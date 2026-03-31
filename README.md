@@ -1,53 +1,167 @@
 # Social Game
 
-## Projektbeschreibung
+Ein System für emergente soziale Interaktion mit KI-Charakteren.
 
-Dieses Projekt ist ein experimentelles Social-Interaction-Game, bei dem der Spieler mit KI-gesteuerten Charakteren (NPCs) dialogbasierte Interaktionen führt. Ziel ist es, möglichst natürliche Gespräche zu simulieren, bei denen Emotionen, Kontext und zwischenmenschliche Dynamiken über längere Zeiträume hinweg konsistent bleiben.
+- Keine vorgegebene Story
+- Keine Dialogbäume
+- Kein klassischer Gameplay-Loop
 
-Die NPCs besitzen interne Zustände (z. B. Emotionen, Vertrauen, Interesse oder aktuelle Stimmung), die sich während eines Dialogs dynamisch verändern können. Auf Basis dieser Zustände werden sowohl die Antworten der NPCs als auch visuelle Darstellungen der Szene generiert. Dadurch entsteht eine interaktive Simulation sozialer Situationen.
+Stattdessen entwickeln sich Gespräche, Beziehungen und Situationen dynamisch aus der Interaktion heraus.
 
-Neben dem Dialogsystem werden auch Bilder und optional Videos erzeugt, um Charaktere, Orte und emotionale Situationen visuell darzustellen. Die generierten Bilder orientieren sich dabei am aktuellen Zustand der Szene sowie am emotionalen Kontext der Konversation.
+## Beispiel: Von vager Idee zu klarer Aussage
+
+Dieses Beispiel zeigt, wie aus einer unscharfen Eingabe durch Interaktion eine konkrete und umsetzbare Aussage entsteht.
+
+### Ausgangspunkt
+
+Ein einfacher Einstieg im Arbeitskontext.  
+Die Eingabe ist nicht falsch, aber unpräzise.
+
+![Start](doc/images/demo_1.png)
+
+### Analyse
+
+Der Charakter erkennt das eigentliche Problem:  
+Die Aussage ist austauschbar und vermeidet jede klare Position.
+
+Statt allgemeinem Feedback wird der Text konkret zerlegt und hinterfragt.
+
+![Analyse](doc/images/demo_2.png)
+
+### Schärfung
+
+Die Interaktion führt nicht zu einer „perfekten“ Formulierung, sondern zu einer klareren Richtung:
+
+Weg von sicheren Aussagen hin zu etwas mit Haltung.
+
+![Ergebnis](doc/images/demo_3.png)
+
+## Was dieses System ist
+
+Dieses Projekt ist ein experimentelles Social-Interaction-System.
+
+Der Fokus liegt auf sozialer Dynamik statt auf Story oder klassischen Spielmechaniken.
+
+NPCs besitzen interne Zustände wie Emotionen, Vertrauen oder Interesse, die sich über Zeit verändern und Verhalten beeinflussen.
+
+Zusätzlich werden Szenen und Bilder generiert, die diesen Zustand visuell widerspiegeln.
+
+## Was dieses System besonders macht
+
+* Keine vorgegebene Story – Interaktion entsteht vollständig durch den Spieler
+* Persistente Gespräche durch Short-Term und Long-Term Memory
+* Dynamische Charakterzustände wie Vertrauen, Spannung oder Interesse
+* Szenen entwickeln sich direkt aus dem Dialog
+* Bilder spiegeln emotionale und situative Veränderungen wider
+* Modularer Aufbau mit spezialisierten Komponenten für Dialog, State, Scene und Bild
+
+## Wie das System funktioniert (kurz)
+
+Nach jeder Nachricht passiert intern:
+
+* Speicherung im Short-Term-Memory
+* Aufbau des aktuellen Kontexts über State, Szene und Long-Term-Memory
+* Bewertung durch spezialisierte Updater
+* Aktualisierung von State, Szene oder Bild bei relevanten Änderungen
+
+Das System entwickelt sich kontinuierlich im Hintergrund weiter, ohne dass der Spieler explizite Befehle geben muss.
 
 ## Projektziele
 
-- Realistische soziale Interaktionen zwischen Spieler und KI-Charakteren simulieren
-- Emotionen, Beziehungen und Dialogdynamiken über längere Gespräche konsistent modellieren
-- Mehrere spezialisierte KI-Modelle (Dialog, Sentiment, State, Bild, Video) in einer modularen Architektur kombinieren
-- Grundlage für KI-basierte Social-Simulationen, Story-Games und Trainingssysteme schaffen
+* Realistische soziale Interaktionen simulieren
+* Konsistente Entwicklung von Emotionen und Beziehungen
+* Kombination spezialisierter KI-Modelle in einer modularen Architektur
+* Grundlage für Social-Simulation, Story-Systeme und Trainingsanwendungen
 
-## KI-Modelle
+## Genre-Ausrichtung
 
-Die folgende Liste enthält getestete KI-Modelle, die anhand verschiedener Kriterien geprüft und miteinander verglichen wurden. In diesem Dokument gehe ich bewusst nicht auf detaillierte Vergleichsergebnisse ein, um schneller zu einem MVP zu gelangen.
+Geeignet für narrative Stile wie Seinen und Josei.
 
-Es werden jedoch einige Schwerpunkte genannt, bei denen aktuelle Systeme an ihre Grenzen kommen und eventuell mit anderen bzw. mit nicht zensierten (NSFW) Modellen besser performen könnten.
+Fokus:
 
-Zum aktuellen Zeitpunkt nutze ich hauptsächlich die OpenAI-Modelle sowie Copilot-Modelle, da ich bereits entsprechende Subscriptions besitze und keine Zeit mit eigenem Hosting oder der Integration von Drittanbietern verlieren möchte.
+* subtile Emotionen
+* zwischenmenschliche Dynamik
+* langfristige Entwicklung
 
-### GPT-5.4
-- Wird als Dialog-Engine genutzt, da das Modell sehr gut auf Kontext achtet und Intonation sowie Emotionen über längere Dialoge hinweg relativ gut interpolieren kann.
+Die Darstellung ist bewusst photorealistisch und realitätsnah.
 
-### GPT-5-nano
-- Ein sehr performantes und kleines Modell, das für die Generierung von Zwischenprompts sowie für die Verwaltung von Long-Term- und Short-Term-Memory genutzt wird.
-- Wird für Sentiment-Analysen verwendet, indem das vorherige NPC-State mit den neuen States aus dem Dialog verglichen wird. Dadurch können die Emotionen des NPC aktualisiert werden.
-- Wird außerdem als „Check-System“ genutzt, um zu erkennen, ob sich der Zustand bzw. der Dialogverlauf drastisch emotional verändert hat oder ob sich die Location geändert hat.
+## Spielergetriebene Szenenentwicklung
 
-### gpt-image-1.5
-- Ist ausreichend performant und ziemlich genau.
-- Kann sehr gut mit normalen Prompts umgehen, sodass keine stark technischen Prompts wie bei Stable Diffusion benötigt werden.
-- Kann Umgebung und Charakter sehr gut kombinieren und dadurch Bilder generieren, die sowohl den Charakter als auch die Umgebung zeigen.
-- Interpoliert Emotionen zuverlässig und passt Gesichtsausdrücke der Charaktere an die aktuelle Stimmung an.
-- Wird für das initiale Charakterbild sowie für Bilder von Locations verwendet.
+Das System gibt keine feste Story vor.
 
-### Seedream-5.0
-- Ein NSFW-Image-Modell.
-- Benötigt relativ technische Prompts und meist ein Referenzbild, um den Charakter konsistent zu halten.
-- Im Vergleich zu gpt-image-1.5 sehr teuer und wird daher nur eingesetzt, wenn **gpt-image-1.5** an seine Grenzen stößt (z. B. bei anstößigen oder grenzwertigen Szenen).
-- Das Modell ist deutlich besser als Stable Diffusion, da die Prompts weniger technisch sein müssen. Das ist wichtig, weil die Bildprompts in diesem Projekt automatisch aus dem Kontext durch KI generiert werden.
+Die Situation entsteht durch:
 
-### Wan-2.5
-- Wird für Video-Generierung aus einem Szenenbild verwendet.
-- Aktuell ein „Nice-to-have“-Feature, um Umgebungen zu animieren, falls das Projekt weit genug fortschreitet.
-- Wan 2.6 ist besser, aber derzeit deutlich teurer.
-- In meinen Tests liefert das Modell aktuell bessere Ergebnisse als die OpenAI-Video-Modelle.
-- Bei Image-to-Video-Modellen muss darauf geachtet werden, dass sie auch NSFW-Inhalte verarbeiten können.  
-  In diesem Projekt werden solche Inhalte bereits beim Image-Generator teilweise vorgefiltert. Wenn ein stärker zensiertes Modell verwendet wird, kann es passieren, dass Videos häufiger blockiert werden. Das führt zu Performance- und Kostenproblemen.
+* Dialog
+* implizite Handlungen
+* emotionalen Kontext
+
+Beispiel:
+
+"Komm, ich geh gern ein Stück mit dir :) (wir gehen langsam nebeneinander weiter)"
+
+Der NPC reagiert darauf kontextsensitiv und passt Verhalten, Stimmung und Wahrnehmung an.
+
+## NPC-Archetypen
+
+Eine kleine, gezielte Auswahl erzeugt unterschiedliche Dynamiken:
+
+* Sensibel defensiv (vika)
+* Explorativ spontan (olga)
+* Kontrolliert spannungssicher (mira)
+* Offen low-resistance (ben)
+* Kompetitiv statusorientiert (tarik)
+* Distanziert selektiv (nora)
+
+Ziel ist Vielfalt in Interaktionen statt viele ähnliche Charaktere.
+
+## Szenen und Wirkung
+
+* Event – sozial offen
+* IT-Büro – strukturiert
+* Stadtspaziergang – dynamisch
+* Café – intim
+* Aufbruch – Entscheidungssituation
+
+## Weiterführende Dokumentation
+
+* Anforderungen: `doc/requirements`
+* Architekturentscheidungen (ADR): `doc/adr`
+
+## Installation
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m pip install -e .
+```
+
+## Konfiguration
+
+Im Projektverzeichnis eine .env anlegen.
+
+```env
+OPENAI_API_KEY=<your_openai_api_key>
+```
+
+## Schnellstart
+
+```bash
+source .venv/bin/activate
+sg web
+```
+
+Im Browser öffnen:
+
+[http://127.0.0.1:8000](http://127.0.0.1:8000)
+
+## Status
+
+Alpha für Entwickler.
+
+Fokus auf Architektur und Interaktionsmodell.
+Kein vollständiger Gameplay-Loop.
+Fehlerhandling bewusst minimal.
+Ziel ist die Exploration sozialer Dynamik mit LLMs.
+
+![Logo](engine/web/static/icons/icon-192.png)

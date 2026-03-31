@@ -1,2 +1,7 @@
 .idea
 .data
+.venv
+.env
+dump*
+debug*
+__pycache__

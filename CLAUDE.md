@@ -1,0 +1,3 @@
+- Bei beschreibungen, README, ADRs und Anforderungen verwende immer Umlaute und Sonderzeichen korrekt (z.B. "ü" statt "ue", "ß" statt "ss").
+- Baue keine Kompartibilitätslayer bei refactorings ein, sondern aktualisiere die bestehenden Schnittstellen direkt.
+- Schreibe keine Mirationshinweise oder Kompatibilitätswarnungen

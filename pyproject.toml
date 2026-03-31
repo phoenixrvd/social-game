@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "social-game"
+version = "0.1.0"
+description = "Web-GUI und CLI-Werkzeuge fuer Session, Updater und LLM-Pruefung im Social Game"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+web = [
+	"fastapi",
+	"uvicorn",
+	"httpx",
+	"markdown",
+]
+
+[project.scripts]
+sg = "engine.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["engine*"]
+
+[tool.setuptools.package-data]
+engine = [
+	"web/static/*.html",
+	"web/static/css/*.css",
+	"web/static/js/*.js",
+	"web/static/icons/*",
+]
+

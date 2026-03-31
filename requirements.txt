@@ -1,0 +1,16 @@
+typer
+pyyaml
+openai
+python-dotenv
+apscheduler
+fastapi
+uvicorn
+httpx
+markdown
+rapidfuzz
+Pillow
+pydantic-settings
+
+
+pytest
+coverage
