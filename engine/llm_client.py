@@ -43,12 +43,8 @@ def _openai_error_message(exc: openai.OpenAIError) -> str:
     return str(exc)
 
 
-def _get_client() -> OpenAI:
-    return OpenAI(api_key=config.OPENAI_API_KEY)
-
-
 def hello_llm():
-    client = _get_client()
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     response1 = client.responses.create(
         model=config.MODEL_LLM_SMALL,
@@ -68,7 +64,7 @@ def hello_llm():
 
 def stream_prompt(messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
     """Streamt die NPC-Antwort tokenweise/chunkweise."""
-    client = _get_client()
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     stream_options: ChatCompletionStreamOptionsParam = {
         "include_usage": True,
@@ -96,14 +92,20 @@ def stream_prompt(messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
             if delta_text:
                 yield delta_text
 
-        log_info(LOGGER, "chat_tokens", prompt_tokens=usage.prompt_tokens, completion_tokens=usage.completion_tokens, total_tokens=usage.total_tokens, cached_tokens=usage.prompt_tokens_details.cached_tokens, unavailable=False, message_count=len(messages))
+        if usage is None:
+            log_info(LOGGER, "chat_tokens", unavailable=True, message_count=len(messages))
+            return
+
+        prompt_tokens_details = getattr(usage, "prompt_tokens_details", None)
+        cached_tokens = 0 if prompt_tokens_details is None else getattr(prompt_tokens_details, "cached_tokens", 0) or 0
+        log_info(LOGGER, "chat_tokens", prompt_tokens=usage.prompt_tokens, completion_tokens=usage.completion_tokens, total_tokens=usage.total_tokens, cached_tokens=cached_tokens, unavailable=False, message_count=len(messages))
     except openai.OpenAIError as exc:
         raise RuntimeError(_openai_error_message(exc)) from exc
 
 
 def run_prompt(prompt: str, model: str = config.MODEL_LLM_BIG) -> str:
     """Fuehrt einen einfachen User-Prompt aus und gibt den Textinhalt der ersten Antwort zurueck."""
-    client = _get_client()
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
     try:
         response = client.chat.completions.create(
             model=model,
@@ -118,14 +120,9 @@ def run_prompt(prompt: str, model: str = config.MODEL_LLM_BIG) -> str:
         raise RuntimeError(_openai_error_message(exc)) from exc
 
 
-def run_prompt_small(prompt: str) -> str:
-    """Fuehrt einen einfachen User-Prompt mit dem Mini-Modell aus."""
-    return run_prompt(prompt, model=config.MODEL_LLM_SMALL)
-
-
 def refresh_img(prompt: str, reference_img_bytes: bytes) -> bytes:
     """Erzeugt ein neues PNG auf Basis eines Referenzbildes."""
-    client = _get_client()
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
 
     image_file = BytesIO(reference_img_bytes)
     image_file.name = "img.png"

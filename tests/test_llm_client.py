@@ -1,18 +1,11 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import cast
 
 import engine.llm_client as llm_client_module
 from openai.types.chat import ChatCompletionMessageParam
-
-
-class FakeLogger:
-    def __init__(self) -> None:
-        self.messages: list[Any] = []
-
-    def info(self, message: object, *args) -> None:
-        self.messages.append(message % args if args else message)
+from tests.fakes import FakeLogger
 
 
 def test_stream_prompt_logs_usage_chunk_without_choices(monkeypatch):
@@ -45,7 +38,7 @@ def test_stream_prompt_logs_usage_chunk_without_choices(monkeypatch):
         chat = SimpleNamespace(completions=FakeCompletions())
 
     monkeypatch.setattr(llm_client_module, "LOGGER", fake_logger)
-    monkeypatch.setattr(llm_client_module, "_get_client", lambda: FakeClient())
+    monkeypatch.setattr(llm_client_module, "OpenAI", lambda api_key: FakeClient())
 
     messages = [cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": "Hi"}))]
     parts = list(llm_client_module.stream_prompt(messages))

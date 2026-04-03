@@ -8,18 +8,7 @@ import engine.updater.image_updater as image_updater_module
 import engine.updater.updater as abstract_updater_module
 from engine.models import Npc, Scene, ShortMemoryMessage
 from engine.updater.image_updater import ImageUpdater
-
-
-class FakeLogger:
-    def __init__(self) -> None:
-        self.messages: list[Any] = []
-
-    def info(self, message: object, *args) -> None:
-        if isinstance(message, str) and args:
-            self.messages.append(message % args)
-            return
-
-        self.messages.append(message)
+from tests.fakes import FakeLogger
 
 
 def _fake_npc(tmp_path: Path) -> Npc:
@@ -74,7 +63,12 @@ def test_image_updater_schedule_generates_image_and_persists_prompt(tmp_path, mo
 """,
         encoding="utf-8",
     )
-    monkeypatch.setattr(image_updater_module, "BUILD_IMAGE_PROMPT_PATH", build_prompt)
+    def fake_load_text(path):
+        if path == image_updater_module.config.PROJECT_ROOT / "prompts" / "image_build_prompt.md":
+            return build_prompt.read_text(encoding="utf-8")
+        return Path(path).read_text(encoding="utf-8")
+
+    monkeypatch.setattr(image_updater_module, "load_text", fake_load_text)
 
     updater = ImageUpdater()
     updater.emit_update()
@@ -84,7 +78,7 @@ def test_image_updater_schedule_generates_image_and_persists_prompt(tmp_path, mo
         captured_prompt["value"] = prompt
         return "optimized prompt"
 
-    monkeypatch.setattr(image_updater_module, "run_prompt_small", fake_optimizer)
+    monkeypatch.setattr(image_updater_module, "run_prompt", lambda prompt, model: fake_optimizer(prompt))
     monkeypatch.setattr(image_updater_module, "refresh_img", lambda _prompt, _img: b"generated")
 
     updater.schedule()
@@ -112,14 +106,19 @@ def test_image_updater_schedule_skips_when_prompt_is_unchanged(tmp_path, monkeyp
 
     build_prompt = tmp_path / "image_build_prompt.md"
     build_prompt.write_text("build rules", encoding="utf-8")
-    monkeypatch.setattr(image_updater_module, "BUILD_IMAGE_PROMPT_PATH", build_prompt)
+    def fake_load_text(path):
+        if path == image_updater_module.config.PROJECT_ROOT / "prompts" / "image_build_prompt.md":
+            return build_prompt.read_text(encoding="utf-8")
+        return Path(path).read_text(encoding="utf-8")
+
+    monkeypatch.setattr(image_updater_module, "load_text", fake_load_text)
 
     updater = ImageUpdater()
     updater.emit_update()
     updater._image_prompt_path().parent.mkdir(parents=True, exist_ok=True)
     updater._image_prompt_path().write_text("same prompt", encoding="utf-8")
 
-    monkeypatch.setattr(image_updater_module, "run_prompt_small", lambda _prompt: "same prompt")
+    monkeypatch.setattr(image_updater_module, "run_prompt", lambda _prompt, model: "same prompt")
     monkeypatch.setattr(
         image_updater_module,
         "refresh_img",
@@ -203,12 +202,17 @@ def test_image_updater_persists_last_error_and_clears_it_after_success(tmp_path,
         """{{CURRENT_IMAGE_PROMPT}}\n{{CURRENT_STATE}}\n{{CURRENT_SCENE}}""",
         encoding="utf-8",
     )
-    monkeypatch.setattr(image_updater_module, "BUILD_IMAGE_PROMPT_PATH", build_prompt)
+    def fake_load_text(path):
+        if path == image_updater_module.config.PROJECT_ROOT / "prompts" / "image_build_prompt.md":
+            return build_prompt.read_text(encoding="utf-8")
+        return Path(path).read_text(encoding="utf-8")
+
+    monkeypatch.setattr(image_updater_module, "load_text", fake_load_text)
 
     updater = ImageUpdater()
 
     prompts = iter(["first prompt", "second prompt"])
-    monkeypatch.setattr(image_updater_module, "run_prompt_small", lambda _prompt: next(prompts))
+    monkeypatch.setattr(image_updater_module, "run_prompt", lambda _prompt, model: next(prompts))
 
     def failing_refresh(_prompt: str, _img: bytes) -> bytes:
         raise RuntimeError("moderation_blocked")

@@ -4,15 +4,42 @@ state: implemented
 
 # SG-004: Dynamischer Charakterzustand
 
-Der Charakterzustand wird dynamisch aktualisiert, um die Reaktionen der NPCs auf die Interaktionen des Spielers zu beeinflussen.
+## Kontext
+Das System bildet den Zustand von Charakteren dynamisch ab.  
+Der fachliche Fokus liegt auf veränderbaren Eigenschaften im Spielverlauf.
 
-## Technische Details
+## Annahmen
+- Keine
 
-- Der Charakterzustand wird synchron aktualisiert (siehe [ADR-003](../adr/003-synchroner-update-orchestrator.md)).
-- Die Aktualisierung basiert auf `state.md` (alter Zustand), Short-Term-Memory und Long-Term-Memory.
-- State-Updates werden über den periodischen Orchestrator-Lauf der Web-GUI sowie manuell über `sg update state` angestoßen.
-- `sg update state` ruft `schedule()` auf und führt den State-Update-Zyklus bei erfüllten Aktivierungsbedingungen vollständig aus.
-- Aktivierungsbedingung für einen State-Lauf: Es liegt mindestens eine neue STM-Nachricht seit dem zuletzt verarbeiteten State-Stand vor.
-- Nach einem erfolgreichen State-Lauf wird der Bild-Run-Trigger für den `ImageUpdater` gesetzt.
-- Der aktuelle State wird im Dialogkontext direkt im gemeinsamen Chat-Systemprompt berücksichtigt; es gibt keine separate zusätzliche Runtime-Systemnachricht mehr pro Turn.
+## Offene Fragen
+- Keine
+
+## Anforderungen
+
+### Zustandsänderungen von Charakteren
+**Typ:** Funktional  
+**Beschreibung:** Das System muss Änderungen am Charakterzustand im Verlauf von Interaktionen berücksichtigen.  
+**Akzeptanzkriterien:**
+- Charakterzustände können sich nach relevanten Ereignissen ändern.
+- Spätere Interaktionen beziehen den aktuellen Zustand ein.
+
+**Referenzen:** Keine
+
+### Kohärenz des Charakterverhaltens
+**Typ:** Nicht-funktional  
+**Beschreibung:** Das System muss das Verhalten von Charakteren konsistent zum aktuellen Zustand halten.  
+**Akzeptanzkriterien:**
+- Reaktionen eines Charakters passen zum dokumentierten Zustand.
+- Unbegründete Zustandswechsel treten nicht auf.
+
+**Referenzen:** Keine
+
+### Zustand im Spielkontext
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss Charakterzustände innerhalb des fachlichen Spielkontexts führen.  
+**Akzeptanzkriterien:**
+- Zustandsinformationen bleiben auf spielrelevante Merkmale begrenzt.
+- Zustände werden nicht losgelöst von der laufenden Handlung interpretiert.
+
+**Referenzen:** Keine
 

@@ -8,18 +8,7 @@ import engine.updater.updater as abstract_updater_module
 from engine.models import Npc, Scene, ShortMemoryMessage
 import engine.updater.ltm_updater as ltm_updater_module
 from engine.updater.ltm_updater import LtmUpdater
-
-
-class FakeLogger:
-    def __init__(self) -> None:
-        self.messages: list[Any] = []
-
-    def info(self, message: object, *args) -> None:
-        if isinstance(message, str) and args:
-            self.messages.append(message % args)
-            return
-
-        self.messages.append(message)
+from tests.fakes import FakeLogger
 
 
 class FakeNpcStore:
@@ -39,9 +28,7 @@ class FakeNpcStore:
             stm=list(self._stm),
         )
 
-    def save_ltm(self, npc_id: str, scene_id: str, ltm: str) -> None:
-        assert npc_id == "vika"
-        assert scene_id == "default"
+    def save_ltm(self, ltm: str) -> None:
         self._ltm = ltm
 
     def remove_stm_by_ids(self, npc_id: str, scene_id: str, message_ids: Iterable[str]) -> None:
@@ -54,7 +41,7 @@ class FakeNpcStore:
 @pytest.fixture(autouse=True)
 def _mock_session_store(monkeypatch):
     def fake_load_text(path):
-        if path == ltm_updater_module.LTM_PROMPT_PATH:
+        if path == ltm_updater_module.config.PROJECT_ROOT / "prompts" / "ltm_summary.md":
             return """# Role: Long-Term-Memory Generator
 
 ## Bisherige Long-Term-Memory
@@ -66,7 +53,7 @@ def _mock_session_store(monkeypatch):
         raise AssertionError(f"Unexpected path: {path}")
 
     monkeypatch.setattr(ltm_updater_module, "load_text", fake_load_text)
-    monkeypatch.setattr(ltm_updater_module, "run_prompt_small", lambda _prompt: "updated ltm")
+    monkeypatch.setattr(ltm_updater_module, "run_prompt", lambda _prompt, model: "updated ltm")
 
 
 def _build_updater(monkeypatch, npc_store: FakeNpcStore, tmp_path: Path) -> Any:
@@ -96,8 +83,8 @@ def test_schedule_with_insufficient_batch_does_not_trigger(monkeypatch, tmp_path
 
     monkeypatch.setattr(
         ltm_updater_module,
-        "run_prompt_small",
-        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM darf ohne batch nicht aufgerufen werden")),
+        "run_prompt",
+        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM darf ohne batch nicht aufgerufen werden")),
     )
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
@@ -125,7 +112,7 @@ def test_schedule_with_batch_and_messages_triggers_update(monkeypatch, tmp_path)
         assert "msg-1" in prompt
         return "persisted ltm"
 
-    monkeypatch.setattr(ltm_updater_module, "run_prompt_small", fake_summarizer)
+    monkeypatch.setattr(ltm_updater_module, "run_prompt", lambda prompt, model: fake_summarizer(prompt))
     monkeypatch.setattr(ltm_updater_module, "LOGGER", fake_logger)
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
@@ -149,8 +136,8 @@ def test_schedule_without_new_messages_does_not_trigger(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         ltm_updater_module,
-        "run_prompt_small",
-        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM darf ohne neue messages nicht aufgerufen werden")),
+        "run_prompt",
+        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM darf ohne neue messages nicht aufgerufen werden")),
     )
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
@@ -173,7 +160,7 @@ def test_schedule_with_first_eligible_batch_triggers_immediately(monkeypatch, tm
     npc_store = FakeNpcStore(stm=stm)
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
-    monkeypatch.setattr(ltm_updater_module, "run_prompt_small", lambda _prompt: "fresh ltm")
+    monkeypatch.setattr(ltm_updater_module, "run_prompt", lambda _prompt, model: "fresh ltm")
 
     updater.schedule()
 

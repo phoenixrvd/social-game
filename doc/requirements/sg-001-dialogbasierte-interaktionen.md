@@ -4,21 +4,42 @@ state: implemented
 
 # SG-001: Dialogbasierte Interaktionen
 
-Das System soll dialogbasierte Interaktionen zwischen einem Spieler und KI-gesteuerten Charakteren (NPCs) simulieren.
+## Kontext
+Das System unterstützt dialogbasierte Interaktionen.  
+Der fachliche Fokus liegt auf dem Austausch zwischen Nutzer und Spielwelt.
 
-## Globaler Interaktionskontext (Ergänzung)
+## Annahmen
+- Keine
 
-- Es gibt ein CLI-Kommando, mit dem NPC und Szene für die Interaktion global festgelegt werden.
-- Der gesetzte Zustand wird in `.data/session.yaml` gespeichert.
-- Dieser Session-Zustand wird zusammen mit der Konfiguration geladen und steht danach der Web-GUI sowie den Watchern zur Verfügung.
-- Der aktuelle Interaktionskontext wird zentral aus der Session geladen.
+## Offene Fragen
+- Keine
 
-## Technische Details
+## Anforderungen
 
-- Die Kommunikation erfolgt mit einer LLM, und Dialoge sollen über längere Zeiträume hinweg konsistent bleiben.
-- Konfiguration und Einstellungen von Szenen und NPCs sollen persistierbar sein.
-- Der eigentliche Dialog findet in der implementierten Lösung ausschließlich in der Web-GUI statt.
-- Neue Spieler- und NPC-Nachrichten werden im Short-Term-Memory persistiert und stehen damit auch den Watchern für State-, Scene-, LTM- und Bild-Updates zur Verfügung.
-- Der Turn-Kontext für die Dialog-LLM wird über einen gemeinsamen Systemprompt aufgebaut, der NPC-Rolle, Character Data, Character Description, Long-Term-Memory, aktuelle Szene und aktuellen NPC-State enthält.
-- Nach dem Systemprompt folgen die STM-Nachrichten; die aktuelle User-Nachricht wird separat als letzter Turn hinzugefügt.
+### Durchführung von Dialogen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss Dialoge zwischen Nutzer und Charakteren ermöglichen.  
+**Akzeptanzkriterien:**
+- Eine Nutzereingabe führt zu einer inhaltlich passenden Dialogantwort.
+- Mehrere Dialogbeiträge können in einer laufenden Unterhaltung verarbeitet werden.
+
+**Referenzen:** Keine
+
+### Nachvollziehbare Dialogabfolge
+**Typ:** Nicht-funktional  
+**Beschreibung:** Das System muss die Reihenfolge von Dialogbeiträgen konsistent halten.  
+**Akzeptanzkriterien:**
+- Dialogbeiträge werden in der Reihenfolge ihres Eingangs verarbeitet.
+- Antworten beziehen sich auf den aktuellen Stand der Unterhaltung.
+
+**Referenzen:** Keine
+
+### Gültiger Dialogkontext
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss Dialoge nur im Rahmen des definierten Spielkontexts verarbeiten.  
+**Akzeptanzkriterien:**
+- Antworten bleiben innerhalb der vorgesehenen Rolle und Spielsituation.
+- Kontextfremde Ausgaben werden vermieden.
+
+**Referenzen:** Keine
 

@@ -96,6 +96,26 @@ class FakeNpcStore:
         self._current_npc.stm.extend([user_message, assistant_message])
         return [user_message, assistant_message]
 
+    def save_scene(self, scene: str) -> None:
+        self._current_npc.scene = Scene(scene_id=FakeSessionStore.current.scene_id, description=scene)
+
+    def save_description(self, description: str) -> None:
+        self._current_npc.description = description
+
+    def save_ltm(self, ltm: str) -> None:
+        self._current_npc.ltm = ltm
+
+    def revert_scene(self) -> None:
+        scene_id = FakeSessionStore.current.scene_id
+        self._current_npc.scene = Scene(scene_id=scene_id, description=f"Szene {scene_id}")
+
+    def revert_description(self) -> None:
+        npc_id = FakeSessionStore.current.npc_id
+        self._current_npc.description = f"Charakterbeschreibung {npc_id}"
+
+    def revert_ltm(self) -> None:
+        self._current_npc.ltm = "kennt den Spieler"
+
 
 class FakeNpcTurnService:
     def __init__(self) -> None:
@@ -111,7 +131,13 @@ class FakeNpcTurnService:
 fake_npc_store = FakeNpcStore()
 
 
-def _make_client(tmp_path, monkeypatch) -> TestClient:
+def _make_client(
+    tmp_path,
+    monkeypatch,
+    *,
+    base_url: str = "http://testserver",
+    web_debug: bool = False,
+) -> TestClient:
     npcs_dir = tmp_path / "npcs"
     scenes_dir = tmp_path / "scenes"
     data_npcs_dir = tmp_path / ".data" / "npcs"
@@ -156,12 +182,13 @@ def _make_client(tmp_path, monkeypatch) -> TestClient:
     monkeypatch.setattr(web_app_module.config, "NPC_DIR", npcs_dir)
     monkeypatch.setattr(web_app_module.config, "SCENE_DIR", scenes_dir)
     monkeypatch.setattr(web_app_module.config, "DATA_NPC_DIR", data_npcs_dir)
+    monkeypatch.setattr(web_app_module.config, "WEB_DEBUG", web_debug)
     monkeypatch.setattr(web_app_module, "SessionStore", FakeSessionStore)
     monkeypatch.setattr(web_app_module, "NpcStore", lambda: fake_npc_store)
     monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
     monkeypatch.setattr(web_app_module, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
 
-    return TestClient(web_app_module.app)
+    return TestClient(web_app_module.app, base_url=base_url)
 
 
 def test_index_serves_gui(tmp_path, monkeypatch):
@@ -171,8 +198,62 @@ def test_index_serves_gui(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert "Social Game GUI" in response.text
-    assert "Nachricht eingeben" in response.text
-    assert "image-refresh-button" in response.text
+    assert "<sg-app" in response.text
+    assert 'src="js/sg-app.js"' in response.text
+
+
+def test_security_headers_are_present_on_index(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+
+    response = client.get("/")
+
+    csp = response.headers.get("content-security-policy", "")
+    assert "script-src 'self'" in csp, "CSP fehlt script-src 'self'"
+    assert "object-src 'none'" in csp, "CSP fehlt object-src 'none'"
+    assert "frame-ancestors 'none'" in csp, "CSP fehlt frame-ancestors"
+    assert "require-trusted-types-for 'script'" in csp, "CSP fehlt Trusted Types"
+    assert "trusted-types sg" in csp, "CSP fehlt trusted-types Policy-Name"
+
+    assert response.headers.get("x-frame-options", "").upper() == "DENY"
+    assert response.headers.get("x-content-type-options", "").lower() == "nosniff"
+
+    hsts = response.headers.get("strict-transport-security", "")
+    assert "max-age=" in hsts, "HSTS fehlt max-age"
+    max_age = int(next(p.split("=")[1] for p in hsts.split(";") if "max-age" in p.strip().lower()))
+    assert max_age >= 31536000, f"HSTS max-age zu kurz: {max_age}"
+    assert "includesubdomains" in hsts.lower(), "HSTS fehlt includeSubDomains"
+
+    assert response.headers.get("cross-origin-opener-policy", "").lower() == "same-origin"
+
+
+def test_security_headers_are_present_on_api_routes(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+
+    response = client.get("/api/state")
+
+    assert "content-security-policy" in response.headers
+    assert "x-frame-options" in response.headers
+    assert "strict-transport-security" in response.headers
+    assert "cross-origin-opener-policy" in response.headers
+
+
+def test_static_assets_get_cache_headers(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+
+    for path in ("/css/app.css", "/js/sg-app.js"):
+        response = client.get(path)
+        cache = response.headers.get("cache-control", "")
+        assert "max-age" in cache, f"Cache-Control fehlt für {path}"
+
+
+def test_static_assets_disable_cache_in_web_debug_mode(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch, web_debug=True)
+
+    for path in ("/css/app.css", "/js/sg-app.js"):
+        response = client.get(path)
+        assert response.headers.get("cache-control") == "no-cache, no-store, must-revalidate"
+        assert response.headers.get("pragma") == "no-cache"
+        assert response.headers.get("expires") == "0"
 
 
 def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypatch):
@@ -187,6 +268,7 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["character_description"] == "Charakterbeschreibung vika"
     assert payload["character_data"] == {"name": "Vika"}
     assert payload["scene_id"] == "office"
+    assert payload["ltm"] == "kennt den Spieler"
     assert payload["image_url"] == "/api/image/current"
     assert payload["image_update_error"] == ""
     assert payload["messages"][0]["content"] == "Hi"
@@ -315,6 +397,57 @@ def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
     assert response.json()["detail"] == "Mindestens npc_id oder scene_id muss gesetzt sein."
 
 
+def test_initial_state_endpoint_returns_fields_and_editable_flag(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+    fake_npc_store._current_npc = _build_npc(npc_id="vika", scene_id="office", messages=[])
+
+    response = client.get("/api/initial-state")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scene_description"] == "Szene office"
+    assert payload["character_description"] == "Charakterbeschreibung vika"
+    assert payload["ltm"] == "kennt den Spieler"
+    assert payload["editable"] is True
+
+
+def test_initial_state_save_rejects_after_first_message(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+
+    response = client.put("/api/initial-state/scene", json={"value": "Neue Szene"})
+
+    assert response.status_code == 409
+
+
+def test_initial_state_save_and_revert_for_character(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+    fake_npc_store._current_npc = _build_npc(npc_id="vika", scene_id="office", messages=[])
+
+    save_response = client.put("/api/initial-state/character", json={"value": "Neu"})
+    assert save_response.status_code == 200
+    assert save_response.json()["character_description"] == "Neu"
+
+    revert_response = client.post("/api/initial-state/character/revert")
+    assert revert_response.status_code == 200
+    assert revert_response.json()["character_description"] == "Charakterbeschreibung vika"
+
+
+def test_initial_state_returns_generic_error_on_load_failure(tmp_path, monkeypatch):
+    _make_client(tmp_path, monkeypatch)
+
+    class FailingNpcStore:
+        def load(self):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr(web_app_module, "NpcStore", FailingNpcStore)
+    client = TestClient(web_app_module.app, base_url="http://testserver", raise_server_exceptions=False)
+
+    response = client.get("/api/initial-state")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "Initialzustand-Aktion fehlgeschlagen."
+
+
 def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
     client = _make_client(tmp_path, monkeypatch)
     scene_data_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
@@ -409,6 +542,36 @@ def test_refresh_active_image_returns_500_on_schedule_error(tmp_path, monkeypatc
 
     assert response.status_code == 500
     assert "generation_failed" in response.json()["detail"]
+
+
+def test_health_returns_runtime_signatures(tmp_path, monkeypatch):
+    client = _make_client(tmp_path, monkeypatch)
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert payload["npc_id"] == "vika"
+    assert payload["scene_id"] == "office"
+    assert payload["messages_signature"] == "2|m2"
+    assert payload["image_update_error"] == ""
+    assert payload["image_signature"]
+
+
+def test_health_returns_500_when_loading_session_fails(tmp_path, monkeypatch):
+    _make_client(tmp_path, monkeypatch)
+
+    class FailingSessionStore:
+        def load(self):
+            raise RuntimeError("session kaputt")
+
+    monkeypatch.setattr(web_app_module, "SessionStore", FailingSessionStore)
+    client = TestClient(web_app_module.app, base_url="http://testserver", raise_server_exceptions=False)
+
+    response = client.get("/health")
+
+    assert response.status_code == 500
 
 
 def test_get_state_returns_last_image_update_error(tmp_path, monkeypatch):

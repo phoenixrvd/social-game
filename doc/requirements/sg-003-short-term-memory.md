@@ -4,28 +4,42 @@ state: implemented
 
 # SG-003: Short-Term-Memory
 
-Das System soll ein Short-Term-Memory besitzen, um den Kontext eines laufenden Dialogs zu speichern und darauf basierend konsistente Antworten zu generieren.
+## Kontext
+Das System nutzt ein Kurzzeitgedächtnis für den aktuellen Gesprächs- und Handlungskontext.  
+Der fachliche Fokus liegt auf der unmittelbaren Situationsverarbeitung.
 
-## Technische Details
+## Annahmen
+- Keine
 
-- Das Short-Term-Memory (STM) ist die persistierte Konversationsgeschichte pro NPC.
-- Persistenzort: `.data/npcs/<npc_id>/stm.jsonl`.
-- Beim Start eines Dialogs wird das STM fuer den NPC geladen.
-- Pro Dialog-Turn werden genau diese Nachrichten in das STM geschrieben:
-  - die neue `user`-Nachricht,
-  - die neue `assistant`-Antwort.
-- Die Reihenfolge im STM bleibt strikt chronologisch.
-- Das STM ist die einzige Quelle fuer SG-002 (LTM-Zusammenfassung).
-- Wenn SG-002 ein Batch erfolgreich verarbeitet hat, werden genau diese verarbeiteten Nachrichten aus dem STM entfernt.
-- Das STM darf den Dialogfluss nicht blockieren; Speicheroperationen muessen leichtgewichtig bleiben.
-- Wird das Laufzeitverzeichnis `.data/npcs/<npc_id>` fuer einen NPC geloescht (Reset), gilt dessen STM als vollstaendig zurueckgesetzt.
+## Offene Fragen
+- Keine
 
-## Akzeptanzkriterien
+## Anforderungen
 
-- Nach Neustart des Programms wird das zuvor gespeicherte STM fuer denselben NPC wieder geladen.
-- Nach einem erfolgreichen Dialog-Turn sind genau 2 neue Nachrichten im STM vorhanden (`user`, `assistant`).
-- Nach einem erfolgreichen SG-002-Update sind die verarbeiteten Nachrichten nicht mehr im STM vorhanden.
-- Nach einer Dialogpfad-Loeschung im Chat enthaelt das STM keine Nachricht mehr ab dem ausgewaehlten Loeschpunkt.
-- Nach einem NPC-Reset ueber die Web-GUI enthaelt `.data/npcs/<npc_id>/stm.jsonl` keine vorherigen Dialognachrichten mehr.
-- Die verbleibenden Nachrichten sind weiterhin in korrekter zeitlicher Reihenfolge.
+### Kurzfristiger Kontextbezug
+**Typ:** Funktional  
+**Beschreibung:** Das System muss aktuelle Informationen für die laufende Interaktion vorhalten.  
+**Akzeptanzkriterien:**
+- Antworten berücksichtigen den jüngsten Gesprächsverlauf.
+- Der direkte Situationsbezug bleibt innerhalb einer aktiven Interaktion erhalten.
+
+**Referenzen:** Keine
+
+### Zeitnahe Aktualität
+**Typ:** Nicht-funktional  
+**Beschreibung:** Das System muss das Short-Term-Memory zeitnah an neue Interaktionen anpassen.  
+**Akzeptanzkriterien:**
+- Neue Eingaben beeinflussen den kurzfristigen Kontext ohne spürbare Verzögerung.
+- Veraltete Kurzzeitinhalte dominieren die aktuelle Antwort nicht.
+
+**Referenzen:** Keine
+
+### Begrenzung auf kurzfristige Inhalte
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss das Short-Term-Memory auf kurzfristig relevante Inhalte beschränken.  
+**Akzeptanzkriterien:**
+- Langfristige Wissensinhalte werden nicht ausschließlich im Short-Term-Memory geführt.
+- Der Fokus bleibt auf der aktuellen Szene und dem unmittelbaren Dialog.
+
+**Referenzen:** Keine
 

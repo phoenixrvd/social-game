@@ -7,19 +7,10 @@ from pathlib import Path
 from engine.logging import get_logger, log_info
 from engine.config import config
 from engine.fs_utils import load_text, save_text
-from engine.llm_client import refresh_img, run_prompt_small
+from engine.llm_client import refresh_img, run_prompt
 from engine.stores.npc_store import NpcStore
 from engine.updater.updater import AbstractUpdater
 
-BUILD_IMAGE_PROMPT_PATH = config.PROJECT_ROOT / "prompts" / "image_build_prompt.md"
-
-IMAGE_RUN_TRIGGER_FILENAME = "image_updater_run.flag"
-IMAGE_NAME = "img.png"
-IMAGE_PROMPT_FILENAME = "image_updater_update_prompt.txt"
-IMAGE_LAST_ERROR_FILENAME = "image_updater_last_error.txt"
-BACKUP_DIR_NAME = "img_backup"
-BACKUP_GLOB = "img-*.png"
-BACKUP_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
 LOGGER = get_logger("updater.image")
 
 
@@ -29,7 +20,7 @@ class ImageUpdater(AbstractUpdater):
         self.npc_store = NpcStore()
 
     def _run_trigger_path(self) -> Path:
-        return self._orchestrator_dir() / IMAGE_RUN_TRIGGER_FILENAME
+        return self._orchestrator_dir() / "image_updater_run.flag"
 
     def emit_update(self) -> None:
         save_text(self._run_trigger_path(), "1")
@@ -43,19 +34,23 @@ class ImageUpdater(AbstractUpdater):
         return True
 
     def _image_path(self) -> Path:
-        return self._current_npc_scene_data_dir() / IMAGE_NAME
+        return self._current_npc_scene_data_dir() / "img.png"
 
     def _backup_dir(self) -> Path:
-        return self._current_npc_scene_data_dir() / BACKUP_DIR_NAME
+        return self._current_npc_scene_data_dir() / "img_backup"
 
     def _image_prompt_path(self) -> Path:
-        return self._orchestrator_dir() / IMAGE_PROMPT_FILENAME
+        return self._orchestrator_dir() / "image_updater_update_prompt.txt"
 
     def _last_error_path(self) -> Path:
-        return self._orchestrator_dir() / IMAGE_LAST_ERROR_FILENAME
+        return self._orchestrator_dir() / "image_updater_last_error.txt"
 
     def get_last_error(self) -> str:
-        return load_text(self._last_error_path()).strip()
+        path = self._last_error_path()
+        if not path.exists():
+            return ""
+
+        return load_text(path).strip()
 
     def _save_last_error(self, message: str) -> None:
         save_text(self._last_error_path(), message.strip())
@@ -70,7 +65,7 @@ class ImageUpdater(AbstractUpdater):
         if not backup_dir.exists():
             return None
 
-        backups = sorted(backup_dir.glob(BACKUP_GLOB))
+        backups = sorted(backup_dir.glob("img-*.png"))
         if not backups:
             return None
 
@@ -85,7 +80,7 @@ class ImageUpdater(AbstractUpdater):
 
         backup_dir = self._backup_dir()
         backup_dir.mkdir(parents=True, exist_ok=True)
-        backup_path = backup_dir / f"img-{datetime.now(UTC).strftime(BACKUP_TIMESTAMP_FORMAT)}.png"
+        backup_path = backup_dir / f"img-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}.png"
         image_path.rename(backup_path)
         log_info(LOGGER, "image_backup_created", source=image_path, backup=backup_path)
 
@@ -99,7 +94,7 @@ class ImageUpdater(AbstractUpdater):
     def get_preview(self, old_prompt: str) -> str:
         npc = self.npc_store.load()
         return (
-            load_text(BUILD_IMAGE_PROMPT_PATH).strip()
+            load_text(config.PROJECT_ROOT / "prompts" / "image_build_prompt.md").strip()
             .replace("{{NPC_DESCRIPTION}}", npc.description)
             .replace("{{CURRENT_IMAGE_PROMPT}}", old_prompt or "(none)")
             .replace("{{CURRENT_STATE}}", npc.state)
@@ -131,7 +126,7 @@ class ImageUpdater(AbstractUpdater):
         optimization_prompt = self.get_preview(old_prompt)
 
         try:
-            new_prompt = run_prompt_small(optimization_prompt).strip()
+            new_prompt = run_prompt(optimization_prompt, model=config.MODEL_LLM_SMALL).strip()
         except Exception as exc:
             self._save_last_error(str(exc))
             log_info(LOGGER, "image_update_failed", error=str(exc))
@@ -145,14 +140,14 @@ class ImageUpdater(AbstractUpdater):
         # --- Fuzzy similarity ---
         similarity = fuzz.ratio(new_prompt, old_prompt) / 100
 
-        if similarity > 0.95 and not force: # stop if similar to X%
+        if similarity > 0.95 and not force:  # stop if similar to 95%
             log_info(LOGGER, "image_skip", reason="prompt_similar_fuzzy", similarity=similarity)
             return
 
         # --- Token overlap ---
         overlap = self._token_overlap(new_prompt, old_prompt)
 
-        if overlap > 0.85 and not force: # stop if overlap to X%
+        if overlap > 0.85 and not force:  # stop if overlap is above 85%
             log_info(LOGGER, "image_skip", reason="prompt_similar_tokens", overlap=overlap)
             return
 
@@ -176,6 +171,34 @@ class ImageUpdater(AbstractUpdater):
 
         log_info(LOGGER, "image_updated", path=image_path)
         log_info(LOGGER, "updater_completed", updater="image", prompt_length=len(new_prompt), image_bytes=len(new_img))
+
+    def refresh_image_with_current_prompt(self) -> tuple[str, bool]:
+        """Regeneriert das Bild mit dem bestehenden Prompt, ohne ihn zu aktualisieren."""
+        npc = self.npc_store.load()
+        image_path = self._image_path()
+
+        current_prompt = self._load_old_prompt().strip()
+
+        if not current_prompt:
+            return f"Kein Prompt vorhanden fuer NPC '{npc.npc_id}'.", False
+
+        log_info(LOGGER, "image_refresh_started", npc=npc.npc_id, prompt_length=len(current_prompt))
+
+        try:
+            new_img = refresh_img(current_prompt, npc.img.read_bytes())
+        except Exception as exc:
+            self._save_last_error(str(exc))
+            log_info(LOGGER, "image_refresh_failed", error=str(exc))
+            return f"Bilderzeugung fehlgeschlagen: {str(exc)}", False
+
+        self._backup_existing_image(image_path)
+
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        image_path.write_bytes(new_img)
+        self._clear_last_error()
+
+        log_info(LOGGER, "image_refreshed", path=image_path, image_bytes=len(new_img))
+        return f"Bild erfolgreich regeneriert fuer '{npc.npc_id}'.", True
 
     def revert(self) -> tuple[str, bool]:
         npc = self.npc_store.load()

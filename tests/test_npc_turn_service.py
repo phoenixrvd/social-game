@@ -33,7 +33,7 @@ def test_build_turn_messages_uses_prompt_template_with_placeholders(monkeypatch)
     monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
 
     def fake_load_text(path):
-        if path == npc_turn_service_module.GENERAL_CHAT_RULES_PATH:
+        if path == npc_turn_service_module.config.PROJECT_ROOT / "prompts" / "chat_general_rules.md":
             return template
         raise AssertionError(f"Unerwarteter Pfad: {path}")
 
@@ -63,7 +63,7 @@ def test_build_turn_messages_uses_leer_for_empty_values(monkeypatch):
     monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
 
     def fake_load_text(path):
-        if path == npc_turn_service_module.GENERAL_CHAT_RULES_PATH:
+        if path == npc_turn_service_module.config.PROJECT_ROOT / "prompts" / "chat_general_rules.md":
             return "{{ROLE}} | {{CHARACTER_DATA}} | {{CHARACTER_DESCRIPTION}} | {{CHARACTER_LONG_TERM_MEMORY}}"
         raise AssertionError(f"Unerwarteter Pfad: {path}")
 
@@ -101,7 +101,7 @@ def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is
     monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
 
     def fake_load_text(path):
-        if path == npc_turn_service_module.GENERAL_CHAT_RULES_PATH:
+        if path == npc_turn_service_module.config.PROJECT_ROOT / "prompts" / "chat_general_rules.md":
             return "{{ROLE}} | {{CURRENT_SCENE}} | {{NPC_STATE}}"
         raise AssertionError(f"Unerwarteter Pfad: {path}")
 

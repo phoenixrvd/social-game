@@ -1,7 +1,6 @@
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -9,18 +8,7 @@ import engine.updater.scene_updater as scene_updater_module
 import engine.updater.updater as abstract_updater_module
 from engine.models import Npc, Scene, ShortMemoryMessage
 from engine.updater.scene_updater import SceneUpdater
-
-
-class FakeLogger:
-    def __init__(self) -> None:
-        self.messages: list[Any] = []
-
-    def info(self, message: object, *args) -> None:
-        if isinstance(message, str) and args:
-            self.messages.append(message % args)
-            return
-
-        self.messages.append(message)
+from tests.fakes import FakeLogger
 
 
 class FakeNpcStore:
@@ -31,17 +19,15 @@ class FakeNpcStore:
     def load(self) -> Npc:
         return replace(self._npc)
 
-    def save_scene(self, npc_id: str, scene_id: str, scene: str) -> None:
-        assert npc_id == self._npc.npc_id
-        assert scene_id == self._npc.scene.scene_id
-        self._npc = replace(self._npc, scene=Scene(scene_id=scene_id, description=scene))
+    def save_scene(self, scene: str) -> None:
+        self._npc = replace(self._npc, scene=Scene(scene_id=self._npc.scene.scene_id, description=scene))
         self.saved_scene = True
 
 
 @pytest.fixture(autouse=True)
 def _mock_prompts(monkeypatch):
     def fake_load_text(path):
-        if path == scene_updater_module.SCENE_PROMPT_PATH:
+        if path == scene_updater_module.config.PROJECT_ROOT / "prompts" / "scene_update.md":
             return """# Role: Scene State Updater
 
 ## Aktuelle Szenendaten
@@ -103,12 +89,12 @@ def test_schedule_updates_scene_when_active(monkeypatch, tmp_path):
 
     captured_prompt: list[str] = []
 
-    def fake_run_prompt_small(prompt: str) -> str:
+    def fake_run_prompt(prompt: str) -> str:
         captured_prompt.append(prompt)
         return "cafe"
 
     monkeypatch.setattr(scene_updater_module, "LOGGER", fake_logger)
-    monkeypatch.setattr(scene_updater_module, "run_prompt_small", fake_run_prompt_small)
+    monkeypatch.setattr(scene_updater_module, "run_prompt", lambda prompt, model: fake_run_prompt(prompt))
 
     updater.schedule()
 
@@ -136,8 +122,8 @@ def test_schedule_is_noop_without_stm(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         scene_updater_module,
-        "run_prompt_small",
-        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM must not run")),
+        "run_prompt",
+        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM must not run")),
     )
 
     updater.schedule()
@@ -176,8 +162,8 @@ def test_schedule_is_noop_without_new_messages_after_last_check(monkeypatch, tmp
 
     monkeypatch.setattr(
         scene_updater_module,
-        "run_prompt_small",
-        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM must not run")),
+        "run_prompt",
+        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM must not run")),
     )
 
     updater.schedule()

@@ -3,12 +3,11 @@ from __future__ import annotations
 from engine.logging import get_logger, log_info
 from engine.config import config
 from engine.fs_utils import load_text
-from engine.llm_client import run_prompt_small
+from engine.llm_client import run_prompt
 from engine.stores.npc_store import NpcStore
 from engine.updater.image_updater import ImageUpdater
 from engine.updater.updater import AbstractUpdater
 
-STATE_PROMPT_PATH = config.PROJECT_ROOT / "prompts" / "state_update.md"
 LOGGER = get_logger("updater.state")
 
 
@@ -30,14 +29,14 @@ class StateUpdater(AbstractUpdater):
 
         log_info(LOGGER, "updater_active", updater="state", active=True, prompt_start=True, stm_count=len(npc.stm))
         prompt = (
-            load_text(STATE_PROMPT_PATH).strip()
+            load_text(config.PROJECT_ROOT / "prompts" / "state_update.md").strip()
             .replace("{{CURRENT_STATE}}", npc.state)
             .replace("{{SHORT_TERM_MEMORY}}", self.format_short_memory(npc.stm))
             .replace("{{LONG_TERM_MEMORY}}", npc.ltm.strip() or "(leer)")
         )
-        raw = run_prompt_small(prompt).strip()
+        raw = run_prompt(prompt, model=config.MODEL_LLM_SMALL).strip()
 
-        self.npc_store.save_state(npc.npc_id, npc.scene.scene_id, raw)
+        self.npc_store.save_state(raw)
         self.image_updater.emit_update()
 
         log_info(LOGGER, "updater_completed", updater="state", state_length=len(raw))

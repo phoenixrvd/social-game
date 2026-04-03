@@ -1,76 +1,50 @@
-# ADR 003: Synchroner Update-Orchestrator
+---
+state: implemented
+---
 
-**Status:** Akzeptiert  
-**Datum:** 2026-03-25
+# ADR-003: Synchroner Update-Orchestrator
+
+## Status
+implemented
 
 ## Kontext
-
-Das System aktualisiert mehrere Zustände:
-
-- LTM
-- State
-- Scene
-- Image
-
-Updates basieren auf STM, bestehendem Kontext und spezialisierten Prompt-Templates.  
-Mit SG-008 existiert ein Orchestrator, der beim Start der Web-GUI (`sg web`) automatisch mitläuft.
-
-Ziel ist:
-
-- deterministisches Verhalten
-- Debuggbarkeit
-- keine versteckten Hintergrundprozesse
+- Das System aktualisiert LTM, State, Scene und Image auf Basis von STM, bestehendem Kontext und spezialisierten Prompt-Templates.
+- Beim Start von `sg web` läuft ein Orchestrator automatisch mit; Ziel sind deterministisches Verhalten, Debuggbarkeit und keine versteckten Hintergrundprozesse.
 
 ## Entscheidung
+- Der Update-Orchestrator läuft synchron und periodisch im Web-Lifecycle von `sg web`; die Updater werden in der Reihenfolge `ltm`, `scene`, `state`, `image` ausgeführt und erledigen Aktivierungsprüfung, Prompt-Aufbau, blockierenden LLM-Call, Persistierung und direkte Folgeaktionen im selben Zyklus.
 
-Alle Updates werden **synchron innerhalb eines periodischen Orchestrator-Loops** ausgeführt.
+## Begründung
+- Synchrones Ausführen erhöht Nachvollziehbarkeit und Determinismus.
+- Die feste Reihenfolge berücksichtigt Abhängigkeiten, insbesondere für `image` nach `scene` und `state`.
+- Interne Aktivierungsbedingungen in `schedule()` vermeiden unnötige LLM-Calls.
+- Der automatische Start im Web-Lifecycle verhindert separate manuelle Startschritte.
 
-Pro Updater:
+## Alternativen
+### Alternative 1
+- Asynchrone Ausführung der Updater über Hintergrundprozesse oder Queues.
+- Verworfen, weil dadurch Debugging schwieriger wird und versteckte Nebenläufigkeit entsteht.
 
-1. `schedule()` prüft Zeit + neue Nachrichten + Regeln bzw. Trigger intern
-2. der Prompt wird direkt aus den relevanten Daten aufgebaut
-3. der LLM-Call wird **blockierend** ausgeführt
-4. das Ergebnis wird persistiert
-5. abhängige Folgeaktionen werden direkt ausgelöst
+### Alternative 2
+- Unabhängige, manuell gestartete Einzelupdates ohne zentralen Orchestrator.
+- Verworfen, weil abhängige Änderungen dann nicht kontrolliert im selben Zyklus sichtbar werden.
 
-## Orchestrator
-
-- Lauf: automatisch im Web-Lifecycle von `sg web`
-- Reihenfolge:
-    1. LTM
-    2. Scene
-    3. State
-    4. Image
-
-→ wichtig für Abhängigkeiten (Image ← Scene/State)
+### Alternative 3
+- Rein ereignisgetriebene Aktualisierung ohne periodischen Loop.
+- Verworfen, weil die zentrale Ablaufsteuerung und feste Reihenfolge damit verloren gehen.
 
 ## Konsequenzen
+- positiv: Der Ablauf bleibt deterministisch und gut nachvollziehbar.
+- negativ: Blockierende LLM-Calls verlängern einen Zyklus und begrenzen die Parallelität.
+- offen: Ob künftig partielle Asynchronisierung, adaptive Intervalle oder eine stärkere Entkopplung der Updater nötig werden.
 
-**Vorteile**
-- deterministisch
-- gut debuggbar
-- keine Race Conditions
-- klare Update-Trigger in `schedule()` ohne verteilte Zusatzlogik
+## Annahmen
+- `schedule()` kapselt die Aktivierungsbedingungen je Updater.
+- `image` hängt fachlich von Änderungen in `scene` und `state` ab.
 
-**Nachteile**
-- höhere Latenz pro Zyklus
-- keine Parallelisierung
+## Offene Fragen
+- Ob die aktuelle Reihenfolge und Synchronität bei steigender Last ausreichend bleiben.
 
-## Design-Regeln
-
-- `schedule()` verhindert unnötige LLM-Calls über interne Aktivierungsbedingungen
-- alle vier Updater führen ihren Prompt-Schritt direkt aus, sobald die jeweiligen Aktivierungsbedingungen erfüllt sind
-- `scene`, `state` und `ltm` reagieren auf neue Nachrichten seit dem letzten Check
-- `image` reagiert auf einen expliziten Run-Trigger aus `scene` bzw. `state`
-- `image` erzeugt nur dann ein neues Bild, wenn der frisch erzeugte Prompt hinreichend vom zuletzt gespeicherten Prompt abweicht (Exact-/Fuzzy-/Token-Ähnlichkeitsprüfung)
-- Image wird erst nach `scene` und `state` eingeplant, damit abhängige Änderungen im selben Orchestrator-Zyklus sichtbar werden
-
-## Zukunft
-
-- partielle Asynchronisierung möglich
-- adaptive Intervalle / Batching
-- stärkere Entkopplung der Updater
-
-## Fazit
-
-Synchron + periodisch = **kontrollierte Automatisierung mit maximaler Nachvollziehbarkeit**
+## Referenzen
+- `engine/updater/schedule.py`
+- `engine/web/app.py`

@@ -19,20 +19,6 @@ session_app = typer.Typer(no_args_is_help=True, help="Globalen Session-Kontext f
 app.add_typer(session_app, name="session")
 
 
-def print_refresh_output(
-    command_name: str,
-    output: str,
-    did_persist: bool,
-    debug: bool,
-    debug_message: str = "Debug-Modus: keine Persistenz.",
-) -> None:
-    typer.echo(output)
-
-    if did_persist:
-        typer.echo(f"[{command_name}] Persistiert.")
-    elif debug:
-        typer.echo(f"[{command_name}] {debug_message}")
-
 def _run_web(*, host: str, port: int, reload: bool) -> None:
     import importlib
 
@@ -71,9 +57,8 @@ def resolve_updater(updater_name: str) -> AbstractUpdater:
 
 
 @app.callback()
-def main():
+def main() -> None:
     """Hilft beim Starten und Pruefen der wichtigsten Social-Game-Funktionen."""
-    return None
 
 
 @session_app.command("set")
@@ -136,6 +121,17 @@ def image_revert():
     typer.echo(output)
     if did_revert:
         typer.echo("[image revert] Abgeschlossen.")
+
+
+@app.command("image-refresh")
+def image_refresh():
+    """Generiert das Bild mit dem aktuellen Prompt neu, ohne ihn zu aktualisieren."""
+    updater = ImageUpdater()
+
+    output, did_refresh = updater.refresh_image_with_current_prompt()
+    typer.echo(output)
+    if did_refresh:
+        typer.echo("[image-refresh] Persistiert.")
 
 
 @app.command("icons")

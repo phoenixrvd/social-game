@@ -14,8 +14,6 @@ from engine.fs_utils import load_text
 from engine.models import ShortMemoryMessage
 from engine.stores.npc_store import NpcStore
 
-GENERAL_CHAT_RULES_PATH = config.PROJECT_ROOT / "prompts" / "chat_general_rules.md"
-
 
 class NpcTurnService:
     def __init__(self) -> None:
@@ -26,7 +24,7 @@ class NpcTurnService:
 
         character = yaml.dump(npc.character, allow_unicode=True, sort_keys=False).strip()
         system_prompt = (
-            load_text(GENERAL_CHAT_RULES_PATH).strip()
+            load_text(config.PROJECT_ROOT / "prompts" / "chat_general_rules.md").strip()
             .replace("{{ROLE}}", npc.system_prompt.strip() or "(leer)")
             .replace("{{CHARACTER_DATA}}", character or "(leer)")
             .replace("{{CHARACTER_DESCRIPTION}}", npc.description.strip() or "(leer)")
@@ -36,9 +34,8 @@ class NpcTurnService:
         )
 
         memory_messages = [self._memory_message(message) for message in npc.stm]
-        messages = [self._system([system_prompt])] + memory_messages
-
-        return messages
+        system_message: ChatCompletionSystemMessageParam = {"role": "system", "content": system_prompt}
+        return cast(list[ChatCompletionMessageParam], [system_message, *memory_messages])
 
     def build_user_message(self, player_input: str) -> ChatCompletionUserMessageParam:
         return {
@@ -52,9 +49,4 @@ class NpcTurnService:
             cast(object, {"role": message.role, "content": message.content}),
         )
 
-    def _system(self, parts: list[str | None]) -> ChatCompletionSystemMessageParam:
-        return {
-            "role": "system",
-            "content": "\n\n".join(part for part in parts if part),
-        }
 

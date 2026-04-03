@@ -3,155 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Social Game GUI</title>
+    <meta name="description" content="Social Game GUI für dialogbasierte Interaktionen mit NPCs, Szenenverwaltung und dynamischer Bilddarstellung." />
+    <meta name="theme-color" content="#18181b" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f4f5" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="canonical" href="" />
+    <title>Social Game</title>
     <link rel="icon" href="icons/favicon.ico?v=2" sizes="any" />
     <link rel="shortcut icon" href="icons/favicon.ico?v=2" />
     <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32x32.png?v=2" />
     <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16x16.png?v=2" />
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2" />
-    <script>
-      document.documentElement.setAttribute("data-theme", localStorage.getItem("theme") === "light" ? "light" : "dark")
-    </script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="/site.webmanifest" />
+    <script src="js/theme-init.js"></script>
     <link rel="stylesheet" href="css/app.css" />
+    <link rel="modulepreload" href="js/sg-app.js" />
+    <link rel="modulepreload" href="js/sg-chat.js" />
+    <link rel="modulepreload" href="js/sg-message.js" />
+    <link rel="modulepreload" href="js/sg-input.js" />
+    <link rel="modulepreload" href="js/sg-scene-image.js" />
+    <link rel="modulepreload" href="js/trusted-types.js" />
   </head>
-  <body class="overflow-x-hidden overflow-y-auto bg-[var(--bg-app)] text-[var(--text-primary)] lg:overflow-y-hidden">
-    <div class="app-viewport bg-[var(--bg-app)] text-[var(--text-primary)]">
-      <div id="layout-root" class="flex min-h-full flex-col gap-2 p-0 lg:h-full lg:gap-4 lg:p-4 lg:flex-row">
-        <div id="chat-pane" class="order-2 flex min-h-0 w-full flex-col overflow-hidden rounded-none bg-transparent lg:order-1 lg:h-full lg:min-w-0 lg:flex-[1.35] lg:rounded-2xl lg:bg-[var(--bg-panel)]">
+  <body class="sg-body">
+    <main aria-label="Social Game">
+      <h1 class="sg-visually-hidden">Social Game GUI</h1>
+      <sg-app></sg-app>
+    </main>
 
-          <div id="messages" class="chat-scrollbar flex-1 space-y-3 overflow-y-auto bg-transparent p-4 pr-4"></div>
+    <noscript>Diese Anwendung benötigt JavaScript.</noscript>
 
-          <form id="chat-form" class="chat-form-safe fixed inset-x-0 bottom-0 z-20 rounded-t-2xl bg-[var(--bg-panel)] p-4 shadow-[var(--shadow-overlay)] lg:static lg:inset-x-auto lg:bottom-auto lg:rounded-none lg:border-t lg:border-[color:var(--border-soft)] lg:bg-transparent lg:shadow-none">
-            <div class="flex items-end gap-2 rounded-xl bg-[var(--bg-input)] px-3 py-2">
-              <label for="chat-input" class="sr-only">Nachricht eingeben</label>
-              <textarea
-                id="chat-input"
-                rows="1"
-                class="input-scrollbar min-h-[24px] max-h-[220px] flex-1 resize-none bg-transparent py-2 pr-1 outline-none placeholder:text-[var(--text-subtle)]"
-                placeholder="Nachricht eingeben..."
-              ></textarea>
-
-              <div
-                id="image-spinner"
-                class="mb-1 mr-1 hidden h-4 w-4 animate-spin rounded-full border-2 border-[color:var(--text-subtle)] border-t-transparent"
-              ></div>
-
-              <button
-                id="send-button"
-                type="submit"
-                class="mb-1 rounded-xl p-2 text-[var(--text-subtle)] transition hover:bg-[var(--icon-button-bg-hover)] hover:text-[var(--icon-button-text-hover)] disabled:opacity-40"
-                aria-label="Senden"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-5 w-5">
-                  <path d="M22 2L11 13"></path>
-                  <path d="M22 2L15 22L11 13L2 9L22 2Z"></path>
-                </svg>
-              </button>
-            </div>
-
-            <div id="selector-panel" class="hidden mt-2 grid grid-cols-2 gap-2">
-              <label class="block text-sm text-[var(--text-muted)]">
-                <span class="pl-1 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-subtle)]">NPC</span>
-                <select
-                  id="npc-select"
-                  class="mt-0.5 min-h-[48px] w-full rounded-xl bg-[var(--bg-input)] px-4 py-3 text-base outline-none transition"
-                ></select>
-              </label>
-              <label class="block text-sm text-[var(--text-muted)]">
-                <span class="pl-1 text-[10px] font-medium uppercase tracking-[0.15em] text-[var(--text-subtle)]">Szene</span>
-                <select
-                  id="scene-select"
-                  class="mt-0.5 min-h-[48px] w-full rounded-xl bg-[var(--bg-input)] px-4 py-3 text-base outline-none transition"
-                ></select>
-              </label>
-            </div>
-
-            <div class="mt-2 flex items-center text-xs text-[var(--text-subtle)]">
-              <span id="composer-hint" class="hidden lg:inline">Enter = senden, Shift+Enter = neue Zeile</span>
-              <div class="ml-auto flex items-center gap-1">
-                <button
-                  id="selector-toggle-button"
-                  type="button"
-                  class="icon-button rounded-lg p-1.5 transition"
-                  aria-label="NPC und Szene auswählen"
-                  aria-pressed="false"
-                  title="NPC und Szene auswählen"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
-                    <line x1="21" y1="4" x2="14" y2="4"></line>
-                    <line x1="10" y1="4" x2="3" y2="4"></line>
-                    <line x1="21" y1="12" x2="12" y2="12"></line>
-                    <line x1="8" y1="12" x2="3" y2="12"></line>
-                    <line x1="21" y1="20" x2="16" y2="20"></line>
-                    <line x1="12" y1="20" x2="3" y2="20"></line>
-                    <line x1="14" y1="2" x2="14" y2="6"></line>
-                    <line x1="8" y1="10" x2="8" y2="14"></line>
-                    <line x1="16" y1="18" x2="16" y2="22"></line>
-                  </svg>
-                </button>
-                <button
-                  id="theme-toggle-button"
-                  type="button"
-                  class="icon-button rounded-lg p-1.5 transition"
-                  aria-label="Theme umschalten"
-                  aria-pressed="false"
-                  title="Theme umschalten"
-                ></button>
-                <button
-                  id="image-refresh-button"
-                  type="button"
-                  class="icon-button rounded-lg p-1.5 transition"
-                  aria-label="Bild aktualisieren"
-                  title="Bild aktualisieren"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
-                    <path d="M3 3h18v18H3z"></path>
-                    <path d="M3 15l5-5 4 4 3-3 6 6"></path>
-                    <path d="M16 8h4v4"></path>
-                    <path d="M20 8l-4 4"></path>
-                  </svg>
-                </button>
-                <button
-                  id="delete-button"
-                  type="button"
-                  class="rounded-lg p-1.5 text-red-300 transition hover:bg-red-500/20 hover:text-red-200"
-                  aria-label="NPC-Daten loeschen"
-                  title="NPC-Daten loeschen"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="h-4 w-4">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6l-1 14H6L5 6"></path>
-                    <path d="M10 11v6"></path>
-                    <path d="M14 11v6"></path>
-                    <path d="M9 6V4h6v2"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
-
-        <div id="image-pane" class="relative order-1 z-20 mx-0 mt-0 flex w-full min-h-[20vh] flex-1 items-center justify-center overflow-hidden rounded-2xl bg-[var(--bg-panel)] transition-all duration-200 lg:static lg:z-auto lg:mx-0 lg:mt-0 lg:w-auto lg:order-2 lg:min-h-0 lg:flex-[0.85] lg:overflow-hidden lg:rounded-2xl">
-          <div id="image-empty" class="hidden text-[var(--text-subtle)]">Kein Bild geladen</div>
-
-          <div id="image-frame" class="relative flex h-full w-full min-h-[20vh] items-center justify-center overflow-hidden rounded-xl lg:rounded-xl">
-            <div id="image-content" class="absolute inset-0 flex items-center justify-center overflow-hidden transition-all duration-200">
-              <img id="image-bg" src="data:," alt="bg" class="absolute inset-0 h-full w-full scale-110 object-cover blur-xl opacity-40" />
-              <img id="image-main" src="data:," alt="NPC" class="relative h-full w-auto max-w-full cursor-pointer object-contain" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div id="image-overlay" class="fixed inset-0 z-50 bg-[var(--bg-overlay)] p-2 opacity-0 pointer-events-none lg:hidden">
-        <div id="image-overlay-frame" class="relative h-full w-full overflow-hidden rounded-xl bg-[var(--bg-panel)]">
-          <img id="image-overlay-bg" src="data:," alt="bg" class="absolute inset-0 h-full w-full scale-110 object-cover blur-xl opacity-40" />
-          <img id="image-overlay-main" src="data:," alt="NPC" class="relative h-full w-full object-cover" />
-        </div>
-      </div>
-    </div>
-
-    <script src="js/app.js"></script>
+    <script type="module" src="js/sg-app.js"></script>
   </body>
 </html>

@@ -34,6 +34,9 @@ class Config(BaseSettings):
     LOG_LEVEL: str = "INFO"
     LOG_SHOW_IN_CLI: bool = True
 
+    # Web GUI
+    WEB_DEBUG: bool = False
+
     # LLM/OpenAI configuration
     OPENAI_API_KEY: str  # required
     MODEL_LLM_BIG: str = "gpt-5.4"

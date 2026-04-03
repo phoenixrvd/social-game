@@ -2,9 +2,9 @@
 
 Ein System für emergente soziale Interaktion mit KI-Charakteren.
 
-- Keine vorgegebene Story
-- Keine Dialogbäume
-- Kein klassischer Gameplay-Loop
+* Keine vorgegebene Story
+* Keine Dialogbäume
+* Kein klassischer Gameplay-Loop
 
 Stattdessen entwickeln sich Gespräche, Beziehungen und Situationen dynamisch aus der Interaktion heraus.
 
@@ -14,14 +14,14 @@ Dieses Beispiel zeigt, wie aus einer unscharfen Eingabe durch Interaktion eine k
 
 ### Ausgangspunkt
 
-Ein einfacher Einstieg im Arbeitskontext.  
+Ein einfacher Einstieg im Arbeitskontext.
 Die Eingabe ist nicht falsch, aber unpräzise.
 
 ![Start](doc/images/demo_1.png)
 
 ### Analyse
 
-Der Charakter erkennt das eigentliche Problem:  
+Der Charakter erkennt das eigentliche Problem:
 Die Aussage ist austauschbar und vermeidet jede klare Position.
 
 Statt allgemeinem Feedback wird der Text konkret zerlegt und hinterfragt.
@@ -127,7 +127,29 @@ Ziel ist Vielfalt in Interaktionen statt viele ähnliche Charaktere.
 * Anforderungen: `doc/requirements`
 * Architekturentscheidungen (ADR): `doc/adr`
 
-## Installation
+## Konfiguration
+
+Im Projektverzeichnis eine `.env` anlegen.
+
+```env
+OPENAI_API_KEY=<your_openai_api_key>
+```
+
+## Schnellstart (Docker – Quick Preview)
+
+Wenn du keine passende Python-Version installieren möchtest oder einfach direkt loslegen willst:
+
+```bash
+docker compose up --build
+```
+
+Danach erreichbar unter:
+
+[http://localhost:8000](http://localhost:8000)
+
+## Hackable Installation (empfohlen)
+
+Für Entwicklung, Verständnis und Anpassungen:
 
 ```bash
 python3 -m venv .venv
@@ -136,18 +158,9 @@ pip install -r requirements.txt
 python -m pip install -e .
 ```
 
-## Konfiguration
-
-Im Projektverzeichnis eine .env anlegen.
-
-```env
-OPENAI_API_KEY=<your_openai_api_key>
-```
-
-## Schnellstart
+Start:
 
 ```bash
-source .venv/bin/activate
 sg web
 ```
 
@@ -162,6 +175,7 @@ Alpha für Entwickler.
 Fokus auf Architektur und Interaktionsmodell.
 Kein vollständiger Gameplay-Loop.
 Fehlerhandling bewusst minimal.
+
 Ziel ist die Exploration sozialer Dynamik mit LLMs.
 
 ![Logo](engine/web/static/icons/icon-192.png)
