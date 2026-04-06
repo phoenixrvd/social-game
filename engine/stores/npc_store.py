@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Iterable, Literal, cast
 from uuid import uuid4
 
 from engine.config import config
@@ -72,7 +72,7 @@ class NpcStore:
             ShortMemoryMessage(
                 id=str(row.get("id", "")),
                 timestamp_utc=str(row.get("timestamp_utc", "")),
-                role=role,
+                role=cast(Literal["user", "assistant", "system"], role),
                 content=str(row.get("content", "")),
             )
             for row in rows
@@ -99,27 +99,9 @@ class NpcStore:
             img=self._load_current_image_path(resolved_npc_id, resolved_scene_id),
         )
 
-    def _revert_runtime_value(self, npc_id: str, scene_id: str, filename: str) -> None:
-        path = self._runtime_path(npc_id, scene_id, filename)
-        if path.is_file():
-            path.unlink()
-
-    def _revert_active_runtime_value(self, filename: str) -> None:
-        session = self.session_store.load()
-        self._revert_runtime_value(session.npc_id, session.scene_id, filename)
-
     def _save_active_runtime_value(self, filename: str, content: str) -> None:
         session = self.session_store.load()
         save_text(self._runtime_path(session.npc_id, session.scene_id, filename), content)
-
-    def revert_scene(self) -> None:
-        self._revert_active_runtime_value("scene.md")
-
-    def revert_ltm(self) -> None:
-        self._revert_active_runtime_value("ltm.md")
-
-    def revert_description(self) -> None:
-        self._revert_active_runtime_value("description.md")
 
     def save_state(self, state: str) -> None:
         self._save_active_runtime_value("state.md", state)
@@ -127,8 +109,6 @@ class NpcStore:
     def save_ltm(self, ltm: str) -> None:
         self._save_active_runtime_value("ltm.md", ltm)
 
-    def save_description(self, description: str) -> None:
-        self._save_active_runtime_value("description.md", description)
 
     def save_scene(self, scene: str) -> None:
         self._save_active_runtime_value("scene.md", scene)

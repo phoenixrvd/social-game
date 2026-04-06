@@ -96,27 +96,6 @@ class FakeNpcStore:
         self._current_npc.stm.extend([user_message, assistant_message])
         return [user_message, assistant_message]
 
-    def save_scene(self, scene: str) -> None:
-        self._current_npc.scene = Scene(scene_id=FakeSessionStore.current.scene_id, description=scene)
-
-    def save_description(self, description: str) -> None:
-        self._current_npc.description = description
-
-    def save_ltm(self, ltm: str) -> None:
-        self._current_npc.ltm = ltm
-
-    def revert_scene(self) -> None:
-        scene_id = FakeSessionStore.current.scene_id
-        self._current_npc.scene = Scene(scene_id=scene_id, description=f"Szene {scene_id}")
-
-    def revert_description(self) -> None:
-        npc_id = FakeSessionStore.current.npc_id
-        self._current_npc.description = f"Charakterbeschreibung {npc_id}"
-
-    def revert_ltm(self) -> None:
-        self._current_npc.ltm = "kennt den Spieler"
-
-
 class FakeNpcTurnService:
     def __init__(self) -> None:
         self.npc_store = fake_npc_store
@@ -397,57 +376,6 @@ def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
     assert response.json()["detail"] == "Mindestens npc_id oder scene_id muss gesetzt sein."
 
 
-def test_initial_state_endpoint_returns_fields_and_editable_flag(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = _build_npc(npc_id="vika", scene_id="office", messages=[])
-
-    response = client.get("/api/initial-state")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["scene_description"] == "Szene office"
-    assert payload["character_description"] == "Charakterbeschreibung vika"
-    assert payload["ltm"] == "kennt den Spieler"
-    assert payload["editable"] is True
-
-
-def test_initial_state_save_rejects_after_first_message(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.put("/api/initial-state/scene", json={"value": "Neue Szene"})
-
-    assert response.status_code == 409
-
-
-def test_initial_state_save_and_revert_for_character(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = _build_npc(npc_id="vika", scene_id="office", messages=[])
-
-    save_response = client.put("/api/initial-state/character", json={"value": "Neu"})
-    assert save_response.status_code == 200
-    assert save_response.json()["character_description"] == "Neu"
-
-    revert_response = client.post("/api/initial-state/character/revert")
-    assert revert_response.status_code == 200
-    assert revert_response.json()["character_description"] == "Charakterbeschreibung vika"
-
-
-def test_initial_state_returns_generic_error_on_load_failure(tmp_path, monkeypatch):
-    _make_client(tmp_path, monkeypatch)
-
-    class FailingNpcStore:
-        def load(self):
-            raise RuntimeError("boom")
-
-    monkeypatch.setattr(web_app_module, "NpcStore", FailingNpcStore)
-    client = TestClient(web_app_module.app, base_url="http://testserver", raise_server_exceptions=False)
-
-    response = client.get("/api/initial-state")
-
-    assert response.status_code == 500
-    assert response.json()["detail"] == "Initialzustand-Aktion fehlgeschlagen."
-
-
 def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
     client = _make_client(tmp_path, monkeypatch)
     scene_data_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
@@ -471,14 +399,6 @@ def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/webp"
     assert len(response.content) > 0
-
-
-def test_current_image_head_returns_200(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.head("/api/image/current")
-
-    assert response.status_code == 200
 
 
 def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
@@ -543,35 +463,6 @@ def test_refresh_active_image_returns_500_on_schedule_error(tmp_path, monkeypatc
     assert response.status_code == 500
     assert "generation_failed" in response.json()["detail"]
 
-
-def test_health_returns_runtime_signatures(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.get("/health")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["npc_id"] == "vika"
-    assert payload["scene_id"] == "office"
-    assert payload["messages_signature"] == "2|m2"
-    assert payload["image_update_error"] == ""
-    assert payload["image_signature"]
-
-
-def test_health_returns_500_when_loading_session_fails(tmp_path, monkeypatch):
-    _make_client(tmp_path, monkeypatch)
-
-    class FailingSessionStore:
-        def load(self):
-            raise RuntimeError("session kaputt")
-
-    monkeypatch.setattr(web_app_module, "SessionStore", FailingSessionStore)
-    client = TestClient(web_app_module.app, base_url="http://testserver", raise_server_exceptions=False)
-
-    response = client.get("/health")
-
-    assert response.status_code == 500
 
 
 def test_get_state_returns_last_image_update_error(tmp_path, monkeypatch):

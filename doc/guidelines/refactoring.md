@@ -1,6 +1,11 @@
 # Refactoring
 
-- Reduziere Komplexität bei jeder Änderung mit, wenn es ohne Mehr-Risiko möglich ist.
-- Baue keine Kompatibilitätslayer bei Refactorings ein, sondern aktualisiere bestehende Schnittstellen direkt.
-- Führe globale Konstanten zurück auf direkte Literale, wenn sie nicht mehr als zweimal im Modul verwendet werden.
-- Wenn Literale ohne Kontext unklar sind, benenne sie lokal statt sie unnötig global auszulagern.
+## Grundregeln
+
+- [BLOCKER] Komplexität bei jeder Änderung reduzieren, wenn risikofrei möglich
+- [BLOCKER] Keine Kompatibilitätslayer einführen, bestehende Schnittstellen direkt anpassen
+
+## Konstanten
+
+- [BLOCKER] Globale Konstanten entfernen, wenn sie nicht mehr als zweimal im Modul verwendet werden
+- [WARNING] Unklare Literale lokal benennen statt global auszulagern

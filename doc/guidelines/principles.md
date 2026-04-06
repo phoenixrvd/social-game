@@ -1,7 +1,8 @@
-# Prinzipien
+# Principles
 
-- Code soll kurz, lesbar und direkt sein.
-- Komplexität soll aktiv reduziert werden.
-- Fehler dürfen nicht verschleiert werden.
-- Abstraktionen sollen nur bei echtem Wiederverwendungsnutzen eingeführt werden.
-- Lokale Verständlichkeit hat Vorrang vor globalen Konstanten.
+- Code ist kurz, lesbar und direkt
+- Komplexität wird aktiv reduziert
+- Fehlerursachen werden nicht verschleiert
+- Abstraktionen nur bei echtem Wiederverwendungsnutzen
+- Lokale Verständlichkeit hat Vorrang vor globaler Struktur
+- Bevorzuge Klarheit über Abstraktion

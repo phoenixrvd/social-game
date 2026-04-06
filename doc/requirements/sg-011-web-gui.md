@@ -34,6 +34,8 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 - Nutzereingaben und Systemantworten sind visuell unterscheidbar.
 - Die Anzeige bleibt innerhalb einer Sitzung konsistent.
 
+**Technische Anmerkung:** Beim initialen Laden eines Nachrichtenverlaufs (leere Nachrichtenliste vor dem Render) wird ohne Scroll-Animation direkt ans Ende gescrollt (`scrollBehavior: instant`), um unnötige Animationen beim Bulk-Insert zu vermeiden. Inkrementelle Updates (z. B. gestreamte Chunks) verwenden weiche Scroll-Animation (`scrollBehavior: smooth`).
+
 **Referenzen:** Keine
 
 ### Zugriff über Browserkontext

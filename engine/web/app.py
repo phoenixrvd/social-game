@@ -139,19 +139,6 @@ class SessionRequest(BaseModel):
     scene_id: str | None = None
 
 
-class InitialStateSaveRequest(BaseModel):
-    value: str
-
-
-INITIAL_FIELD_TO_STORE_KEY = {
-    "scene": "scene_description",
-    "character": "character_description",
-    "ltm": "ltm",
-}
-
-GENERIC_INITIAL_STATE_ERROR = "Initialzustand-Aktion fehlgeschlagen."
-
-
 def _sse_data(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=True)}\n\n"
 
@@ -245,27 +232,6 @@ def _state_payload() -> dict[str, Any]:
     }
 
 
-def _initial_state_payload() -> dict[str, Any]:
-    npc = NpcStore().load()
-    return {
-        "scene_description": npc.scene.description,
-        "character_description": npc.description,
-        "ltm": npc.ltm,
-        "editable": len(_visible_stm_messages(npc)) == 0,
-    }
-
-
-def _resolve_initial_state_context() -> tuple[NpcStore, bool]:
-    npc_store = NpcStore()
-    editable = len(_visible_stm_messages(npc_store.load())) == 0
-    return npc_store, editable
-
-
-def _validate_initial_field(field: str) -> None:
-    if field not in INITIAL_FIELD_TO_STORE_KEY:
-        raise HTTPException(status_code=404, detail="Initialzustandsfeld nicht gefunden.")
-
-
 @app.get("/")
 def index() -> Any:
     response = FileResponse(INDEX_PATH)
@@ -283,63 +249,6 @@ def web_manifest() -> Any:
 @app.get("/api/state")
 def get_state() -> dict[str, Any]:
     return _state_payload()
-
-
-@app.get("/api/initial-state")
-def get_initial_state() -> dict[str, Any]:
-    try:
-        return _initial_state_payload()
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=GENERIC_INITIAL_STATE_ERROR) from exc
-
-
-@app.put("/api/initial-state/{field}")
-def save_initial_state(field: str, request: InitialStateSaveRequest) -> dict[str, Any]:
-    _validate_initial_field(field)
-    npc_store, editable = _resolve_initial_state_context()
-    if not editable:
-        raise HTTPException(status_code=409, detail="Initialzustand ist nach erster Nachricht gesperrt.")
-    try:
-        if field == "scene":
-            npc_store.save_scene(request.value)
-        elif field == "character":
-            npc_store.save_description(request.value)
-        else:
-            npc_store.save_ltm(request.value)
-        return _initial_state_payload()
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=GENERIC_INITIAL_STATE_ERROR) from exc
-
-
-@app.post("/api/initial-state/{field}/revert")
-def revert_initial_state(field: str) -> dict[str, Any]:
-    _validate_initial_field(field)
-    npc_store, editable = _resolve_initial_state_context()
-    if not editable:
-        raise HTTPException(status_code=409, detail="Initialzustand ist nach erster Nachricht gesperrt.")
-    try:
-        if field == "scene":
-            npc_store.revert_scene()
-        elif field == "character":
-            npc_store.revert_description()
-        else:
-            npc_store.revert_ltm()
-        return _initial_state_payload()
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=GENERIC_INITIAL_STATE_ERROR) from exc
-
-
-@app.get("/api/messages/delta")
-def get_messages_delta(after_id: str | None = None) -> dict[str, Any]:
-    npc = NpcStore().load()
-    visible = _visible_stm_messages(npc)
-    signature = _messages_signature(npc)
-    if not after_id:
-        return {"messages": [_message_to_payload(m) for m in visible], "messages_signature": signature, "reset_required": False}
-    after_index = next((i for i, m in enumerate(visible) if m.id == after_id), None)
-    if after_index is None:
-        return {"messages": [], "messages_signature": signature, "reset_required": True}
-    return {"messages": [_message_to_payload(m) for m in visible[after_index + 1:]], "messages_signature": signature, "reset_required": False}
 
 
 @app.put("/api/session")
@@ -400,7 +309,6 @@ def chat_stream(request: ChatRequest) -> Any:
 
 
 @app.get("/api/image/current")
-@app.head("/api/image/current")
 def current_image() -> Any:
     npc = NpcStore().load()
     if not npc.img.is_file():
@@ -414,6 +322,15 @@ def current_image() -> Any:
     return Response(content=_get_cached_webp(npc.img), media_type="image/webp")
 
 
+@app.get("/api/image/signature")
+def image_signature() -> dict[str, Any]:
+    npc = NpcStore().load()
+    return {
+        "signature": _image_signature(npc),
+        "image_url": _image_url(npc),
+    }
+
+
 @app.post("/api/image/refresh-active")
 def refresh_active_image() -> dict[str, Any]:
     updater = ImageUpdater()
@@ -424,19 +341,6 @@ def refresh_active_image() -> dict[str, Any]:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return {"image_update_error": updater.get_last_error()}
 
-
-@app.get("/health")
-def health() -> dict[str, str]:
-    session = SessionStore().load()
-    npc = NpcStore().load()
-    return {
-        "status": "ok",
-        "npc_id": session.npc_id,
-        "scene_id": session.scene_id,
-        "image_signature": _image_signature(npc),
-        "messages_signature": _messages_signature(npc),
-        "image_update_error": ImageUpdater().get_last_error(),
-    }
 
 
 def run(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:

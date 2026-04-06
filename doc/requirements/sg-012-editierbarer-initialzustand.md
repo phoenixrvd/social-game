@@ -1,5 +1,5 @@
 ---
-state: implemented
+state: defined
 ---
 
 # SG-012: Editierbarer Initialzustand

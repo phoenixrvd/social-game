@@ -1,5 +1,9 @@
 import { trustedHtml } from "./trusted-types.js"
 
+function isMobileViewport() {
+  return window.matchMedia("(max-width: 1023px)").matches
+}
+
 class SocialGameSceneImage extends HTMLElement {
   constructor() {
     super()
@@ -7,84 +11,48 @@ class SocialGameSceneImage extends HTMLElement {
       imageUrl: "",
       isExpanded: false,
     }
-    this._boundHandleMainLoad = this.handleMainLoad.bind(this)
-    this._boundHandleMainError = this.handleMainError.bind(this)
-    this._boundHandleMainClick = this.handleMainClick.bind(this)
-    this._boundHandleMainKeyDown = this.handleMainKeyDown.bind(this)
-    this._boundHandleOverlayClick = this.handleOverlayClick.bind(this)
-    this._boundHandleOverlayKeyDown = this.handleOverlayKeyDown.bind(this)
-    this._listeners = [
-      [".sg-image-main", "load", this._boundHandleMainLoad],
-      [".sg-image-main", "error", this._boundHandleMainError],
-      [".sg-image-main", "click", this._boundHandleMainClick],
-      [".sg-image-main", "keydown", this._boundHandleMainKeyDown],
-      [".sg-image-overlay", "click", this._boundHandleOverlayClick],
-      [".sg-image-overlay", "keydown", this._boundHandleOverlayKeyDown],
-    ]
+    this.$ = null
     this._lastFocusedElement = null
   }
 
   connectedCallback() {
-    if (!this.querySelector(".sg-image-pane")) {
-      this.innerHTML = trustedHtml(`
-        <div class="sg-image-pane">
-          <div class="sg-image-empty sg-hidden">Kein Bild geladen</div>
-          <div class="sg-image-frame">
-            <div class="sg-image-content">
-              <img class="sg-image-bg" src="data:," alt="Hintergrund" />
-              <img class="sg-image-main" src="data:," alt="NPC" />
-            </div>
+    this.innerHTML = trustedHtml(`
+      <div class="sg-image-pane">
+        <div class="sg-image-empty sg-hidden">Kein Bild geladen</div>
+        <div class="sg-image-frame">
+          <div class="sg-image-content">
+            <img class="sg-image-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" fetchpriority="low" />
+            <img class="sg-image-main" src="data:," alt="Szenenbild" role="button" tabindex="0" aria-label="Bild vergroessern" loading="lazy" decoding="async" />
           </div>
         </div>
+      </div>
 
-        <div class="sg-image-overlay">
-          <div class="sg-image-overlay-frame">
-            <img class="sg-image-overlay-bg" src="data:," alt="Hintergrund" />
-            <img class="sg-image-overlay-main" src="data:," alt="NPC" />
-          </div>
+      <div class="sg-image-overlay" role="dialog" aria-modal="true" aria-label="Vergroessertes Szenenbild" tabindex="-1">
+        <div class="sg-image-overlay-frame">
+          <img class="sg-image-overlay-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" />
+          <img class="sg-image-overlay-main" src="data:," alt="Szenenbild" loading="lazy" decoding="async" />
         </div>
-      `)
+      </div>
+    `)
+
+    this.$ = {
+      frame: this.querySelector(".sg-image-frame"),
+      empty: this.querySelector(".sg-image-empty"),
+      overlay: this.querySelector(".sg-image-overlay"),
+      bg: this.querySelector(".sg-image-bg"),
+      main: this.querySelector(".sg-image-main"),
+      overlayBg: this.querySelector(".sg-image-overlay-bg"),
+      overlayMain: this.querySelector(".sg-image-overlay-main"),
     }
 
-    const mainImage = this.querySelector(".sg-image-main")
-    const backgroundImage = this.querySelector(".sg-image-bg")
-    const overlayBackgroundImage = this.querySelector(".sg-image-overlay-bg")
-    const overlayMainImage = this.querySelector(".sg-image-overlay-main")
-    const overlayElement = this.querySelector(".sg-image-overlay")
-
-    if (mainImage) {
-      mainImage.setAttribute("role", "button")
-      mainImage.setAttribute("tabindex", "0")
-      mainImage.setAttribute("aria-label", "Bild vergroessern")
-      mainImage.setAttribute("loading", "lazy")
-      mainImage.setAttribute("decoding", "async")
-    }
-    backgroundImage?.setAttribute("loading", "lazy")
-    backgroundImage?.setAttribute("decoding", "async")
-    backgroundImage?.setAttribute("fetchpriority", "low")
-    overlayBackgroundImage?.setAttribute("loading", "lazy")
-    overlayBackgroundImage?.setAttribute("decoding", "async")
-    overlayMainImage?.setAttribute("loading", "lazy")
-    overlayMainImage?.setAttribute("decoding", "async")
-
-    if (overlayElement) {
-      overlayElement.setAttribute("role", "dialog")
-      overlayElement.setAttribute("aria-modal", "true")
-      overlayElement.setAttribute("aria-label", "Vergroessertes NPC-Bild")
-      overlayElement.setAttribute("tabindex", "-1")
-    }
-
-    this._listeners.forEach(([selector, eventName, handler]) => {
-      this.querySelector(selector)?.addEventListener(eventName, handler)
-    })
+    this.$.main.addEventListener("load", this.handleMainLoad.bind(this))
+    this.$.main.addEventListener("error", this.handleMainError.bind(this))
+    this.$.main.addEventListener("click", this.handleMainClick.bind(this))
+    this.$.main.addEventListener("keydown", this.handleMainKeyDown.bind(this))
+    this.$.overlay.addEventListener("click", this.handleOverlayClick.bind(this))
+    this.$.overlay.addEventListener("keydown", this.handleOverlayKeyDown.bind(this))
 
     this.render()
-  }
-
-  disconnectedCallback() {
-    this._listeners.forEach(([selector, eventName, handler]) => {
-      this.querySelector(selector)?.removeEventListener(eventName, handler)
-    })
   }
 
   setState(nextState = {}) {
@@ -106,8 +74,11 @@ class SocialGameSceneImage extends HTMLElement {
 
   handleMainClick(event) {
     event.stopPropagation()
+    if (!this._state.imageUrl || !isMobileViewport()) {
+      return
+    }
     this._lastFocusedElement = document.activeElement
-    this.emit("sg:image-expand-toggle", { expanded: !this._state.isExpanded })
+    this.toggleExpanded()
   }
 
   handleMainKeyDown(event) {
@@ -115,15 +86,18 @@ class SocialGameSceneImage extends HTMLElement {
       return
     }
     event.preventDefault()
+    if (!this._state.imageUrl || !isMobileViewport()) {
+      return
+    }
     this._lastFocusedElement = document.activeElement
-    this.emit("sg:image-expand-toggle", { expanded: !this._state.isExpanded })
+    this.toggleExpanded()
   }
 
   handleOverlayClick() {
     if (!this._state.isExpanded) {
       return
     }
-    this.emit("sg:image-expand-toggle", { expanded: false })
+    this.collapseOverlay()
   }
 
   handleOverlayKeyDown(event) {
@@ -131,50 +105,49 @@ class SocialGameSceneImage extends HTMLElement {
       return
     }
     event.preventDefault()
+    this.collapseOverlay()
+  }
+
+  toggleExpanded() {
+    if (!isMobileViewport()) {
+      return
+    }
+    const nextExpanded = !this._state.isExpanded
+    this.setState({ isExpanded: nextExpanded })
+    this.emit("sg:image-expand-toggle", { expanded: nextExpanded })
+
+    if (nextExpanded) {
+      this.$.overlay.focus()
+    }
+  }
+
+  collapseOverlay() {
+    this.setState({ isExpanded: false })
     this.emit("sg:image-expand-toggle", { expanded: false })
+    if (this._lastFocusedElement instanceof HTMLElement) {
+      this._lastFocusedElement.focus()
+    }
   }
 
   render() {
-    const hasImage = Boolean(this._state.imageUrl)
-    const frameElement = this.querySelector(".sg-image-frame")
-    const emptyElement = this.querySelector(".sg-image-empty")
-    const overlayElement = this.querySelector(".sg-image-overlay")
-    const overlayWasOpen = overlayElement?.classList.contains("is-open") ?? false
-    const overlayIsOpen = Boolean(this._state.isExpanded && hasImage)
-    frameElement?.classList.toggle("sg-hidden", !hasImage)
-    emptyElement?.classList.toggle("sg-hidden", hasImage)
-    overlayElement?.classList.toggle("is-open", overlayIsOpen)
+    const hasImage = typeof this._state.imageUrl === "string" && this._state.imageUrl.trim().length > 0
+    const overlayIsOpen = Boolean(isMobileViewport() && this._state.isExpanded && hasImage)
 
-    if (!overlayWasOpen && overlayIsOpen) {
-      overlayElement?.focus()
-    } else if (overlayWasOpen && !overlayIsOpen && this._lastFocusedElement instanceof HTMLElement) {
-      this._lastFocusedElement.focus()
-    }
+    this.$.frame.classList.toggle("sg-hidden", !hasImage)
+    this.$.empty.classList.toggle("sg-hidden", hasImage)
+    this.$.overlay.classList.toggle("is-open", overlayIsOpen)
 
     if (!hasImage) {
       return
     }
 
-    const backgroundImage = this.querySelector(".sg-image-bg")
-    const mainImage = this.querySelector(".sg-image-main")
-    const overlayBackgroundImage = this.querySelector(".sg-image-overlay-bg")
-    const overlayMainImage = this.querySelector(".sg-image-overlay-main")
-    if (!backgroundImage || !mainImage || !overlayBackgroundImage || !overlayMainImage) {
+    if (this.$.main.getAttribute("src") === this._state.imageUrl) {
       return
     }
 
-    if (backgroundImage.getAttribute("src") !== this._state.imageUrl) {
-      backgroundImage.src = this._state.imageUrl
-    }
-    if (mainImage.getAttribute("src") !== this._state.imageUrl) {
-      mainImage.src = this._state.imageUrl
-    }
-    if (overlayBackgroundImage.getAttribute("src") !== this._state.imageUrl) {
-      overlayBackgroundImage.src = this._state.imageUrl
-    }
-    if (overlayMainImage.getAttribute("src") !== this._state.imageUrl) {
-      overlayMainImage.src = this._state.imageUrl
-    }
+    ;[this.$.bg, this.$.main, this.$.overlayBg, this.$.overlayMain].forEach((img) => {
+      img.src = this._state.imageUrl
+    })
   }
 }
 

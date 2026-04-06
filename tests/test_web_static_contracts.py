@@ -8,20 +8,20 @@ def _read(rel_path: str) -> str:
     return (ROOT_DIR / rel_path).read_text(encoding="utf-8")
 
 
-def test_sg_message_sanitizes_html_before_innerhtml_assignment():
+def test_sg_message_uses_content_only_rendering():
     source = _read("engine/web/static/js/sg-message.js")
 
-    assert "function sanitizeMessageHtml(rawHtml)" in source
-    assert "name.startsWith(\"on\")" in source
-    assert "javascript:" in source
-    assert "contentMarkup = sanitizeMessageHtml(message.html)" in source
-    assert "contentMarkup = message.html" not in source
+    assert "message.content" in source
+    assert "message.html" not in source
+    assert "msg-content-prewrap" in source
+    assert "console.log(" not in source
 
 
-def test_sg_message_sanitizer_uses_domparser_not_template_innerhtml():
+def test_sg_message_has_no_domparser_sanitizer_path():
     source = _read("engine/web/static/js/sg-message.js")
 
-    assert "DOMParser" in source
+    assert "sanitizeMessageHtml(" not in source
+    assert "DOMParser" not in source
     assert "template.innerHTML" not in source
 
 
@@ -54,20 +54,17 @@ def test_index_has_no_inline_scripts():
     assert "theme-init.js" in source
 
 
-def test_sg_chat_exposes_public_messages_api_methods():
+def test_sg_chat_exposes_scroll_method():
     source = _read("engine/web/static/js/sg-chat.js")
 
-    expected_methods = [
-        "addMessagesScrollListener(",
-        "removeMessagesScrollListener(",
-        "isMessagesNearBottom(",
-        "scrollMessagesToBottom(",
-        "observeMessagesResize(",
-        "observeMessagesMutations(",
-    ]
+    assert "scrollMessagesToBottom(" in source
 
-    for method in expected_methods:
-        assert method in source
+
+def test_sg_chat_updates_existing_message_elements_during_sync():
+    source = _read("engine/web/static/js/sg-chat.js")
+
+    assert "element.message = renderedMessage" in source
+    assert "container.insertBefore(element, referenceNode)\n        element.message = renderedMessage" not in source
 
 
 def test_sg_chat_routes_context_messages_to_context_component():
@@ -79,14 +76,17 @@ def test_sg_chat_routes_context_messages_to_context_component():
     assert '"context-scene"' in source
 
 
-def test_sg_app_uses_sg_chat_public_api_instead_of_internal_dom_access():
-    source = _read("engine/web/static/js/sg-app.js")
+def test_sg_input_keeps_focus_stable_while_sending():
+    source = _read("engine/web/static/js/sg-input.js")
 
-    assert 'querySelector(".sg-chat-messages")' not in source
-    assert "addMessagesScrollListener" in source
-    assert "removeMessagesScrollListener" in source
-    assert "isMessagesNearBottom" in source
-    assert "scrollMessagesToBottom" in source
-    assert "observeMessagesResize" in source
-    assert "observeMessagesMutations" in source
-
+    assert "const composerReadOnly = this._state.isSessionLoading" in source
+    assert "this.$.textarea.readOnly = composerReadOnly" in source
+    assert "this.$.textarea.setAttribute(\"aria-readonly\", composerReadOnly ? \"true\" : \"false\")" in source
+    assert "this.$.sendButton.addEventListener(\"pointerdown\", this.handleSendPointerDown.bind(this))" in source
+    assert "handleSendPointerDown(event)" in source
+    assert "event.preventDefault()" in source
+    assert "isSubmitBlocked()" in source
+    assert "return this._state.isSending || this._state.isSessionLoading" in source
+    assert "if (this.isSubmitBlocked())" in source
+    assert "_restoreFocusAfterSend" not in source
+    assert "requestAnimationFrame(() => this.focusInput())" not in source

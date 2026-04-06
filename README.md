@@ -152,6 +152,8 @@ Danach erreichbar unter:
 Für Entwicklung, Verständnis und Anpassungen:
 
 ```bash
+git config core.hooksPath .githooks
+
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt

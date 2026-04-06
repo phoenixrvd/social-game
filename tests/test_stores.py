@@ -112,35 +112,7 @@ def test_npc_store_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
     npc = store.load()
 
     assert npc.img == npc_dir / "img.png"
-
-
-def test_npc_store_runtime_description_overlay_and_revert(tmp_path, monkeypatch):
-    monkeypatch.setattr(npc_store_module.config, "SCENE_DIR", tmp_path / "scenes")
-    monkeypatch.setattr(npc_store_module.config, "NPC_DIR", tmp_path / "npcs")
-    monkeypatch.setattr(npc_store_module.config, "DATA_NPC_DIR", tmp_path / "data" / "npcs")
-    monkeypatch.setattr(npc_store_module, "SessionStore", FakeSessionStore)
-
-    (tmp_path / "scenes" / "default").mkdir(parents=True)
-    (tmp_path / "scenes" / "default" / "scene.md").write_text("# Default Szene", encoding="utf-8")
-    npc_dir = tmp_path / "npcs" / "vika"
-    npc_dir.mkdir(parents=True)
-    (npc_dir / "description.md").write_text("Standardbeschreibung", encoding="utf-8")
-    (npc_dir / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
-    (npc_dir / "character.yaml").write_text("name: Vika\n", encoding="utf-8")
-    (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
-    (npc_dir / "ltm.md").write_text("alt", encoding="utf-8")
-
-    store = NpcStore()
-    assert store.load().description == "Standardbeschreibung"
-
-    store.save_description("Runtimebeschreibung")
-    assert store.load().description == "Runtimebeschreibung"
-
-    store.revert_description()
-    assert store.load().description == "Standardbeschreibung"
-
-
-def test_npc_store_revert_scene_and_ltm_removes_runtime_overlay(tmp_path, monkeypatch):
+def test_npc_store_runtime_scene_and_ltm_overlay(tmp_path, monkeypatch):
     monkeypatch.setattr(npc_store_module.config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(npc_store_module.config, "NPC_DIR", tmp_path / "npcs")
     monkeypatch.setattr(npc_store_module.config, "DATA_NPC_DIR", tmp_path / "data" / "npcs")
@@ -159,11 +131,6 @@ def test_npc_store_revert_scene_and_ltm_removes_runtime_overlay(tmp_path, monkey
     store = NpcStore()
     store.save_scene("Runtime Szene")
     store.save_ltm("Runtime LTM")
-    assert "Runtime Szene" in store.load().scene.description
-    assert store.load().ltm == "Runtime LTM"
-
-    store.revert_scene()
-    store.revert_ltm()
     reloaded = store.load()
-    assert "Default Szene" in reloaded.scene.description
-    assert reloaded.ltm == "ltm-default"
+    assert "Runtime Szene" in reloaded.scene.description
+    assert reloaded.ltm == "Runtime LTM"
