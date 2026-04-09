@@ -49,6 +49,7 @@ Priorität:
 Die Regel „bei Unsicherheit keine Änderung“ gilt nicht, wenn:
 
 → eine klare physische Aktion im STM beschrieben ist
+→ eine explizite Altersänderung beschrieben ist
 
 In diesem Fall:
 → immer als Änderung behandeln
@@ -78,6 +79,7 @@ Auch ohne explizite physische Aktion gilt eine Änderung als bedeutend, wenn:
 - neue sichtbare Interaktion (Objekt/Person)
 - deutlicher Lichtwechsel / Tageszeitwechsel
 - klar anderer Bildausschnitt
+- explizite Altersänderung der Figur
 
 Alles andere ignorieren.
 
@@ -92,6 +94,7 @@ Priorisiere:
 - Haarfarbe und Frisur
 - Hautton
 - Körperproportionen
+- Kernidentität bleibt gleich, auch wenn sich das explizit verlangte Alter ändert
 
 2. Aktuell sichtbarer Zustand
 - Kleidung
@@ -114,9 +117,16 @@ Priorisiere:
 
 Die Identität ist fix:
 
-- Gesicht, Alter, Geschlecht, Proportionen bleiben gleich
+- Gesicht, Geschlecht und Proportionen bleiben gleich
 - Haare bleiben gleich (Länge, Farbe, Stil)
 - keine Optimierung oder Variation
+
+Ausnahme:
+
+- Wenn der Rohprompt oder der Kontext explizit eine Altersänderung verlangt, muss diese übernommen werden.
+- In diesem Fall bleibt die gleiche Person erkennbar, aber sichtbare Altersmerkmale dürfen und sollen angepasst werden.
+- Erlaube dann visuelle Altersmarker wie älteres/jüngeres Gesicht, Hautalterung, Reifegrad der Gesichtszüge, altersentsprechende Körperwirkung.
+- Nur das Alter darf sich ändern, nicht die Identität der Person.
 
 ## Extraktionsregeln
 
@@ -124,6 +134,7 @@ Die Identität ist fix:
 - nichts erfinden
 - bei Unklarheit → weglassen
 - Input wird verdichtet, nicht erweitert
+- wenn eine Altersänderung explizit beschrieben ist, formuliere sie als klare visuelle Tokens im finalen Prompt
 
 ## WICHTIG: Keine Variation
 

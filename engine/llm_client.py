@@ -6,6 +6,7 @@ import openai
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam, ChatCompletionStreamOptionsParam
 from pydantic import BaseModel
+from PIL import Image
 
 from engine.logging import get_logger, log_info
 from engine.config import config
@@ -120,17 +121,115 @@ def run_prompt(prompt: str, model: str = config.MODEL_LLM_BIG) -> str:
         raise RuntimeError(_openai_error_message(exc)) from exc
 
 
-def refresh_img(prompt: str, reference_img_bytes: bytes) -> bytes:
-    """Erzeugt ein neues PNG auf Basis eines Referenzbildes."""
+def _scaled_dimensions(
+    width: int,
+    height: int,
+    *,
+    scale_factor: float,
+) -> tuple[int, int]:
+    return (
+        max(1, round(width * scale_factor)),
+        max(1, round(height * scale_factor)),
+    )
+
+
+def _compress_reference_image(
+    image_bytes: bytes,
+    *,
+    filename: str,
+    scale_factor: float,
+    quality: int,
+) -> BytesIO:
+    """Reduziert Upload-Groesse fuer Referenzbilder vor dem Edit-Request."""
+    with Image.open(BytesIO(image_bytes)) as image:
+        normalized = image.convert("RGBA")
+        target_size = _scaled_dimensions(
+            normalized.width,
+            normalized.height,
+            scale_factor=scale_factor,
+        )
+        if normalized.size != target_size:
+            normalized = normalized.resize(target_size, Image.Resampling.LANCZOS)
+
+        flattened = Image.new("RGB", normalized.size, (255, 255, 255))
+        flattened.paste(normalized, mask=normalized.getchannel("A"))
+
+        compressed = BytesIO()
+        compressed.name = filename
+        flattened.save(
+            compressed,
+            format="JPEG",
+            quality=quality,
+            optimize=True,
+            progressive=True,
+        )
+        compressed.seek(0)
+        return compressed
+
+
+def refresh_img(prompt: str, reference_img_bytes: bytes, identity_img_bytes: bytes | None = None) -> bytes:
+    """Erzeugt ein neues PNG auf Basis eines oder mehrerer Referenzbilder."""
     client = OpenAI(api_key=config.OPENAI_API_KEY)
 
-    image_file = BytesIO(reference_img_bytes)
-    image_file.name = "img.png"
+    current_image_file = _compress_reference_image(
+        reference_img_bytes,
+        filename="current.jpg",
+        scale_factor=0.8,
+        quality=82,
+    )
+
+    image_payload: BytesIO | list[BytesIO]
+    if identity_img_bytes is None:
+        image_payload = current_image_file
+    else:
+        identity_image_file = _compress_reference_image(
+            identity_img_bytes,
+            filename="identity.jpg",
+            scale_factor=1.0,
+            quality=92,
+        )
+        image_payload = [identity_image_file, current_image_file]
 
     try:
         result = client.images.edit(
             model=config.MODEL_LLM_IMG_BASE,
-            image=image_file,
+            image=image_payload,
+            prompt=prompt,
+            n=1,
+            size="1024x1536",
+            quality="low",
+            background="auto",
+            input_fidelity="low",
+            extra_query={"moderation": "low"},
+            extra_body={"moderation": "low"},
+        )
+    except openai.OpenAIError as exc:
+        raise RuntimeError(_openai_error_message(exc)) from exc
+
+    if not result.data:
+        raise ValueError("Image generation returned no data")
+
+    b64_data = result.data[0].b64_json
+    if not b64_data:
+        raise ValueError("Image generation returned no base64 payload")
+
+    return base64.b64decode(b64_data)
+
+
+def merge_character_scene_img(prompt: str, character_img_bytes: bytes, scene_img_bytes: bytes) -> bytes:
+    """Erzeugt ein PNG aus Character- und Szenenbild im selben Request."""
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
+
+    character_file = BytesIO(character_img_bytes)
+    character_file.name = "character.png"
+
+    scene_file = BytesIO(scene_img_bytes)
+    scene_file.name = "scene.png"
+
+    try:
+        result = client.images.edit(
+            model=config.MODEL_LLM_IMG_BASE,
+            image=[character_file, scene_file],
             prompt=prompt,
             n=1,
             size="1024x1536",

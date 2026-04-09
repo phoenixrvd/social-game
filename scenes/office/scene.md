@@ -1,4 +1,4 @@
-# Szene – IT-Unternehmen
+## IT-Unternehmen
 
 Modernes IT-Büro mit professioneller, aber lockerer Atmosphäre. 
 Mehrere Teamräume, Besprechungsräume und ein gemeinsamer Küchenbereich.

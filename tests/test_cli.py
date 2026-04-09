@@ -1,4 +1,5 @@
 from typing import cast
+from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from typer.testing import CliRunner
@@ -27,12 +28,12 @@ def test_hallo_llm(monkeypatch):
 def test_web_command_starts_web_gui(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_run_web(*, host: str, port: int, reload: bool) -> None:
+    def run(*, host: str, port: int, reload: bool) -> None:
         captured["host"] = host
         captured["port"] = port
         captured["reload"] = reload
 
-    monkeypatch.setattr(cli_module, "_run_web", fake_run_web)
+    monkeypatch.setattr("engine.web.app.run", run)
 
     result = runner.invoke(app, ["web", "--host", "0.0.0.0", "--port", "8123", "--reload"])
 
@@ -41,16 +42,18 @@ def test_web_command_starts_web_gui(monkeypatch):
 
 
 def test_web_command_reports_error(monkeypatch):
-    def fake_run_web(*, host: str, port: int, reload: bool) -> None:
+    def run(*, host: str, port: int, reload: bool) -> None:
         _ = host, port, reload
         raise RuntimeError("kaputt")
 
-    monkeypatch.setattr(cli_module, "_run_web", fake_run_web)
+    monkeypatch.setattr("engine.web.app.run", run)
 
     result = runner.invoke(app, ["web"])
 
     assert result.exit_code == 1
-    assert "Web-GUI konnte nicht gestartet werden" in result.output
+    assert result.output == ""
+    assert isinstance(result.exception, RuntimeError)
+    assert "kaputt" in str(result.exception)
 
 
 def test_root_help_uses_normal_descriptions():
@@ -65,7 +68,7 @@ def test_root_help_uses_normal_descriptions():
 
 def test_group_help_uses_normal_descriptions():
     checks = [
-        (["session", "--help"], "Globalen Session-Kontext fuer NPC und Szene setzen."),
+        (["session-set", "--help"], "Setzt den globalen Session-Kontext und speichert ihn in .data/session.yaml."),
     ]
 
     for command, expected_text in checks:
@@ -277,31 +280,35 @@ def test_memory_group_is_no_longer_registered():
     assert "memory" in result.output
 
 
+def test_session_group_is_no_longer_registered():
+    result = runner.invoke(app, ["session", "--help"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output
+    assert "session" in result.output
+
+
 def test_revert_image_nothing_to_revert(monkeypatch):
     class FakeImageUpdater:
         def revert(self):
-            return "Kein Daten-Bild vorhanden fuer 'vika'.", False
+            return None
 
     monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
 
     result = runner.invoke(app, ["image-revert"])
     assert result.exit_code == 0
-    assert "Kein Daten-Bild vorhanden" in result.output
-    assert "Abgeschlossen" not in result.output
+    assert result.output == ""
 
 
 def test_revert_image_deleted_and_restored(monkeypatch):
     class FakeImageUpdater:
         def revert(self):
-            return "Bild geloescht.\nBackup wiederhergestellt: /tmp/character_backup/character-20260315-093000.png -> /tmp/character.png", True
+            return None
 
     monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
 
     result = runner.invoke(app, ["image-revert"])
     assert result.exit_code == 0
-    assert "Bild geloescht." in result.output
-    assert "Backup wiederhergestellt" in result.output
-    assert "[image revert] Abgeschlossen." in result.output
+    assert result.output == ""
 
 
 def test_revert_image_not_available(monkeypatch):
@@ -314,7 +321,62 @@ def test_revert_image_not_available(monkeypatch):
     assert result.exit_code == 1
     assert result.output == ""
     assert isinstance(result.exception, AttributeError)
-    assert "revert" in str(result.exception)
+
+
+def test_revert_image_does_not_trigger_refresh(monkeypatch):
+    calls: list[str] = []
+
+    class FakeImageUpdater:
+        def revert(self):
+            calls.append("revert")
+
+        def refresh_image_with_current_prompt(self):
+            calls.append("refresh")
+
+    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+
+    result = runner.invoke(app, ["image-revert"])
+
+    assert result.exit_code == 0
+    assert result.output == ""
+    assert calls == ["revert"]
+
+
+def test_image_merge_scene_calls_updater(monkeypatch):
+    calls: list[str] = []
+
+    class FakeImageUpdater:
+        def merge_with_scene(self):
+            calls.append("merge_with_scene")
+
+    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+
+    result = runner.invoke(app, ["image-merge-scene"])
+
+    assert result.exit_code == 0
+    assert result.output == ""
+    assert calls == ["merge_with_scene"]
+
+
+def test_image_merge_scene_propagates_errors(monkeypatch):
+    class FakeImageUpdater:
+        def merge_with_scene(self):
+            raise RuntimeError("merge_failed")
+
+    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+
+    result = runner.invoke(app, ["image-merge-scene"])
+
+    assert result.exit_code == 1
+    assert result.output == ""
+    assert isinstance(result.exception, RuntimeError)
+
+
+def test_image_refresh_command_removed():
+    result = runner.invoke(app, ["image-refresh"])
+
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_removed_top_level_aliases_fail():
@@ -338,7 +400,7 @@ def test_session_set_saves_context(monkeypatch):
 
     monkeypatch.setattr(cli_module, "SessionStore", FakeSessionStore)
 
-    result = runner.invoke(app, ["session", "set", "--npc", "vika", "--scene", "default"])
+    result = runner.invoke(app, ["session-set", "--npc", "vika", "--scene", "default"])
     assert result.exit_code == 0
     assert "Session-Kontext gespeichert." in result.output
     assert "npc=vika" in result.output
@@ -346,7 +408,7 @@ def test_session_set_saves_context(monkeypatch):
 
 
 def test_session_set_requires_value():
-    result = runner.invoke(app, ["session", "set"])
+    result = runner.invoke(app, ["session-set"])
     assert result.exit_code == 1
     assert "Mindestens --npc oder --scene muss angegeben werden." in result.output
 
@@ -357,20 +419,37 @@ def test_icons_command_runs_pipeline(monkeypatch, tmp_path):
     input_path = icons_dir / "origin.png"
     input_path.write_bytes(b"png")
 
-    captured: dict[str, object] = {}
+    captured: dict[str, object] = {"saves": []}
 
-    def fake_generate_icons(*, input_path, output_dir):
-        captured["input_path"] = input_path
-        captured["output_dir"] = output_dir
+    class FakeSource:
+        width = 320
+        height = 640
+
+        def convert(self, mode):
+            captured["convert_mode"] = mode
+            return self
+
+    class FakeBase:
+        def paste(self, source, xy, mask):
+            captured["paste"] = (source, xy, mask)
+
+        def save(self, path, format=None, sizes=None):
+            captured["saves"].append((Path(path), format, sizes))
+
+        def resize(self, size, resample):
+            captured.setdefault("resizes", []).append((size, resample))
+            return self
 
     monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(cli_module, "_generate_icons", fake_generate_icons)
+    monkeypatch.setattr(cli_module.Image, "open", lambda path: FakeSource())
+    monkeypatch.setattr(cli_module.Image, "new", lambda mode, size, color: FakeBase())
 
     result = runner.invoke(app, ["icons", "--input", str(input_path)])
 
     assert result.exit_code == 0
-    assert captured["input_path"] == input_path
-    assert captured["output_dir"] == icons_dir
+    assert captured["convert_mode"] == "RGBA"
+    assert captured["paste"][1] == ((1024 - 320) // 2, (1024 - 640) // 2)
+    assert captured["saves"][0][0] == icons_dir / "base.png"
     assert "Icons erfolgreich generiert." in result.output
 
 
@@ -389,20 +468,14 @@ def test_icons_command_reports_generation_failure(monkeypatch, tmp_path):
     input_path = icons_dir / "origin.png"
     input_path.write_bytes(b"png")
 
-    def fake_generate_icons(*, input_path, output_dir):
-        _ = input_path, output_dir
+    def fake_open(_path):
         raise RuntimeError("kaputt")
 
     monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(cli_module, "_generate_icons", fake_generate_icons)
+    monkeypatch.setattr(cli_module.Image, "open", fake_open)
 
     result = runner.invoke(app, ["icons", "--input", str(input_path)])
 
     assert result.exit_code == 1
-    if result.exception is not None:
-        assert isinstance(result.exception, RuntimeError)
-        assert "kaputt" in str(result.exception)
-    else:
-        assert "Icon-Generierung fehlgeschlagen" in result.output
-
-
+    assert isinstance(result.exception, RuntimeError)
+    assert "kaputt" in str(result.exception)

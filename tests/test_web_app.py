@@ -1,7 +1,9 @@
+import asyncio
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
-from fastapi.testclient import TestClient
+from fastapi import HTTPException
 from PIL import Image
 
 import engine.web.app as web_app_module
@@ -23,7 +25,7 @@ def _build_npc(npc_id: str, scene_id: str, messages: list[ShortMemoryMessage]) -
         ltm="kennt den Spieler",
         scene=Scene(scene_id=scene_id, description=f"Szene {scene_id}"),
         character={"name": npc_id.title()},
-        img=Path(__file__),
+        img_current=Path(__file__),
         stm=messages,
     )
 
@@ -110,13 +112,12 @@ class FakeNpcTurnService:
 fake_npc_store = FakeNpcStore()
 
 
-def _make_client(
+def _setup_web_app(
     tmp_path,
     monkeypatch,
     *,
-    base_url: str = "http://testserver",
     web_debug: bool = False,
-) -> TestClient:
+) -> None:
     npcs_dir = tmp_path / "npcs"
     scenes_dir = tmp_path / "scenes"
     data_npcs_dir = tmp_path / ".data" / "npcs"
@@ -156,7 +157,7 @@ def _make_client(
             ),
         ],
     )
-    fake_npc_store._current_npc = replace(fake_npc_store._current_npc, img=test_img_path)
+    fake_npc_store._current_npc = replace(fake_npc_store._current_npc, img_current=test_img_path)
 
     monkeypatch.setattr(web_app_module.config, "NPC_DIR", npcs_dir)
     monkeypatch.setattr(web_app_module.config, "SCENE_DIR", scenes_dir)
@@ -166,25 +167,40 @@ def _make_client(
     monkeypatch.setattr(web_app_module, "NpcStore", lambda: fake_npc_store)
     monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
     monkeypatch.setattr(web_app_module, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
+    web_app_module.app.state.watch_scheduler = None
 
-    return TestClient(web_app_module.app, base_url=base_url)
+def _request(path: str, method: str = "GET"):
+    return SimpleNamespace(url=SimpleNamespace(path=path), method=method)
+
+
+def _run_async(coro):
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+
+
+async def _apply_headers(path: str, response, method: str = "GET"):
+    async def call_next(_request):
+        return response
+
+    return await web_app_module._add_web_headers(_request(path, method), call_next)
 
 
 def test_index_serves_gui(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
+    content = (web_app_module.STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
-    response = client.get("/")
-
-    assert response.status_code == 200
-    assert "Social Game GUI" in response.text
-    assert "<sg-app" in response.text
-    assert 'src="js/sg-app.js"' in response.text
+    assert "Social Game GUI" in content
+    assert "<sg-app" in content
+    assert 'src="js/sg-app.js"' in content
 
 
 def test_security_headers_are_present_on_index(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.get("/")
+    _setup_web_app(tmp_path, monkeypatch)
+    response = _run_async(_apply_headers("/", web_app_module._problem_response(200, {})))
 
     csp = response.headers.get("content-security-policy", "")
     assert "script-src 'self'" in csp, "CSP fehlt script-src 'self'"
@@ -206,9 +222,8 @@ def test_security_headers_are_present_on_index(tmp_path, monkeypatch):
 
 
 def test_security_headers_are_present_on_api_routes(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.get("/api/state")
+    _setup_web_app(tmp_path, monkeypatch)
+    response = _run_async(_apply_headers("/api/state", web_app_module._problem_response(200, {})))
 
     assert "content-security-policy" in response.headers
     assert "x-frame-options" in response.headers
@@ -217,31 +232,27 @@ def test_security_headers_are_present_on_api_routes(tmp_path, monkeypatch):
 
 
 def test_static_assets_get_cache_headers(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
 
     for path in ("/css/app.css", "/js/sg-app.js"):
-        response = client.get(path)
+        response = _run_async(_apply_headers(path, web_app_module._problem_response(200, {})))
         cache = response.headers.get("cache-control", "")
         assert "max-age" in cache, f"Cache-Control fehlt für {path}"
 
 
 def test_static_assets_disable_cache_in_web_debug_mode(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch, web_debug=True)
+    _setup_web_app(tmp_path, monkeypatch, web_debug=True)
 
     for path in ("/css/app.css", "/js/sg-app.js"):
-        response = client.get(path)
+        response = _run_async(_apply_headers(path, web_app_module._problem_response(200, {})))
         assert response.headers.get("cache-control") == "no-cache, no-store, must-revalidate"
         assert response.headers.get("pragma") == "no-cache"
         assert response.headers.get("expires") == "0"
 
 
 def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.get("/api/state")
-
-    assert response.status_code == 200
-    payload = response.json()
+    _setup_web_app(tmp_path, monkeypatch)
+    payload = web_app_module.get_state()
     assert payload["npc_id"] == "vika"
     assert payload["npc_name"] == "Vika"
     assert payload["character_description"] == "Charakterbeschreibung vika"
@@ -249,51 +260,48 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["scene_id"] == "office"
     assert payload["ltm"] == "kennt den Spieler"
     assert payload["image_url"] == "/api/image/current"
-    assert payload["image_update_error"] == ""
     assert payload["messages"][0]["content"] == "Hi"
     assert payload["npcs"] == [{"id": "mira", "label": "Mira"}, {"id": "vika", "label": "Vika"}]
     assert payload["scenes"] == [{"id": "cafe", "label": "Cafe"}, {"id": "office", "label": "Office"}]
 
 
 def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = _build_npc(
         npc_id="vika",
         scene_id="office",
         messages=[],
     )
 
-    response = client.get("/api/state")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert len(payload["messages"]) == 2
+    payload = web_app_module.get_state()
+    assert len(payload["messages"]) == 3
     character_message = payload["messages"][0]
     scene_message = payload["messages"][1]
+    ltm_message = payload["messages"][2]
     assert character_message["id"] == "context-character"
     assert scene_message["id"] == "context-scene"
+    assert ltm_message["id"] == "context-ltm"
     assert character_message["role"] == "assistant"
     assert scene_message["role"] == "assistant"
+    assert ltm_message["role"] == "assistant"
     assert character_message["content"] == ""
     assert scene_message["content"] == ""
+    assert ltm_message["content"] == ""
     assert "Charakterbeschreibung vika" in character_message["html"]
     assert "Szene office" in scene_message["html"]
+    assert "kennt den Spieler" in ltm_message["html"]
 
 
 def test_get_state_prefers_real_messages_over_context_fallback(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.get("/api/state")
-
-    assert response.status_code == 200
-    payload = response.json()
+    _setup_web_app(tmp_path, monkeypatch)
+    payload = web_app_module.get_state()
     assert len(payload["messages"]) == 2
     assert payload["messages"][0]["content"] == "Hi"
     assert payload["messages"][1]["content"] == "Hallo."
 
 
 def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = _build_npc(
         npc_id="vika",
         scene_id="office",
@@ -307,20 +315,18 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
         ],
     )
 
-    response = client.get("/api/state")
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert len(payload["messages"]) == 2
+    payload = web_app_module.get_state()
+    assert len(payload["messages"]) == 3
     assert payload["messages"][0]["id"] == "context-character"
     assert payload["messages"][1]["id"] == "context-scene"
+    assert payload["messages"][2]["id"] == "context-ltm"
     assert "Charakterbeschreibung vika" in payload["messages"][0]["html"]
     assert "Szene office" in payload["messages"][1]["html"]
 
 
 
 def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = replace(
         fake_npc_store._current_npc,
         description="[link](javascript:alert('x'))",
@@ -328,26 +334,20 @@ def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeyp
         scene=Scene(scene_id="office", description="Szene [ok](https://example.com)"),
     )
 
-    response = client.get("/api/state")
-
-    assert response.status_code == 200
-    payload = response.json()
+    payload = web_app_module.get_state()
     character_html = payload["messages"][0]["html"]
     assert "javascript:" in character_html
 
 
 def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = replace(
         fake_npc_store._current_npc,
         description="Au\u00dfen:\n\n- direkt\n- offen",
         stm=[],
     )
 
-    response = client.get("/api/state")
-
-    assert response.status_code == 200
-    payload = response.json()
+    payload = web_app_module.get_state()
     character_html = payload["messages"][0]["html"]
     assert "<ul>" in character_html
     assert "<li>direkt</li>" in character_html
@@ -355,12 +355,8 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
 
 
 def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.put("/api/session", json={"npc_id": "mira", "scene_id": "cafe"})
-
-    assert response.status_code == 200
-    payload = response.json()
+    _setup_web_app(tmp_path, monkeypatch)
+    payload = web_app_module.update_session(web_app_module.SessionRequest(npc_id="mira", scene_id="cafe"))
     assert FakeSessionStore.saved_calls == [("mira", "cafe")]
     assert payload["npc_id"] == "mira"
     assert payload["npc_name"] == "Mira"
@@ -368,59 +364,59 @@ def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
 
 
 def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
 
-    response = client.put("/api/session", json={})
-
-    assert response.status_code == 400
-    assert response.json()["detail"] == "Mindestens npc_id oder scene_id muss gesetzt sein."
+    try:
+        web_app_module.update_session(web_app_module.SessionRequest())
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Mindestens npc_id oder scene_id muss gesetzt sein."
 
 
 def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     scene_data_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
     scene_data_dir.mkdir(parents=True, exist_ok=True)
     assert scene_data_dir.exists()
 
-    response = client.delete("/api/npc/reset-active")
+    payload = web_app_module.reset_active_npc_runtime_data()
 
-    assert response.status_code == 200
     assert not scene_data_dir.exists()
-    payload = response.json()
     assert payload["npc_id"] == "vika"
     assert payload["scene_id"] == "office"
 
 
 def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.get("/api/image/current")
+    _setup_web_app(tmp_path, monkeypatch)
+    response = web_app_module.current_image()
 
     assert response.status_code == 200
-    assert response.headers["content-type"] == "image/webp"
-    assert len(response.content) > 0
+    assert response.media_type == "image/webp"
+    assert len(response.body) > 0
 
 
 def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = _build_npc(
         npc_id="vika",
         scene_id="office",
         messages=[],
     )
-    fake_npc_store._current_npc.img = tmp_path / "missing.png"
+    fake_npc_store._current_npc.img_current = tmp_path / "missing.png"
 
-    response = client.get("/api/image/current")
-
-    assert response.status_code == 404
-    detail = response.json()["detail"]
-    assert "Kein NPC-Bild verfuegbar." in detail
-    assert "npc_id='vika'" in detail
-    assert "scene_id='office'" in detail
+    try:
+        web_app_module.current_image()
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 404
+        assert "Kein NPC-Bild verfügbar." in exc.detail
+        assert "npc_id='vika'" in exc.detail
+        assert "scene_id='office'" in exc.detail
 
 
 def test_refresh_active_image_triggers_emit_update_before_schedule(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
     calls: list[str] = []
 
     class FakeImageUpdater:
@@ -431,20 +427,16 @@ def test_refresh_active_image_triggers_emit_update_before_schedule(tmp_path, mon
             assert force is True
             calls.append("schedule")
 
-        def get_last_error(self) -> str:
-            return ""
-
     monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
 
-    response = client.post("/api/image/refresh-active")
+    response = web_app_module.refresh_active_image()
 
-    assert response.status_code == 200
-    assert response.json() == {"image_update_error": ""}
+    assert response == {}
     assert calls == ["emit_update", "schedule"]
 
 
 def test_refresh_active_image_returns_500_on_schedule_error(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    _setup_web_app(tmp_path, monkeypatch)
 
     class FakeImageUpdater:
         def emit_update(self) -> None:
@@ -453,53 +445,99 @@ def test_refresh_active_image_returns_500_on_schedule_error(tmp_path, monkeypatc
         def schedule(self, force: bool = False) -> None:
             raise RuntimeError("generation_failed")
 
-        def get_last_error(self) -> str:
-            return "generation_failed"
-
     monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
 
-    response = client.post("/api/image/refresh-active")
+    try:
+        web_app_module.refresh_active_image()
+        raise AssertionError("Expected RuntimeError")
+    except RuntimeError as exc:
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
 
     assert response.status_code == 500
-    assert "generation_failed" in response.json()["detail"]
+    assert response.media_type == "application/problem+json"
+    assert b"Interner Serverfehler." in response.body
+    assert b"generation_failed" not in response.body
 
 
+def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    calls: list[str] = []
 
-def test_get_state_returns_last_image_update_error(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
 
     class FakeImageUpdater:
-        def get_last_error(self) -> str:
-            return "moderation_blocked"
+        def emit_update_if_missing(self) -> None:
+            calls.append("emit_update_if_missing")
 
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
     monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
 
-    response = client.get("/api/state")
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Startbild bitte"))
 
     assert response.status_code == 200
-    assert response.json()["image_update_error"] == "moderation_blocked"
+    assert list(response.body_iterator) == ["Antwort", " vom Web"]
+    assert calls == ["emit_update_if_missing"]
+
+
+def test_chat_stream_skips_initial_image_emit_when_generated_image_exists(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    calls: list[str] = []
+
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
+
+    class FakeImageUpdater:
+        def emit_update_if_missing(self) -> None:
+            calls.append("emit_update_if_missing")
+
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Noch eine Nachricht"))
+
+    assert response.status_code == 200
+    assert list(response.body_iterator) == ["Antwort", " vom Web"]
+    assert calls == ["emit_update_if_missing"]
 
 
 def test_chat_endpoint_is_not_available_anymore(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
-
-    response = client.post("/api/chat", json={"message": "Hi"})
-
-    assert response.status_code == 404
+    _setup_web_app(tmp_path, monkeypatch)
+    assert all(getattr(route, "path", None) != "/api/chat" for route in web_app_module.app.routes)
 
 
-def test_chat_stream_endpoint_streams_chunks_and_done(tmp_path, monkeypatch):
-    client = _make_client(tmp_path, monkeypatch)
+def test_chat_stream_endpoint_streams_plain_text(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
 
-    response = client.post("/api/chat/stream", json={"message": "Stream bitte"})
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
+
+    def fake_stream_prompt(turn_messages):
+        captured["turn_messages"] = turn_messages
+        return iter(["Antwort", " vom Web"])
+
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Stream bitte"))
 
     assert response.status_code == 200
-    assert "text/event-stream" in response.headers["content-type"]
-    assert '"type": "chunk"' in response.text
-    assert '"text": "Antwort"' in response.text
-    assert '"text": " vom Web"' in response.text
-    assert '"type": "done"' in response.text
-    assert fake_npc_store.appended_turns == [("Stream bitte", "Antwort vom Web")]
+    assert response.media_type == "text/plain; charset=utf-8"
+    assert captured["turn_messages"] == [
+        {"role": "system", "content": "stub"},
+        {"role": "user", "content": "Stream bitte"},
+    ]
+    assert type(response.body_iterator).__name__ == "generator"
 
 
 def test_web_lifecycle_starts_and_stops_watchers(monkeypatch):

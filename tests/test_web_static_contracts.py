@@ -33,11 +33,9 @@ def test_trusted_types_policy_is_defined():
     assert "export function trustedHtml" in source
 
 
-def test_all_components_use_trusted_html_for_innerhtml():
+def test_components_with_direct_html_injection_use_trusted_html():
     for rel_path in (
-        "engine/web/static/js/sg-app.js",
         "engine/web/static/js/sg-chat.js",
-        "engine/web/static/js/sg-context-message.js",
         "engine/web/static/js/sg-input.js",
         "engine/web/static/js/sg-scene-image.js",
         "engine/web/static/js/sg-message.js",

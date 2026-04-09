@@ -1,4 +1,4 @@
-# Szene – Stadtspaziergang
+## Stadtspaziergang
 
 Eine belebte Straße, Menschen gehen vorbei, vereinzelte Gespräche, Straßenlärm im Hintergrund.
 

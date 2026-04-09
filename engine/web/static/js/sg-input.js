@@ -82,7 +82,6 @@ class SocialGameInput extends HTMLElement {
       isSessionLoading: false,
       isImageRefreshLoading: false,
       errorMessage: "",
-      imageUpdateError: "",
       selectorPanelOpen: false,
       theme: "dark",
       npcs: [],
@@ -159,7 +158,7 @@ class SocialGameInput extends HTMLElement {
               type="button"
               data-action="reset-active-npc"
               class="sg-toolbar-button sg-toolbar-button-danger"
-              aria-label="History loeschen"
+              aria-label="Verlauf löschen"
             >
               ${SVG_DELETE}
             </button>
@@ -286,7 +285,7 @@ class SocialGameInput extends HTMLElement {
   render() {
     const controlsDisabled = this._state.isSending || this._state.isSessionLoading
     const composerReadOnly = this._state.isSessionLoading
-    const errorText = this._state.errorMessage || this._state.imageUpdateError
+    const errorText = this._state.errorMessage
 
     this.$.form.setAttribute("aria-busy", controlsDisabled ? "true" : "false")
     this.$.sessionRow.toggleAttribute("hidden", !this._state.selectorPanelOpen)
@@ -320,4 +319,3 @@ class SocialGameInput extends HTMLElement {
 }
 
 customElements.get("sg-input") || customElements.define("sg-input", SocialGameInput)
-

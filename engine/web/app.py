@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import json
 import shutil
 from contextlib import asynccontextmanager
@@ -11,14 +10,16 @@ from typing import Any, AsyncIterator
 import markdown
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
+import uvicorn
 
 from engine.config import config
 from engine.fs_utils import load_text, load_yaml
 from engine.llm_client import stream_prompt
+from engine.logging import get_logger
 from engine.models import Npc, ShortMemoryMessage
 from engine.services.npc_turn_service import NpcTurnService
 from engine.stores.npc_store import NpcStore
@@ -27,16 +28,17 @@ from engine.updater.image_updater import ImageUpdater
 from engine.updater.schedule import start_scheduler, stop_scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-INDEX_PATH = STATIC_DIR / "index.html"
-WEB_MANIFEST_PATH = STATIC_DIR / "site.webmanifest"
 
 _webp_cache: dict[str, Any] = {"signature": "", "data": b""}
+logger = get_logger("web")
 
 
-def _set_no_cache_headers(response: Response) -> None:
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
+def _problem_response(status_code: int, detail: Any) -> Response:
+    return Response(
+        content=json.dumps({"type": "about:blank", "status": status_code, "detail": detail}),
+        status_code=status_code,
+        media_type="application/problem+json",
+    )
 
 
 def _get_cached_webp(img_path: Path) -> bytes:
@@ -103,31 +105,36 @@ async def _add_web_headers(request: Request, call_next):
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
-    if request.url.path.startswith(("/css/", "/js/", "/icons/")):
-        if config.WEB_DEBUG:
-            _set_no_cache_headers(response)
-        else:
-            response.headers["Cache-Control"] = "public, max-age=3600"
+    if not request.url.path.startswith(("/css/", "/js/", "/icons/")):
+        return response
+
+    if config.WEB_DEBUG:
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    else:
+        response.headers["Cache-Control"] = "public, max-age=3600"
 
     return response
 
 
 @app.exception_handler(HTTPException)
-async def _problem_detail_handler(request: Request, exc: HTTPException) -> Response:
-    return Response(
-        content=json.dumps({"type": "about:blank", "status": exc.status_code, "detail": exc.detail}),
-        status_code=exc.status_code,
-        media_type="application/problem+json",
-    )
+async def _problem_detail_handler(_request: Request, exc: HTTPException) -> Response:
+    return _problem_response(exc.status_code, exc.detail)
 
 
 @app.exception_handler(RequestValidationError)
-async def _validation_error_handler(request: Request, exc: RequestValidationError) -> Response:
-    return Response(
-        content=json.dumps({"type": "about:blank", "status": 422, "detail": exc.errors()}),
-        status_code=422,
-        media_type="application/problem+json",
+async def _validation_error_handler(_request: Request, exc: RequestValidationError) -> Response:
+    return _problem_response(422, exc.errors())
+
+
+@app.exception_handler(Exception)
+async def _internal_error_handler(request: Request, exc: Exception) -> Response:
+    logger.exception(
+        "Unerwarteter Fehler in Web-Request",
+        extra={"path": request.url.path, "method": request.method},
     )
+    return _problem_response(500, "Interner Serverfehler.")
 
 
 class ChatRequest(BaseModel):
@@ -137,10 +144,6 @@ class ChatRequest(BaseModel):
 class SessionRequest(BaseModel):
     npc_id: str | None = None
     scene_id: str | None = None
-
-
-def _sse_data(payload: dict[str, Any]) -> str:
-    return f"data: {json.dumps(payload, ensure_ascii=True)}\n\n"
 
 
 def _message_to_payload(message: ShortMemoryMessage) -> dict[str, str]:
@@ -161,11 +164,36 @@ def _visible_messages(npc: Npc) -> list[dict[str, Any]]:
     if visible:
         return visible
     character_description = npc.description
-    scene_description = (npc.scene.description or "").strip() or "Keine Szenenbeschreibung verfuegbar."
-    return [
-        {"id": "context-character", "role": "assistant", "content": "", "html": _render_markdown_to_html(character_description), "timestamp": ""},
-        {"id": "context-scene", "role": "assistant", "content": "", "html": _render_markdown_to_html(scene_description), "timestamp": ""},
+    scene_description = (npc.scene.description or "").strip() or "Keine Szenenbeschreibung verfügbar."
+    context_messages = [
+        {
+            "id": "context-character",
+            "role": "assistant",
+            "content": "",
+            "html": _render_markdown_to_html(character_description),
+            "timestamp": ""
+        },
+        {
+            "id": "context-scene",
+            "role": "assistant",
+            "content": "",
+            "html": _render_markdown_to_html(scene_description),
+            "timestamp": ""
+        },
     ]
+
+    if npc.ltm.strip():
+        context_messages.append(
+            {
+                "id": "context-ltm",
+                "role": "assistant",
+                "content": "",
+                "html": _render_markdown_to_html(f"# Beziehung\n\n{npc.ltm}"),
+                "timestamp": "",
+            }
+        )
+
+    return context_messages
 
 
 def _visible_stm_messages(npc: Npc) -> list[ShortMemoryMessage]:
@@ -204,16 +232,18 @@ def _list_scenes() -> list[dict[str, str]]:
 
 
 def _image_url(npc: Npc) -> str | None:
-    return "/api/image/current" if npc.img.is_file() else None
+    return "/api/image/current" if npc.img_current.is_file() else None
 
 
 def _image_signature(npc: Npc) -> str:
-    return f"{npc.img.stat().st_mtime_ns}|{npc.img.stat().st_size}" if npc.img.exists() else ""
+    if not npc.img_current.exists():
+        return ""
+    stat = npc.img_current.stat()
+    return f"{stat.st_mtime_ns}|{stat.st_size}"
 
 
 def _state_payload() -> dict[str, Any]:
     npc = NpcStore().load()
-    image_updater = ImageUpdater()
     return {
         "npc_id": npc.npc_id,
         "npc_name": str(npc.character.get("name", npc.npc_id)).strip() or npc.npc_id,
@@ -226,24 +256,9 @@ def _state_payload() -> dict[str, Any]:
         "messages_signature": _messages_signature(npc),
         "image_url": _image_url(npc),
         "image_signature": _image_signature(npc),
-        "image_update_error": image_updater.get_last_error(),
         "npcs": _list_npcs(),
         "scenes": _list_scenes(),
     }
-
-
-@app.get("/")
-def index() -> Any:
-    response = FileResponse(INDEX_PATH)
-    _set_no_cache_headers(response)
-    return response
-
-
-@app.get("/site.webmanifest")
-def web_manifest() -> Any:
-    response = FileResponse(WEB_MANIFEST_PATH, media_type="application/manifest+json")
-    _set_no_cache_headers(response)
-    return response
 
 
 @app.get("/api/state")
@@ -272,7 +287,7 @@ def reset_active_npc_runtime_data() -> dict[str, Any]:
         try:
             shutil.rmtree(scene_data_dir)
         except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"NPC-Scene-Daten konnten nicht geloescht werden: {exc}") from exc
+            raise HTTPException(status_code=500, detail=f"NPC-Scene-Daten konnten nicht gelöscht werden: {exc}") from exc
     return _state_payload()
 
 
@@ -283,43 +298,35 @@ def chat_stream(request: ChatRequest) -> Any:
         raise HTTPException(status_code=400, detail="Nachricht darf nicht leer sein.")
 
     npc_turn = NpcTurnService()
-    turn_messages = npc_turn.build_turn_messages()
     user_message = npc_turn.build_user_message(message_text)
-    turn_messages = turn_messages + [user_message]
+    turn_messages = [*npc_turn.build_turn_messages(), user_message]
+    prompt_stream = stream_prompt(turn_messages)
 
     def event_stream():
         parts: list[str] = []
-        try:
-            for part in stream_prompt(turn_messages):
-                parts.append(part)
-                yield _sse_data({"type": "chunk", "text": part})
-        except Exception as exc:
-            yield _sse_data({"type": "error", "detail": str(exc)})
-            return
+        for part in prompt_stream:
+            parts.append(part)
+            yield part
 
         reply = "".join(parts).strip()
-        stored = npc_turn.npc_store.append_stm_turn(str(user_message["content"]), reply)
-        yield _sse_data({
-            "type": "done",
-            "assistant_message": _message_to_payload(stored[1]),
-            "image_url": _image_url(npc_turn.npc_store.load()),
-        })
+        npc_turn.npc_store.append_stm_turn(str(user_message["content"]), reply)
+        ImageUpdater().emit_update_if_missing()
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(event_stream(), media_type="text/plain; charset=utf-8")
 
 
 @app.get("/api/image/current")
 def current_image() -> Any:
     npc = NpcStore().load()
-    if not npc.img.is_file():
+    if not npc.img_current.is_file():
         raise HTTPException(
             status_code=404,
             detail=(
-                "Kein NPC-Bild verfuegbar. "
-                f"npc_id='{npc.npc_id}', scene_id='{npc.scene.scene_id}', path='{npc.img}'"
+                "Kein NPC-Bild verfügbar. "
+                f"npc_id='{npc.npc_id}', scene_id='{npc.scene.scene_id}', path='{npc.img_current}'"
             ),
         )
-    return Response(content=_get_cached_webp(npc.img), media_type="image/webp")
+    return Response(content=_get_cached_webp(npc.img_current), media_type="image/webp")
 
 
 @app.get("/api/image/signature")
@@ -335,22 +342,13 @@ def image_signature() -> dict[str, Any]:
 def refresh_active_image() -> dict[str, Any]:
     updater = ImageUpdater()
     updater.emit_update()
-    try:
-        updater.schedule(force=True)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"image_update_error": updater.get_last_error()}
-
+    updater.schedule(force=True)
+    return {}
 
 
 def run(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:
-    uvicorn = importlib.import_module("uvicorn")
     uvicorn.run("engine.web.app:app", host=host, port=port, reload=reload)
 
 
-# Montiere statische Verzeichnisse am Ende, damit API-Routes zuerst geprueft werden.
-app.mount("/icons", StaticFiles(directory=STATIC_DIR / "icons"), name="icons")
-app.mount("/css", StaticFiles(directory=STATIC_DIR / "css"), name="css")
-app.mount("/js", StaticFiles(directory=STATIC_DIR / "js"), name="js")
-
-
+# Montiere statische Dateien am Ende, damit API-Routes zuerst geprueft werden.
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

@@ -1,4 +1,4 @@
-# Szene – Event Location
+## Event Location
 
 Elegante Event-Location mit gedimmtem Licht, vereinzelten Sitzbereichen und offener Bar.  
 Gedämpfte Gespräche, leise Musik, vereinzeltes Lachen.

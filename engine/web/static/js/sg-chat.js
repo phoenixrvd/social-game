@@ -51,7 +51,8 @@ class SocialGameChat extends HTMLElement {
 
     for (const [index, message] of this._state.messages.entries()) {
       const key = typeof message?.id === "string" && message.id ? `id:${message.id}` : `index:${index}:${message?.role || ""}`
-      const componentName = message?.id === "context-character" || message?.id === "context-scene" ? "sg-context-message" : "sg-message"
+      const contextMessageIds = ["context-character", "context-scene", "context-ltm"]
+      const componentName = contextMessageIds.includes(message?.id) ? "sg-context-message" : "sg-message"
       const renderedMessage = {
         ...message,
         showTypingDots: message?.id === this._state.activeAssistantId ? showTypingDotsForActiveAssistant : false,

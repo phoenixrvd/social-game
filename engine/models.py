@@ -29,6 +29,7 @@ class Npc:
     ltm: str
     scene: Scene
     img: Path = field(default_factory=Path)
+    img_current: Path = field(default_factory=Path)
     stm: list[ShortMemoryMessage] = field(default_factory=list)
     character: dict[str, Any] = field(default_factory=dict)
 
@@ -43,6 +44,7 @@ class Npc:
 class Scene:
     scene_id: str
     description: str
+    img: Path = field(default_factory=Path)
 
 
 @dataclass

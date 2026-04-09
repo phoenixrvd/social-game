@@ -22,12 +22,12 @@ class SocialGameSceneImage extends HTMLElement {
         <div class="sg-image-frame">
           <div class="sg-image-content">
             <img class="sg-image-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" fetchpriority="low" />
-            <img class="sg-image-main" src="data:," alt="Szenenbild" role="button" tabindex="0" aria-label="Bild vergroessern" loading="lazy" decoding="async" />
+            <img class="sg-image-main" src="data:," alt="Szenenbild" role="button" tabindex="0" aria-label="Bild vergrößern" loading="lazy" decoding="async" />
           </div>
         </div>
       </div>
 
-      <div class="sg-image-overlay" role="dialog" aria-modal="true" aria-label="Vergroessertes Szenenbild" tabindex="-1">
+      <div class="sg-image-overlay" role="dialog" aria-modal="true" aria-label="Vergrößertes Szenenbild" tabindex="-1">
         <div class="sg-image-overlay-frame">
           <img class="sg-image-overlay-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" />
           <img class="sg-image-overlay-main" src="data:," alt="Szenenbild" loading="lazy" decoding="async" />

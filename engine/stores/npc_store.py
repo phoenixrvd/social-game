@@ -23,10 +23,11 @@ class NpcStore:
         return self._npc_scene_data_dir(npc_id, scene_id) / filename
 
     def _load_scene(self, npc_id: str, scene_id: str) -> Scene:
+        scene_img = config.SCENE_DIR / scene_id / "img.png"
         session = self._runtime_path(npc_id, scene_id, "scene.md")
 
         if session.is_file():
-            return Scene(scene_id=scene_id, description=load_text(session))
+            return Scene(scene_id=scene_id, description=load_text(session), img=scene_img)
 
         default = load_text(config.SCENE_DIR / scene_id / "scene.md")
 
@@ -34,7 +35,7 @@ class NpcStore:
         if scene.is_file():
             default =  "\n".join([default, load_text(scene)])
 
-        return Scene(scene_id=scene_id, description=default)
+        return Scene(scene_id=scene_id, description=default, img=scene_img)
 
     def _load_default_files(self, npc_id: str) -> dict[str, Any]:
         npc_dir = config.NPC_DIR / npc_id
@@ -96,7 +97,8 @@ class NpcStore:
             ltm=self._load_runtime_value(resolved_npc_id, resolved_scene_id, "ltm.md", raw["ltm"]),
             scene=scene,
             stm=self._load_stm(resolved_npc_id, resolved_scene_id),
-            img=self._load_current_image_path(resolved_npc_id, resolved_scene_id),
+            img=config.NPC_DIR / resolved_npc_id / "img.png",
+            img_current=self._load_current_image_path(resolved_npc_id, resolved_scene_id),
         )
 
     def _save_active_runtime_value(self, filename: str, content: str) -> None:

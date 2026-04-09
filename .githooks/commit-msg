@@ -1,0 +1,8 @@
+#!/bin/sh
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo "")"
+
+if [ "$branch" = "main" ] && ! grep -Eq '^v[0-9]+\.[0-9]+:' "$1"; then
+  echo "Main branch commits expects version prefix: vX.Y: message (see doc/guidelines/git-workflow.md)"
+  exit 1
+fi

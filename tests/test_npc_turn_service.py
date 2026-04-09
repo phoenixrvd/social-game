@@ -13,7 +13,7 @@ def _build_npc(**overrides) -> Npc:
         state="mood: neutral",
         ltm="Kennt den Spieler",
         scene=Scene(scene_id="office", description="Im Buero"),
-        img=Path(__file__),
+        img_current=Path(__file__),
         character={"name": "Vika", "hobby": "Kaffee"},
     )
     for key, value in overrides.items():

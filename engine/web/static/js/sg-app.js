@@ -15,21 +15,16 @@ function appendCacheBuster(url) {
   return `${url}${separator}t=${Date.now()}`
 }
 
-function parseSseEvent(rawEvent) {
-  const dataLines = rawEvent
-    .split("\n")
-    .filter((line) => line.startsWith("data:"))
-    .map((line) => line.slice(5).trim())
-
-  if (dataLines.length === 0) {
-    return null
-  }
-
-  return JSON.parse(dataLines.join("\n"))
-}
-
 function isMobileViewport() {
   return window.matchMedia("(max-width: 1023px)").matches
+}
+
+async function readJsonResponse(response) {
+  return response.json().catch(() => ({}))
+}
+
+function getErrorMessage(payload, fallbackMessage) {
+  return typeof payload?.detail === "string" && payload.detail.trim() ? payload.detail.trim() : fallbackMessage
 }
 
 class SocialGameApp extends HTMLElement {
@@ -40,7 +35,6 @@ class SocialGameApp extends HTMLElement {
       input: "",
       imageUrl: "",
       errorMessage: "",
-      imageUpdateError: "",
       isSending: false,
       isSessionLoading: false,
       isImageRefreshLoading: false,
@@ -49,6 +43,7 @@ class SocialGameApp extends HTMLElement {
       scenes: [],
       npcId: "",
       sceneId: "",
+      relationshipStatus: "",
       isImageExpanded: false,
       isSelectorPanelOpen: false,
       theme: localStorage.getItem("theme") === "light" ? "light" : "dark",
@@ -110,22 +105,22 @@ class SocialGameApp extends HTMLElement {
   }
 
   setError(message) {
-    this.setState({ errorMessage: typeof message === "string" ? message.trim() : "" })
+    this.setState({errorMessage: typeof message === "string" ? message.trim() : ""})
   }
 
   clearError() {
-    this.setState({ errorMessage: "" })
+    this.setState({errorMessage: ""})
   }
 
   toggleSelectorPanel() {
-    this.setState({ isSelectorPanelOpen: !this.state.isSelectorPanelOpen })
+    this.setState({isSelectorPanelOpen: !this.state.isSelectorPanelOpen})
   }
 
   toggleTheme() {
     const nextTheme = this.state.theme === "dark" ? "light" : "dark"
     localStorage.setItem("theme", nextTheme)
     document.documentElement.setAttribute("data-theme", nextTheme)
-    this.setState({ theme: nextTheme })
+    this.setState({theme: nextTheme})
   }
 
   handleInputChange(event) {
@@ -137,34 +132,10 @@ class SocialGameApp extends HTMLElement {
     document.body.classList.toggle("sg-overflow-y-hidden", this.state.isImageExpanded && isMobileViewport())
   }
 
-  normalizeMessages(messages, payload) {
-    if (Array.isArray(messages) && messages.length > 0) {
-      return messages
-    }
-
-    return [
-      {
-        id: "context-character",
-        role: "assistant",
-        content: "",
-        html: typeof payload?.character_description === "string" ? payload.character_description : "Keine Charakterbeschreibung verfuegbar.",
-        timestamp: "",
-      },
-      {
-        id: "context-scene",
-        role: "assistant",
-        content: "",
-        html: typeof payload?.scene_description === "string" ? payload.scene_description : "Keine Szenenbeschreibung verfuegbar.",
-        timestamp: "",
-      },
-    ]
-  }
-
   applyStatePayload(payload = {}) {
-    this.state.messages = this.normalizeMessages(payload.messages, payload)
+    this.state.messages = Array.isArray(payload.messages) ? payload.messages : []
     this.state.imageUrl = payload.image_url ? appendCacheBuster(payload.image_url) : ""
     this._imageSignature = typeof payload.image_signature === "string" ? payload.image_signature : ""
-    this.state.imageUpdateError = typeof payload.image_update_error === "string" ? payload.image_update_error : ""
     this.state.npcs = Array.isArray(payload.npcs) ? payload.npcs : []
     this.state.scenes = Array.isArray(payload.scenes) ? payload.scenes : []
     this.state.npcId = typeof payload.npc_id === "string" ? payload.npc_id : ""
@@ -186,7 +157,6 @@ class SocialGameApp extends HTMLElement {
       isSessionLoading: this.state.isSessionLoading,
       isImageRefreshLoading: this.state.isImageRefreshLoading,
       errorMessage: this.state.errorMessage,
-      imageUpdateError: this.state.imageUpdateError,
       selectorPanelOpen: this.state.isSelectorPanelOpen,
       theme: this.state.theme,
       npcs: this.state.npcs,
@@ -226,7 +196,7 @@ class SocialGameApp extends HTMLElement {
       return
     }
     try {
-      const response = await fetch("/api/image/signature", { cache: "no-store" })
+      const response = await fetch("/api/image/signature", {cache: "no-store"})
       if (!response.ok) {
         return
       }
@@ -245,12 +215,12 @@ class SocialGameApp extends HTMLElement {
   }
 
   async loadInitialState() {
-    this.setState({ isSessionLoading: true })
+    this.setState({isSessionLoading: true})
     try {
-      const response = await fetch("/api/state", { cache: "no-store" })
-      const payload = await response.json()
+      const response = await fetch("/api/state", {cache: "no-store"})
+      const payload = await readJsonResponse(response)
       if (!response.ok) {
-        this.setError(payload.detail || "State konnte nicht geladen werden.")
+        this.setError(getErrorMessage(payload, "State konnte nicht geladen werden."))
         return
       }
       this.applyStatePayload(payload)
@@ -258,7 +228,7 @@ class SocialGameApp extends HTMLElement {
     } catch (error) {
       this.setError(error instanceof Error ? error.message : "Backend nicht erreichbar.")
     } finally {
-      this.setState({ isSessionLoading: false })
+      this.setState({isSessionLoading: false})
       requestAnimationFrame(() => this.$.input?.focusInput())
       this.startImagePolling()
     }
@@ -273,16 +243,16 @@ class SocialGameApp extends HTMLElement {
       return
     }
 
-    this.setState({ isSessionLoading: true, errorMessage: "" })
+    this.setState({isSessionLoading: true, errorMessage: ""})
     try {
       const response = await fetch("/api/session", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify(nextSession),
       })
-      const payload = await response.json()
+      const payload = await readJsonResponse(response)
       if (!response.ok) {
-        this.setError(payload.detail || "Session konnte nicht aktualisiert werden.")
+        this.setError(getErrorMessage(payload, "Session konnte nicht aktualisiert werden."))
         return
       }
       this.applyStatePayload(payload)
@@ -290,12 +260,12 @@ class SocialGameApp extends HTMLElement {
     } catch (error) {
       this.setError(error instanceof Error ? error.message : "Session konnte nicht aktualisiert werden.")
     } finally {
-      this.setState({ isSessionLoading: false })
+      this.setState({isSessionLoading: false})
     }
   }
 
   handleImageError() {
-    this.setState({ imageUrl: "", isImageExpanded: false })
+    this.setState({imageUrl: "", isImageExpanded: false})
   }
 
   async refreshActiveImage() {
@@ -303,27 +273,25 @@ class SocialGameApp extends HTMLElement {
       return
     }
 
-    this.setInputState({ isImageRefreshLoading: true, errorMessage: "" })
+    this.setInputState({isImageRefreshLoading: true, errorMessage: ""})
     try {
-      const response = await fetch("/api/image/refresh-active", { method: "POST" })
-      const payload = await response.json()
-      const imageUpdateError = typeof payload.image_update_error === "string" ? payload.image_update_error : ""
+      const response = await fetch("/api/image/refresh-active", {method: "POST"})
+      const payload = await readJsonResponse(response)
 
       if (!response.ok) {
         this.setInputState({
-          imageUpdateError,
-          errorMessage: payload.detail || "Bild konnte nicht aktualisiert werden.",
+          errorMessage: getErrorMessage(payload, "Bild konnte nicht aktualisiert werden."),
         })
         return
       }
 
       const newUrl = appendCacheBuster("/api/image/current")
-      this.setInputState({ imageUpdateError, imageUrl: newUrl })
+      this.setInputState({imageUrl: newUrl})
       this.renderImage()
 
       // Signatur neu holen damit das Polling nicht erneut triggert
       try {
-        const sigResponse = await fetch("/api/image/signature", { cache: "no-store" })
+        const sigResponse = await fetch("/api/image/signature", {cache: "no-store"})
         if (sigResponse.ok) {
           const sigPayload = await sigResponse.json()
           this._imageSignature = typeof sigPayload.signature === "string" ? sigPayload.signature : this._imageSignature
@@ -333,9 +301,9 @@ class SocialGameApp extends HTMLElement {
         console.warn("Signatur-Refresh nach Bildaktualisierung fehlgeschlagen.", error)
       }
     } catch (error) {
-      this.setInputState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht aktualisiert werden." })
+      this.setInputState({errorMessage: error instanceof Error ? error.message : "Bild konnte nicht aktualisiert werden."})
     } finally {
-      this.setInputState({ isImageRefreshLoading: false })
+      this.setInputState({isImageRefreshLoading: false})
     }
   }
 
@@ -344,92 +312,55 @@ class SocialGameApp extends HTMLElement {
       return
     }
 
-    const shouldDelete = window.confirm("Soll der Verlauf des aktiven NPC wirklich geloescht werden?")
+    const shouldDelete = window.confirm("Soll der Verlauf des aktiven NPC wirklich gelöscht werden?")
     if (!shouldDelete) {
       return
     }
 
-    this.setState({ isSessionLoading: true, errorMessage: "" })
+    this.setState({isSessionLoading: true, errorMessage: ""})
     try {
-      const response = await fetch("/api/npc/reset-active", { method: "DELETE" })
-      const payload = await response.json()
+      const response = await fetch("/api/npc/reset-active", {method: "DELETE"})
+      const payload = await readJsonResponse(response)
       if (!response.ok) {
-        this.setError(payload.detail || "History konnte nicht geloescht werden.")
+        this.setError(getErrorMessage(payload, "Verlauf konnte nicht gelöscht werden."))
         return
       }
       this.applyStatePayload(payload)
       this.renderAll()
     } catch (error) {
-      this.setError(error instanceof Error ? error.message : "History konnte nicht geloescht werden.")
+      this.setError(error instanceof Error ? error.message : "Verlauf konnte nicht gelöscht werden.")
     } finally {
-      this.setState({ isSessionLoading: false })
+      this.setState({isSessionLoading: false})
     }
-  }
-
-  replaceAssistantPlaceholder(assistantMessage, replacement) {
-    const index = this.state.messages.indexOf(assistantMessage)
-    if (index < 0) {
-      return
-    }
-    this.state.messages[index] = {
-      ...replacement,
-      role: "assistant",
-      timestamp: replacement.timestamp || createNowTimestamp(),
-    }
-    this.renderChat()
   }
 
   async streamAssistantReply(text, assistantMessage) {
     const response = await fetch("/api/chat/stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: text }),
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: text}),
     })
 
     if (!response.ok || !response.body) {
-      const payload = await response.json().catch(() => ({}))
-      throw new Error(payload.detail || "Nachricht konnte nicht gesendet werden.")
+      const payload = await readJsonResponse(response)
+      throw new Error(getErrorMessage(payload, "Nachricht konnte nicht gesendet werden."))
     }
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder("utf-8")
-    let buffer = ""
-    let finalAssistantMessage = null
 
     while (true) {
-      const { done, value } = await reader.read()
+      const {done, value} = await reader.read()
       if (done) {
         break
       }
 
-      buffer += decoder.decode(value, { stream: true })
-      const events = buffer.split("\n\n")
-      buffer = events.pop() || ""
-
-      for (const chunk of events) {
-        const eventData = parseSseEvent(chunk)
-        if (!eventData) {
-          continue
-        }
-
-        if (eventData.type === "chunk") {
-          assistantMessage.content += String(eventData.text || "")
-          this.renderChat()
-        }
-
-        if (eventData.type === "done") {
-          finalAssistantMessage = eventData.assistant_message || null
-        }
-
-        if (eventData.type === "error") {
-          throw new Error(eventData.detail || "Antwortstream fehlgeschlagen.")
-        }
-      }
+      assistantMessage.content += decoder.decode(value, {stream: true})
+      this.renderChat()
     }
 
-    if (finalAssistantMessage) {
-      this.replaceAssistantPlaceholder(assistantMessage, finalAssistantMessage)
-    }
+    assistantMessage.content += decoder.decode()
+    this.renderChat()
   }
 
   async handleSubmit(submittedText) {
@@ -459,7 +390,7 @@ class SocialGameApp extends HTMLElement {
     }
 
     this.state.messages.push(userMessage, assistantMessage)
-    this.setState({ input: "", isSending: true, activeAssistantId: assistantMessage.id })
+    this.setState({input: "", isSending: true, activeAssistantId: assistantMessage.id})
 
     try {
       await this.streamAssistantReply(text, assistantMessage)
@@ -467,10 +398,9 @@ class SocialGameApp extends HTMLElement {
       this.state.messages = this.state.messages.filter((message) => message !== assistantMessage)
       this.setError(error instanceof Error ? error.message : "Nachricht konnte nicht gesendet werden.")
     } finally {
-      this.setState({ isSending: false, activeAssistantId: "" })
+      this.setState({isSending: false, activeAssistantId: ""})
     }
   }
 }
 
 customElements.get("sg-app") || customElements.define("sg-app", SocialGameApp)
-

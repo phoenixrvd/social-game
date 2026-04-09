@@ -1,9 +1,7 @@
-## Szene – IT-Büro am späten Freitagabend
+## Unterbrochene Notiz
 
-Das Büro ist fast leer. Die meisten Kollegen sind bereits gegangen, nur vereinzelt brennt noch Licht.
+Vor dem Whiteboard bleibt eine halb gelöschte Skizze stehen.
 
-Gedämpftes Licht von Monitoren und Deckenlampen taucht den Raum in eine ruhige, leicht intime Atmosphäre. Tastaturgeräusche sind selten geworden, Gespräche verstummt. Die sonst geschäftige Umgebung wirkt langsamer, entspannter.
+Vika steht seitlich am hohen Tisch. Sie trägt eine cremefarbene Bluse, eine schmale Stoffhose und feine Stiefeletten. Ein schmaler Cardigan liegt über ihren Schultern. Ein Stift ruht zwischen ihren Fingern – als würde sie jede Bewegung erst prüfen. Sie hebt den Blick nur kurz. Dann hält sie den Platz neben sich frei. Stützt die Hüfte leicht an die Tischkante.
 
-Draußen ist es dunkel, die Fenster spiegeln das Innere des Büros leicht zurück.
-
-Vika ist noch da, wirkt ruhiger als tagsüber, weniger angespannt. Die formelle Distanz des Arbeitsalltags ist spürbar gelockert.
+Auf dem Tisch stehen zwei Kaffeebecher. Nur einer ist angerührt.

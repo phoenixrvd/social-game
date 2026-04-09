@@ -14,39 +14,6 @@ app = typer.Typer(
     no_args_is_help=True,
     help="Werkzeuge fuer Web-GUI, Session, Updater und LLM-Pruefung im Social Game.",
 )
-
-session_app = typer.Typer(no_args_is_help=True, help="Globalen Session-Kontext fuer NPC und Szene setzen.")
-app.add_typer(session_app, name="session")
-
-
-def _run_web(*, host: str, port: int, reload: bool) -> None:
-    import importlib
-
-    web_app = importlib.import_module("engine.web.app")
-    run_web = getattr(web_app, "run")
-    run_web(host=host, port=port, reload=reload)
-
-
-def _generate_icons(*, input_path: Path, output_dir: Path) -> None:
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    source = Image.open(input_path).convert("RGBA")
-    base = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
-    x = (1024 - source.width) // 2
-    y = (1024 - source.height) // 2
-    base.paste(source, (x, y), source)
-
-    base_path = output_dir / "base.png"
-    base.save(base_path, format="PNG")
-
-    base.resize((192, 192), Image.Resampling.LANCZOS).save(output_dir / "icon-192.png", format="PNG")
-    base.resize((512, 512), Image.Resampling.LANCZOS).save(output_dir / "icon-512.png", format="PNG")
-    base.resize((180, 180), Image.Resampling.LANCZOS).save(output_dir / "apple-touch-icon.png", format="PNG")
-    base.resize((32, 32), Image.Resampling.LANCZOS).save(output_dir / "favicon-32x32.png", format="PNG")
-    base.resize((16, 16), Image.Resampling.LANCZOS).save(output_dir / "favicon-16x16.png", format="PNG")
-    base.save(output_dir / "favicon.ico", format="ICO", sizes=[(64, 64), (48, 48), (32, 32), (16, 16)])
-
-
 def resolve_updater(updater_name: str) -> AbstractUpdater:
     key = updater_name.strip().lower()
     updater_cls = dict(UPDATER_CLASSES).get(key)
@@ -61,7 +28,7 @@ def main() -> None:
     """Hilft beim Starten und Pruefen der wichtigsten Social-Game-Funktionen."""
 
 
-@session_app.command("set")
+@app.command("session-set")
 def set_session_context(
     npc: str | None = typer.Option(
         None,
@@ -105,11 +72,9 @@ def web(
     reload: bool = typer.Option(False, "--reload", help="Auto-Reload fuer Entwicklung aktivieren."),
 ):
     """Startet die browserbasierte GUI."""
-    try:
-        _run_web(host=host, port=port, reload=reload)
-    except Exception as exc:
-        typer.echo(f"Web-GUI konnte nicht gestartet werden: {exc}")
-        raise typer.Exit(code=1) from exc
+    from engine.web.app import run as run_web
+
+    run_web(host=host, port=port, reload=reload)
 
 
 @app.command("image-revert")
@@ -117,21 +82,13 @@ def image_revert():
     """Setzt das Charakterbild auf das letzte Backup zurueck."""
     updater = ImageUpdater()
 
-    output, did_revert = updater.revert()
-    typer.echo(output)
-    if did_revert:
-        typer.echo("[image revert] Abgeschlossen.")
+    updater.revert()
 
 
-@app.command("image-refresh")
-def image_refresh():
-    """Generiert das Bild mit dem aktuellen Prompt neu, ohne ihn zu aktualisieren."""
-    updater = ImageUpdater()
-
-    output, did_refresh = updater.refresh_image_with_current_prompt()
-    typer.echo(output)
-    if did_refresh:
-        typer.echo("[image-refresh] Persistiert.")
+@app.command("image-merge-scene")
+def image_merge_scene() -> None:
+    """Fuegt aktives Charakterbild und Szenenbild zu einem neuen Laufzeitbild zusammen."""
+    ImageUpdater().merge_with_scene()
 
 
 @app.command("icons")
@@ -152,7 +109,25 @@ def icons(
         raise typer.Exit(code=1)
 
     typer.echo("→ Generiere Icons...")
-    _generate_icons(input_path=input_path, output_dir=output_dir)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    source = Image.open(input_path).convert("RGBA")
+    base = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+    x = (1024 - source.width) // 2
+    y = (1024 - source.height) // 2
+    base.paste(source, (x, y), source)
+
+    base_path = output_dir / "base.png"
+    base.save(base_path, format="PNG")
+
+    base.resize((192, 192), Image.Resampling.LANCZOS).save(output_dir / "icon-192.png", format="PNG")
+    base.resize((512, 512), Image.Resampling.LANCZOS).save(output_dir / "icon-512.png", format="PNG")
+    base.resize((180, 180), Image.Resampling.LANCZOS).save(output_dir / "apple-touch-icon.png", format="PNG")
+    base.resize((32, 32), Image.Resampling.LANCZOS).save(output_dir / "favicon-32x32.png", format="PNG")
+    base.resize((16, 16), Image.Resampling.LANCZOS).save(output_dir / "favicon-16x16.png", format="PNG")
+    base.save(output_dir / "favicon.ico", format="ICO", sizes=[(64, 64), (48, 48), (32, 32), (16, 16)])
+
     typer.echo("Icons erfolgreich generiert.")
 
 

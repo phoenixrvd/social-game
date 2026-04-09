@@ -7,7 +7,7 @@ from pathlib import Path
 from engine.logging import get_logger, log_info
 from engine.config import config
 from engine.fs_utils import load_text, save_text
-from engine.llm_client import refresh_img, run_prompt
+from engine.llm_client import merge_character_scene_img, refresh_img, run_prompt
 from engine.stores.npc_store import NpcStore
 from engine.updater.updater import AbstractUpdater
 
@@ -24,6 +24,12 @@ class ImageUpdater(AbstractUpdater):
 
     def emit_update(self) -> None:
         save_text(self._run_trigger_path(), "1")
+
+    def emit_update_if_missing(self) -> None:
+        if self.has_generated_image():
+            return
+
+        self.emit_update()
 
     def _consume_run_toggle(self) -> bool:
         run_trigger_path = self._run_trigger_path()
@@ -42,23 +48,15 @@ class ImageUpdater(AbstractUpdater):
     def _image_prompt_path(self) -> Path:
         return self._orchestrator_dir() / "image_updater_update_prompt.txt"
 
-    def _last_error_path(self) -> Path:
-        return self._orchestrator_dir() / "image_updater_last_error.txt"
+    def has_generated_image(self) -> bool:
+        return self._image_path().exists()
 
-    def get_last_error(self) -> str:
-        path = self._last_error_path()
+    @staticmethod
+    def _load_optional_text(path: Path) -> str:
         if not path.exists():
             return ""
 
         return load_text(path).strip()
-
-    def _save_last_error(self, message: str) -> None:
-        save_text(self._last_error_path(), message.strip())
-
-    def _clear_last_error(self) -> None:
-        path = self._last_error_path()
-        if path.exists():
-            path.unlink()
 
     def _latest_backup_path(self) -> Path | None:
         backup_dir = self._backup_dir()
@@ -84,12 +82,27 @@ class ImageUpdater(AbstractUpdater):
         image_path.rename(backup_path)
         log_info(LOGGER, "image_backup_created", source=image_path, backup=backup_path)
 
-    def _load_old_prompt(self) -> str:
-        prompt_path = self._image_prompt_path()
-        if not prompt_path.exists():
-            return ""
+    def _load_current_prompt(self) -> str:
+        return self._load_optional_text(self._image_prompt_path())
 
-        return load_text(prompt_path).strip()
+    def _scene_merge_prompt(self, scene_description: str) -> str:
+        return (
+            load_text(config.PROJECT_ROOT / "prompts" / "image_scene.md")
+            .strip()
+            .replace("{{SCENE_DESCRIPTION}}", scene_description)
+        )
+
+    def _render_refresh_prompt(self, base_prompt: str) -> str:
+        return (
+            load_text(config.PROJECT_ROOT / "prompts" / "image_refresh.md")
+            .strip()
+            .replace("{{BASE_PROMPT}}", base_prompt.strip())
+        )
+
+    def _write_image(self, image_path: Path, image_bytes: bytes) -> None:
+        self._backup_existing_image(image_path)
+        image_path.parent.mkdir(parents=True, exist_ok=True)
+        image_path.write_bytes(image_bytes)
 
     def get_preview(self, old_prompt: str) -> str:
         npc = self.npc_store.load()
@@ -102,6 +115,10 @@ class ImageUpdater(AbstractUpdater):
             .replace("{{CURRENT_STM}}", self.format_short_memory(npc.stm, last_n=config.UPDATER_LTM_SHORT_MEMORY_MESSAGES_TO_KEEP))
         )
 
+    def _generate_update_prompt(self, old_prompt: str) -> str:
+        optimization_prompt = self.get_preview(old_prompt)
+        return run_prompt(optimization_prompt, model=config.MODEL_LLM_SMALL).strip()
+
     def _token_overlap(self, a: str, b: str) -> float:
         a_tokens = {t.strip() for t in a.split(",") if t.strip()}
         b_tokens = {t.strip() for t in b.split(",") if t.strip()}
@@ -111,6 +128,26 @@ class ImageUpdater(AbstractUpdater):
 
         return len(a_tokens & b_tokens) / len(a_tokens)
 
+    def _should_skip_prompt_update(self, new_prompt: str, old_prompt: str, force: bool) -> bool:
+        if force:
+            return False
+
+        if new_prompt == old_prompt:
+            log_info(LOGGER, "image_skip", reason="prompt_unchanged_exact")
+            return True
+
+        similarity = fuzz.ratio(new_prompt, old_prompt) / 100
+        if similarity > 0.95:  # stop if similar to 95%
+            log_info(LOGGER, "image_skip", reason="prompt_similar_fuzzy", similarity=similarity)
+            return True
+
+        overlap = self._token_overlap(new_prompt, old_prompt)
+        if overlap > 0.85:  # stop if overlap is above 85%
+            log_info(LOGGER, "image_skip", reason="prompt_similar_tokens", overlap=overlap)
+            return True
+
+        return False
+
     def schedule(self, force: bool = False) -> None:
         if not self._consume_run_toggle():
             log_info(LOGGER, "updater_active", updater="image", active=False, prompt_start=False, reason="no_run_toggle_emitted")
@@ -118,113 +155,98 @@ class ImageUpdater(AbstractUpdater):
 
         log_info(LOGGER, "updater_active", updater="image", active=True, prompt_start=True)
 
-        npc = self.npc_store.load()
         image_path = self._image_path()
+
+        if not image_path.exists():
+            self.merge_with_scene()
+            return
+
+        npc = self.npc_store.load()
         prompt_path = self._image_prompt_path()
-        old_prompt = self._load_old_prompt().strip()
+        old_prompt = self._load_current_prompt()
+        new_prompt = self._generate_update_prompt(old_prompt)
 
-        optimization_prompt = self.get_preview(old_prompt)
-
-        try:
-            new_prompt = run_prompt(optimization_prompt, model=config.MODEL_LLM_SMALL).strip()
-        except Exception as exc:
-            self._save_last_error(str(exc))
-            log_info(LOGGER, "image_update_failed", error=str(exc))
-            raise
-
-        # --- Hard check ---
-        if new_prompt == old_prompt and not force:
-            log_info(LOGGER, "image_skip", reason="prompt_unchanged_exact")
+        if self._should_skip_prompt_update(new_prompt, old_prompt, force):
             return
 
-        # --- Fuzzy similarity ---
-        similarity = fuzz.ratio(new_prompt, old_prompt) / 100
-
-        if similarity > 0.95 and not force:  # stop if similar to 95%
-            log_info(LOGGER, "image_skip", reason="prompt_similar_fuzzy", similarity=similarity)
-            return
-
-        # --- Token overlap ---
-        overlap = self._token_overlap(new_prompt, old_prompt)
-
-        if overlap > 0.85 and not force:  # stop if overlap is above 85%
-            log_info(LOGGER, "image_skip", reason="prompt_similar_tokens", overlap=overlap)
-            return
-
-        # --- Generate image ---
         log_info(LOGGER, "image_generation_prompt", prompt=new_prompt)
-        log_info(LOGGER, "image_generation_started", source_image=npc.img, target_image=image_path)
+        log_info(
+            LOGGER,
+            "image_generation_started",
+            source_image=npc.img_current,
+            identity_image=npc.img,
+            target_image=image_path,
+        )
 
-        try:
-            new_img = refresh_img(new_prompt, npc.img.read_bytes())
-        except Exception as exc:
-            self._save_last_error(str(exc))
-            log_info(LOGGER, "image_update_failed", error=str(exc))
-            raise
+        new_img = refresh_img(
+            self._render_refresh_prompt(new_prompt),
+            npc.img_current.read_bytes(),
+            npc.img.read_bytes(),
+        )
 
-        self._backup_existing_image(image_path)
-
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        image_path.write_bytes(new_img)
+        self._write_image(image_path, new_img)
         save_text(prompt_path, new_prompt)
-        self._clear_last_error()
 
         log_info(LOGGER, "image_updated", path=image_path)
         log_info(LOGGER, "updater_completed", updater="image", prompt_length=len(new_prompt), image_bytes=len(new_img))
 
-    def refresh_image_with_current_prompt(self) -> tuple[str, bool]:
+    def refresh_image_with_current_prompt(self) -> None:
         """Regeneriert das Bild mit dem bestehenden Prompt, ohne ihn zu aktualisieren."""
         npc = self.npc_store.load()
         image_path = self._image_path()
-
-        current_prompt = self._load_old_prompt().strip()
+        current_prompt = self._load_current_prompt()
 
         if not current_prompt:
-            return f"Kein Prompt vorhanden fuer NPC '{npc.npc_id}'.", False
+            return
 
         log_info(LOGGER, "image_refresh_started", npc=npc.npc_id, prompt_length=len(current_prompt))
 
-        try:
-            new_img = refresh_img(current_prompt, npc.img.read_bytes())
-        except Exception as exc:
-            self._save_last_error(str(exc))
-            log_info(LOGGER, "image_refresh_failed", error=str(exc))
-            return f"Bilderzeugung fehlgeschlagen: {str(exc)}", False
+        new_img = refresh_img(
+            self._render_refresh_prompt(current_prompt),
+            npc.img_current.read_bytes(),
+            npc.img.read_bytes(),
+        )
 
-        self._backup_existing_image(image_path)
-
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        image_path.write_bytes(new_img)
-        self._clear_last_error()
+        self._write_image(image_path, new_img)
 
         log_info(LOGGER, "image_refreshed", path=image_path, image_bytes=len(new_img))
-        return f"Bild erfolgreich regeneriert fuer '{npc.npc_id}'.", True
 
-    def revert(self) -> tuple[str, bool]:
+    def merge_with_scene(self) -> None:
         npc = self.npc_store.load()
+        image_path = self._image_path()
+        prompt_path = self._image_prompt_path()
+        prompt = self._scene_merge_prompt(npc.scene.description)
+
+        log_info(LOGGER, "image_merge_started", source_image=npc.img_current, scene_image=npc.scene.img, target_image=image_path)
+
+        merged_img = merge_character_scene_img(
+            prompt,
+            npc.img_current.read_bytes(),
+            npc.scene.img.read_bytes(),
+        )
+
+        self._write_image(image_path, merged_img)
+        save_text(prompt_path, self._generate_update_prompt(""))
+
+        log_info(LOGGER, "image_merged_with_scene", path=image_path, image_bytes=len(merged_img))
+
+    def revert(self) -> None:
         image_path = self._image_path()
         backup_path = self._latest_backup_path()
 
         if not image_path.exists() and backup_path is None:
-            return f"Kein Daten-Bild vorhanden fuer '{npc.npc_id}'.", False
+            return
 
         log_info(LOGGER, "image_revert_started", target=image_path, backup=backup_path)
 
-        lines: list[str] = []
-
         if image_path.exists():
             image_path.unlink()
-            lines.append("Bild geloescht.")
 
         if backup_path is None:
-            lines.append("Kein Backup gefunden.")
             log_info(LOGGER, "image_revert_completed", revert=False, target_image=image_path, restored_from=None)
-            return "\n".join(lines), False
+            return
 
         image_path.parent.mkdir(parents=True, exist_ok=True)
         backup_path.replace(image_path)
-        lines.append(f"Backup wiederhergestellt: {backup_path} -> {image_path}")
 
         log_info(LOGGER, "image_revert_completed", revert=True, target_image=image_path, restored_from=backup_path)
-        return "\n".join(lines), True
-

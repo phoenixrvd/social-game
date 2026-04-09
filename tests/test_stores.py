@@ -111,7 +111,7 @@ def test_npc_store_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
     store = NpcStore()
     npc = store.load()
 
-    assert npc.img == npc_dir / "img.png"
+    assert npc.img_current == npc_dir / "img.png"
 def test_npc_store_runtime_scene_and_ltm_overlay(tmp_path, monkeypatch):
     monkeypatch.setattr(npc_store_module.config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(npc_store_module.config, "NPC_DIR", tmp_path / "npcs")
