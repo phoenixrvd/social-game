@@ -18,6 +18,7 @@ Erstelle ein ADR aus der Eingabe.
 - Keine Fakten erfinden
 - Fehlendes → Annahmen oder offene Fragen
 - Anforderungen ≠ ADR
+- Keine Codeänderungen
 
 # Stil
 - Deutsch, Markdown

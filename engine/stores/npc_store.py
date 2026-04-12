@@ -2,72 +2,45 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any, Iterable, Literal, cast
+from typing import Iterable, Literal, cast
 from uuid import uuid4
 
-from engine.config import config
 from engine.models import Npc, Scene, ShortMemoryMessage
-from engine.fs_utils import load_text, load_yaml, save_text, append_jsonl, load_jsonl, save_jsonl
-from engine.stores.session_store import SessionStore
+from engine.storage import storage
 
 
 class NpcStore:
-    def __init__(self) -> None:
-        self.session_store = SessionStore()
+    def _load_state(self) -> str:
+        npc_paths = storage.npc
+        runtime_state = npc_paths.state_runtime
 
-    def _npc_scene_data_dir(self, npc_id: str, scene_id: str) -> Path:
-        return config.DATA_NPC_DIR / npc_id / scene_id
+        if runtime_state.is_file():
+            return runtime_state.get()
 
-    def _runtime_path(self, npc_id: str, scene_id: str, filename: str) -> Path:
-        return self._npc_scene_data_dir(npc_id, scene_id) / filename
+        base_state = npc_paths.state_original.get().strip()
+        relationship = npc_paths.relationship.get().strip()
+        return "\n\n".join(part for part in (base_state, relationship) if part)
 
-    def _load_scene(self, npc_id: str, scene_id: str) -> Scene:
-        scene_img = config.SCENE_DIR / scene_id / "img.png"
-        session = self._runtime_path(npc_id, scene_id, "scene.md")
+    def _load_scene(self) -> Scene:
+        npc_paths = storage.npc
+        scene_paths = storage.scene
+        scene_img = scene_paths.img_original.get()
+        runtime_scene = scene_paths.scene_runtime
 
-        if session.is_file():
-            return Scene(scene_id=scene_id, description=load_text(session), img=scene_img)
+        if runtime_scene.is_file():
+            return Scene(scene_id=scene_paths.scene_id, description=runtime_scene.get(), img=scene_img)
 
-        default = load_text(config.SCENE_DIR / scene_id / "scene.md")
+        default = scene_paths.scene_original.get()
 
-        scene = config.NPC_DIR / npc_id / "scenes" / scene_id / "scene.md"
-        if scene.is_file():
-            default =  "\n".join([default, load_text(scene)])
+        npc_scene = npc_paths.scene_md_original
+        if npc_scene.is_file():
+            default = "\n".join([default, npc_scene.get()])
 
-        return Scene(scene_id=scene_id, description=default, img=scene_img)
+        return Scene(scene_id=scene_paths.scene_id, description=default, img=scene_img)
 
-    def _load_default_files(self, npc_id: str) -> dict[str, Any]:
-        npc_dir = config.NPC_DIR / npc_id
-        return {
-            "description": load_text(npc_dir / "description.md"),
-            "system_prompt": load_text(npc_dir / "system_prompt.md"),
-            "character": load_yaml(npc_dir / "character.yaml"),
-            "state": load_text(npc_dir / "state.md"),
-            "ltm": load_text(npc_dir / "ltm.md"),
-        }
-
-    def _load_runtime_value(self, npc_id: str, scene_id: str, filename: str, default: str) -> str:
-        value = load_text(self._runtime_path(npc_id, scene_id, filename))
-        return value if value else default
-
-    def _stm_path(self, npc_id: str, scene_id: str) -> Path:
-        return self._runtime_path(npc_id, scene_id, "stm.jsonl")
-
-    def _load_current_image_path(self, npc_id: str, scene_id: str) -> Path:
-        session = self._runtime_path(npc_id, scene_id, "img.png")
-        if session.is_file():
-            return session
-
-        scene = config.NPC_DIR / npc_id / "scenes" / scene_id / "img.png"
-        if scene.is_file():
-            return scene
-
-        return  config.NPC_DIR / npc_id / "img.png"
-
-    def _load_stm(self, npc_id: str, scene_id: str) -> list[ShortMemoryMessage]:
+    def _load_stm(self) -> list[ShortMemoryMessage]:
         valid_roles = {"user", "assistant", "system"}
-        rows = load_jsonl(self._stm_path(npc_id, scene_id))
+        rows = storage.npc.stm.get()
 
         return [
             ShortMemoryMessage(
@@ -81,44 +54,27 @@ class NpcStore:
         ]
 
     def load(self) -> Npc:
-        session = self.session_store.load()
-        resolved_npc_id = session.npc_id
-        resolved_scene_id = session.scene_id
-
-        raw = self._load_default_files(resolved_npc_id)
-        scene = self._load_scene(resolved_npc_id, resolved_scene_id)
+        npc_paths = storage.npc
+        system_prompt = npc_paths.system_prompt_original.get()
+        character = npc_paths.character_original.get()
+        scene = self._load_scene()
+        relationship = npc_paths.relationship.get()
 
         return Npc(
-            npc_id=resolved_npc_id,
-            description=self._load_runtime_value(resolved_npc_id, resolved_scene_id, "description.md", raw["description"]),
-            system_prompt=raw["system_prompt"],
-            character=raw["character"],
-            state=self._load_runtime_value(resolved_npc_id, resolved_scene_id, "state.md", raw["state"]),
-            ltm=self._load_runtime_value(resolved_npc_id, resolved_scene_id, "ltm.md", raw["ltm"]),
+            npc_id=npc_paths.npc_id,
+            description=npc_paths.description.get() or npc_paths.description_original.get(),
+            system_prompt=system_prompt,
+            character=character,
+            state=self._load_state(),
+            relationship=relationship,
             scene=scene,
-            stm=self._load_stm(resolved_npc_id, resolved_scene_id),
-            img=config.NPC_DIR / resolved_npc_id / "img.png",
-            img_current=self._load_current_image_path(resolved_npc_id, resolved_scene_id),
+            stm=self._load_stm(),
+            img=storage.npc.img_original.get(),
+            img_current=storage.npc.img_current.get(),
         )
-
-    def _save_active_runtime_value(self, filename: str, content: str) -> None:
-        session = self.session_store.load()
-        save_text(self._runtime_path(session.npc_id, session.scene_id, filename), content)
-
-    def save_state(self, state: str) -> None:
-        self._save_active_runtime_value("state.md", state)
-
-    def save_ltm(self, ltm: str) -> None:
-        self._save_active_runtime_value("ltm.md", ltm)
-
-
-    def save_scene(self, scene: str) -> None:
-        self._save_active_runtime_value("scene.md", scene)
 
     def append_stm(
         self,
-        npc_id: str,
-        scene_id: str,
         role: Literal["user", "assistant", "system"],
         content: str,
     ) -> ShortMemoryMessage:
@@ -128,7 +84,7 @@ class NpcStore:
             role=role,
             content=content,
         )
-        append_jsonl(self._stm_path(npc_id, scene_id), asdict(message))
+        storage.npc.stm.append(asdict(message))
         return message
 
     def append_stm_turn(
@@ -136,18 +92,15 @@ class NpcStore:
         user_content: str,
         assistant_content: str,
     ) -> list[ShortMemoryMessage]:
-        session = self.session_store.load()
-        npc_id = session.npc_id
-        scene_id = session.scene_id
-        user_msg = self.append_stm(npc_id, scene_id, "user", user_content)
-        assistant_msg = self.append_stm(npc_id, scene_id, "assistant", assistant_content)
+        user_msg = self.append_stm("user", user_content)
+        assistant_msg = self.append_stm("assistant", assistant_content)
         return [user_msg, assistant_msg]
 
-    def remove_stm_by_ids(self, npc_id: str, scene_id: str, message_ids: Iterable[str]) -> None:
+    def remove_stm_by_ids(self, message_ids: Iterable[str]) -> None:
         remove_set = set(message_ids)
         if not remove_set:
             return
 
-        current = self._load_stm(npc_id, scene_id)
+        current = self._load_stm()
         kept = [asdict(msg) for msg in current if msg.id not in remove_set]
-        save_jsonl(self._stm_path(npc_id, scene_id), kept)
+        storage.npc.stm.save(kept)

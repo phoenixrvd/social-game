@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
+import engine.services.state_update_service as state_update_service_module
+import engine.storage as storage_module
 import engine.updater.state_updater as state_updater_module
-import engine.updater.updater as abstract_updater_module
 from engine.models import Npc, Scene, ShortMemoryMessage
 from engine.updater.state_updater import StateUpdater
-from tests.fakes import FakeLogger
 
 
 class FakeNpcStore:
@@ -19,16 +19,39 @@ class FakeNpcStore:
     def load(self) -> Npc:
         return replace(self._npc)
 
-    def save_state(self, state: str) -> None:
-        self._npc = replace(self._npc, state=state)
-        self.saved = True
+
+class FakeStateStorage:
+    def __init__(self, npc_store: FakeNpcStore, prompt_text: str) -> None:
+        self.npc = self._build_npc_view(npc_store)
+        self.prompts = self._build_prompts(prompt_text)
+
+    @staticmethod
+    def _build_npc_view(npc_store: FakeNpcStore):
+        class FakeStateRuntime:
+            def save(self, state: str) -> None:
+                npc_store._npc = replace(npc_store._npc, state=state)
+                npc_store.saved = True
+
+        class FakeNpcView:
+            state_runtime = FakeStateRuntime()
+
+        return FakeNpcView()
+
+    @staticmethod
+    def _build_prompts(prompt_text: str):
+        class FakePrompt:
+            def get(self) -> str:
+                return prompt_text
+
+        class FakePrompts:
+            state_update = FakePrompt()
+
+        return FakePrompts()
 
 
 @pytest.fixture(autouse=True)
 def _mock_prompts(monkeypatch):
-    def fake_load_text(path):
-        if path == state_updater_module.config.PROJECT_ROOT / "prompts" / "state_update.md":
-            return """# Role: NPC State Updater
+    prompt_text = """# Role: NPC State Updater
 
 ## Current State
 {{CURRENT_STATE}}
@@ -36,12 +59,10 @@ def _mock_prompts(monkeypatch):
 ## Short-Term-Memory
 {{SHORT_TERM_MEMORY}}
 
-## Long-Term-Memory
-{{LONG_TERM_MEMORY}}
+## Relevant Earlier ETM Episodes
+{{CURRENT_ETM}}
 """
-        raise AssertionError(f"Unexpected path: {path}")
-
-    monkeypatch.setattr(state_updater_module, "load_text", fake_load_text)
+    monkeypatch.setattr(state_update_service_module, "_TEST_STATE_UPDATE_PROMPT", prompt_text, raising=False)
 
 
 def _npc(stm: list[ShortMemoryMessage] | None = None) -> Npc:
@@ -51,7 +72,7 @@ def _npc(stm: list[ShortMemoryMessage] | None = None) -> Npc:
         system_prompt="sys",
         state="mood: neutral",
         character={"name": "Vika"},
-        ltm="freundlich",
+        relationship="freundlich",
         scene=Scene(scene_id="default", description="Szene"),
         stm=stm or [],
     )
@@ -59,7 +80,9 @@ def _npc(stm: list[ShortMemoryMessage] | None = None) -> Npc:
 
 def _build_updater(monkeypatch, npc_store: FakeNpcStore, tmp_path) -> StateUpdater:
     monkeypatch.setattr(state_updater_module, "NpcStore", lambda: npc_store)
-    monkeypatch.setattr(abstract_updater_module.config, "DATA_NPC_DIR", tmp_path / "npcs")
+    prompt_text = getattr(state_update_service_module, "_TEST_STATE_UPDATE_PROMPT")
+    monkeypatch.setattr(state_update_service_module, "storage", FakeStateStorage(npc_store, prompt_text))
+    monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", tmp_path / "npcs")
     return StateUpdater()
 
 
@@ -71,7 +94,6 @@ def test_schedule_updates_state_when_active(monkeypatch, tmp_path):
         def emit_update(self) -> None:
             self.emitted = True
 
-    fake_logger = FakeLogger()
     npc_store = FakeNpcStore(
         _npc(
             stm=[
@@ -85,7 +107,7 @@ def test_schedule_updates_state_when_active(monkeypatch, tmp_path):
         )
     )
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
-    updater.image_updater = FakeImageUpdater()
+    updater.service.image_updater = FakeImageUpdater()
 
     captured_prompt: dict[str, str | None] = {"value": None}
 
@@ -93,19 +115,17 @@ def test_schedule_updates_state_when_active(monkeypatch, tmp_path):
         captured_prompt["value"] = prompt
         return "mood: happy"
 
-    monkeypatch.setattr(state_updater_module, "LOGGER", fake_logger)
-    monkeypatch.setattr(state_updater_module, "run_prompt", lambda prompt, model: fake_run_prompt(prompt))
+    monkeypatch.setattr(state_update_service_module, "run_prompt", lambda prompt, model: fake_run_prompt(prompt))
 
     updater.schedule()
 
     assert npc_store.saved is True
     assert npc_store.load().state == "mood: happy"
-    assert updater.image_updater.emitted is True
+    assert updater.service.image_updater.emitted is True
     assert captured_prompt["value"] is not None
     assert "## Current State\nmood: neutral" in captured_prompt["value"]
     assert "## Short-Term-Memory\nU: Hallo" in captured_prompt["value"]
-    assert "## Long-Term-Memory\nfreundlich" in captured_prompt["value"]
-    assert any(message.get("event") == "updater_active" and message.get("updater") == "state" and message.get("active") is True and message.get("prompt_start") is True for message in fake_logger.messages)
+    assert "## Relevant Earlier ETM Episodes" in captured_prompt["value"]
 
 
 def test_schedule_is_noop_without_stm(monkeypatch, tmp_path):
@@ -118,10 +138,10 @@ def test_schedule_is_noop_without_stm(monkeypatch, tmp_path):
 
     npc_store = FakeNpcStore(_npc(stm=[]))
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
-    updater.image_updater = FakeImageUpdater()
+    updater.service.image_updater = FakeImageUpdater()
 
     monkeypatch.setattr(
-        state_updater_module,
+        state_update_service_module,
         "run_prompt",
         lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM must not run")),
     )
@@ -129,7 +149,7 @@ def test_schedule_is_noop_without_stm(monkeypatch, tmp_path):
     updater.schedule()
 
     assert npc_store.saved is False
-    assert updater.image_updater.emitted is False
+    assert updater.service.image_updater.emitted is False
 
 
 def test_schedule_is_noop_without_new_messages_after_last_check(monkeypatch, tmp_path):
@@ -154,14 +174,14 @@ def test_schedule_is_noop_without_new_messages_after_last_check(monkeypatch, tmp
         )
     )
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
-    updater.image_updater = FakeImageUpdater()
+    updater.service.image_updater = FakeImageUpdater()
 
     last_check_path = Path(tmp_path) / "npcs" / "vika" / "default" / "orchestrator" / "state_updater_last_check.txt"
     last_check_path.parent.mkdir(parents=True, exist_ok=True)
     last_check_path.write_text(old_timestamp, encoding="utf-8")
 
     monkeypatch.setattr(
-        state_updater_module,
+        state_update_service_module,
         "run_prompt",
         lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM must not run")),
     )
@@ -169,5 +189,4 @@ def test_schedule_is_noop_without_new_messages_after_last_check(monkeypatch, tmp
     updater.schedule()
 
     assert npc_store.saved is False
-    assert updater.image_updater.emitted is False
-
+    assert updater.service.image_updater.emitted is False

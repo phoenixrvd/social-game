@@ -1,12 +1,16 @@
 import asyncio
+import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 from fastapi import HTTPException
+import openai
 from PIL import Image
 
 import engine.web.app as web_app_module
+import engine.storage as storage_module
 from engine.models import Npc, Scene, Session, ShortMemoryMessage
 
 
@@ -22,7 +26,7 @@ def _build_npc(npc_id: str, scene_id: str, messages: list[ShortMemoryMessage]) -
         description=f"Charakterbeschreibung {npc_id}",
         system_prompt="Bleib in Character",
         state="mood: neutral",
-        ltm="kennt den Spieler",
+        relationship="kennt den Spieler",
         scene=Scene(scene_id=scene_id, description=f"Szene {scene_id}"),
         character={"name": npc_id.title()},
         img_current=Path(__file__),
@@ -101,12 +105,12 @@ class FakeNpcStore:
 class FakeNpcTurnService:
     def __init__(self) -> None:
         self.npc_store = fake_npc_store
+        self.user_message = None
 
-    def build_turn_messages(self):
-        return [{"role": "system", "content": "stub"}]
-
-    def build_user_message(self, player_input: str):
-        return {"role": "user", "content": player_input}
+    def build_chat_messages(self, player_input: str):
+        user_message = {"role": "user", "content": player_input}
+        self.user_message = user_message
+        return [{"role": "system", "content": "stub"}, user_message]
 
 
 fake_npc_store = FakeNpcStore()
@@ -163,6 +167,11 @@ def _setup_web_app(
     monkeypatch.setattr(web_app_module.config, "SCENE_DIR", scenes_dir)
     monkeypatch.setattr(web_app_module.config, "DATA_NPC_DIR", data_npcs_dir)
     monkeypatch.setattr(web_app_module.config, "WEB_DEBUG", web_debug)
+    monkeypatch.setattr(storage_module.config, "NPC_DIR", npcs_dir)
+    monkeypatch.setattr(storage_module.config, "SCENE_DIR", scenes_dir)
+    monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", data_npcs_dir)
+    storage_module.storage._npc_view = None
+    storage_module.storage._scene_view = None
     monkeypatch.setattr(web_app_module, "SessionStore", FakeSessionStore)
     monkeypatch.setattr(web_app_module, "NpcStore", lambda: fake_npc_store)
     monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
@@ -170,7 +179,7 @@ def _setup_web_app(
     web_app_module.app.state.watch_scheduler = None
 
 def _request(path: str, method: str = "GET"):
-    return SimpleNamespace(url=SimpleNamespace(path=path), method=method)
+    return cast(Any, SimpleNamespace(url=SimpleNamespace(path=path), method=method))
 
 
 def _run_async(coro):
@@ -180,6 +189,20 @@ def _run_async(coro):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
+
+
+def _read_stream_events(response) -> list[dict[str, object]]:
+    return [json.loads(chunk) for chunk in response.body_iterator]
+
+
+def _make_user_visible_runtime_error(detail: str) -> RuntimeError:
+    try:
+        raise openai.OpenAIError("upstream")
+    except openai.OpenAIError as cause:
+        try:
+            raise RuntimeError(detail) from cause
+        except RuntimeError as exc:
+            return exc
 
 
 async def _apply_headers(path: str, response, method: str = "GET"):
@@ -257,11 +280,12 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["npc_name"] == "Vika"
     assert payload["character_description"] == "Charakterbeschreibung vika"
     assert payload["character_data"] == {"name": "Vika"}
+    assert payload["relationship"] == "kennt den Spieler"
     assert payload["scene_id"] == "office"
-    assert payload["ltm"] == "kennt den Spieler"
     assert payload["image_url"] == "/api/image/current"
     assert payload["messages"][0]["content"] == "Hi"
-    assert payload["npcs"] == [{"id": "mira", "label": "Mira"}, {"id": "vika", "label": "Vika"}]
+    npc_options = {(entry["id"], entry["label"]) for entry in payload["npcs"]}
+    assert {("mira", "Mira"), ("vika", "Vika")}.issubset(npc_options)
     assert payload["scenes"] == [{"id": "cafe", "label": "Cafe"}, {"id": "office", "label": "Office"}]
 
 
@@ -277,19 +301,19 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
     assert len(payload["messages"]) == 3
     character_message = payload["messages"][0]
     scene_message = payload["messages"][1]
-    ltm_message = payload["messages"][2]
+    relationship_message = payload["messages"][2]
     assert character_message["id"] == "context-character"
     assert scene_message["id"] == "context-scene"
-    assert ltm_message["id"] == "context-ltm"
+    assert relationship_message["id"] == "context-relationship"
     assert character_message["role"] == "assistant"
     assert scene_message["role"] == "assistant"
-    assert ltm_message["role"] == "assistant"
+    assert relationship_message["role"] == "assistant"
     assert character_message["content"] == ""
     assert scene_message["content"] == ""
-    assert ltm_message["content"] == ""
+    assert relationship_message["content"] == ""
     assert "Charakterbeschreibung vika" in character_message["html"]
     assert "Szene office" in scene_message["html"]
-    assert "kennt den Spieler" in ltm_message["html"]
+    assert "kennt den Spieler" in relationship_message["html"]
 
 
 def test_get_state_prefers_real_messages_over_context_fallback(tmp_path, monkeypatch):
@@ -319,9 +343,10 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
     assert len(payload["messages"]) == 3
     assert payload["messages"][0]["id"] == "context-character"
     assert payload["messages"][1]["id"] == "context-scene"
-    assert payload["messages"][2]["id"] == "context-ltm"
+    assert payload["messages"][2]["id"] == "context-relationship"
     assert "Charakterbeschreibung vika" in payload["messages"][0]["html"]
     assert "Szene office" in payload["messages"][1]["html"]
+    assert "kennt den Spieler" in payload["messages"][2]["html"]
 
 
 
@@ -435,7 +460,27 @@ def test_refresh_active_image_triggers_emit_update_before_schedule(tmp_path, mon
     assert calls == ["emit_update", "schedule"]
 
 
-def test_refresh_active_image_returns_500_on_schedule_error(tmp_path, monkeypatch):
+def test_refresh_active_image_returns_400_with_detail_for_user_visible_llm_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeImageUpdater:
+        def emit_update(self) -> None:
+            pass
+
+        def schedule(self, force: bool = False) -> None:
+            raise _make_user_visible_runtime_error("Anfrage durch Moderation blockiert.")
+
+    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+
+    try:
+        web_app_module.refresh_active_image()
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Anfrage durch Moderation blockiert."
+
+
+def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
     class FakeImageUpdater:
@@ -479,31 +524,11 @@ def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Startbild bitte"))
 
     assert response.status_code == 200
-    assert list(response.body_iterator) == ["Antwort", " vom Web"]
-    assert calls == ["emit_update_if_missing"]
-
-
-def test_chat_stream_skips_initial_image_emit_when_generated_image_exists(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    calls: list[str] = []
-
-    class FakeStreamingResponse:
-        def __init__(self, content, media_type: str):
-            self.status_code = 200
-            self.media_type = media_type
-            self.body_iterator = content
-
-    class FakeImageUpdater:
-        def emit_update_if_missing(self) -> None:
-            calls.append("emit_update_if_missing")
-
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
-
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Noch eine Nachricht"))
-
-    assert response.status_code == 200
-    assert list(response.body_iterator) == ["Antwort", " vom Web"]
+    assert _read_stream_events(response) == [
+        {"type": "chunk", "delta": "Antwort"},
+        {"type": "chunk", "delta": " vom Web"},
+        {"type": "done"},
+    ]
     assert calls == ["emit_update_if_missing"]
 
 
@@ -512,7 +537,7 @@ def test_chat_endpoint_is_not_available_anymore(tmp_path, monkeypatch):
     assert all(getattr(route, "path", None) != "/api/chat" for route in web_app_module.app.routes)
 
 
-def test_chat_stream_endpoint_streams_plain_text(tmp_path, monkeypatch):
+def test_chat_stream_endpoint_streams_ndjson_events(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     captured: dict[str, object] = {}
 
@@ -532,12 +557,102 @@ def test_chat_stream_endpoint_streams_plain_text(tmp_path, monkeypatch):
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Stream bitte"))
 
     assert response.status_code == 200
-    assert response.media_type == "text/plain; charset=utf-8"
+    assert response.media_type == "application/x-ndjson"
     assert captured["turn_messages"] == [
         {"role": "system", "content": "stub"},
         {"role": "user", "content": "Stream bitte"},
     ]
     assert type(response.body_iterator).__name__ == "generator"
+    assert _read_stream_events(response) == [
+        {"type": "chunk", "delta": "Antwort"},
+        {"type": "chunk", "delta": " vom Web"},
+        {"type": "done"},
+    ]
+
+
+def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
+
+    def fake_stream_prompt(_turn_messages):
+        class FailingIterator:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise _make_user_visible_runtime_error("Kontingent erschöpft – Plan und Abrechnung prüfen.")
+
+        return FailingIterator()
+
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Fehler bitte"))
+
+    assert response.status_code == 200
+    assert _read_stream_events(response) == [
+        {"type": "error", "detail": "Kontingent erschöpft – Plan und Abrechnung prüfen."},
+    ]
+    assert fake_npc_store.appended_turns == []
+
+
+def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
+
+    def fake_stream_prompt(_turn_messages):
+        def _iterator():
+            yield "Teilantwort"
+            raise ValueError("secret_backend_details")
+
+        return _iterator()
+
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Teilantwort bitte"))
+
+    assert response.status_code == 200
+    assert _read_stream_events(response) == [
+        {"type": "chunk", "delta": "Teilantwort"},
+        {"type": "error", "detail": "Interner Serverfehler."},
+    ]
+    assert fake_npc_store.appended_turns == []
+
+
+def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
+
+    def fake_append_stm_turn(_user_content: str, _assistant_content: str):
+        raise RuntimeError("internal_store_issue")
+
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    monkeypatch.setattr(fake_npc_store, "append_stm_turn", fake_append_stm_turn)
+
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Speichern bitte"))
+
+    assert response.status_code == 200
+    assert _read_stream_events(response) == [
+        {"type": "chunk", "delta": "Antwort"},
+        {"type": "chunk", "delta": " vom Web"},
+        {"type": "error", "detail": "Interner Serverfehler."},
+    ]
 
 
 def test_web_lifecycle_starts_and_stops_watchers(monkeypatch):

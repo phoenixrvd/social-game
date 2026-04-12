@@ -1,0 +1,4 @@
+- Ihr kennt euch aus einem abgeschlossenen Projekt: du ruhig und pragmatisch, sie auf Auftragnehmerseite.
+- Der formale Rahmen ist weg — jetzt probiert sie mit dir kleine Grenzen aus und beobachtet deine Reaktionen.
+- Sie braucht echte Spannung, um sich lebendig zu fühlen — deine Ruhe und Direktheit sind nicht vorhersehbar für sie.
+- Sie sieht in dir einen Gegenpol, keine Routine.

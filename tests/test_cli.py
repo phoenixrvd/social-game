@@ -12,6 +12,10 @@ from engine.models import Session
 runner = CliRunner()
 
 
+def override_character_image_service(monkeypatch, fake_service_class):
+    monkeypatch.setattr(cli_module, "_character_image_service", lambda: fake_service_class())
+
+
 def test_hello():
     result = runner.invoke(app, ["hello"])
     assert result.exit_code == 0
@@ -98,7 +102,7 @@ def test_update_help_uses_user_facing_text():
 
 
 def test_start_scheduler_uses_dedicated_scheduler_intervals(monkeypatch):
-    class FakeLtmUpdater:
+    class FakeEtmUpdater:
         schedule_calls = 0
 
         def get_update_interval(self):
@@ -155,7 +159,7 @@ def test_start_scheduler_uses_dedicated_scheduler_intervals(monkeypatch):
         schedule_module,
         "UPDATER_CLASSES",
         (
-            ("ltm", FakeLtmUpdater),
+            ("etm", FakeEtmUpdater),
             ("scene", FakeSceneUpdater),
             ("state", FakeStateUpdater),
             ("image", FakeImageUpdater),
@@ -166,16 +170,16 @@ def test_start_scheduler_uses_dedicated_scheduler_intervals(monkeypatch):
     scheduler, _updaters = schedule_module.start_scheduler(run_immediately=True)
 
     assert scheduler is fake_scheduler
-    assert FakeLtmUpdater.schedule_calls == 1
+    assert FakeEtmUpdater.schedule_calls == 1
     assert FakeSceneUpdater.schedule_calls == 1
     assert FakeStateUpdater.schedule_calls == 1
     assert FakeImageUpdater.schedule_calls == 1
     assert fake_scheduler.started is True
     assert len(fake_scheduler.jobs) == 4
 
-    ltm_job = fake_scheduler.jobs[0]
-    assert ltm_job[1] == "interval"
-    assert ltm_job[2]["seconds"] == 350
+    etm_job = fake_scheduler.jobs[0]
+    assert etm_job[1] == "interval"
+    assert etm_job[2]["seconds"] == 350
 
     scene_job = fake_scheduler.jobs[1]
     assert scene_job[1] == "interval"
@@ -201,7 +205,7 @@ def test_watch_changes_command_removed():
 
 
 def test_watch_refresh_command_removed():
-    result = runner.invoke(app, ["watch", "refresh", "ltm"])
+    result = runner.invoke(app, ["watch", "refresh", "relationship"])
 
     assert result.exit_code != 0
     assert "No such command 'watch'" in result.output
@@ -288,11 +292,14 @@ def test_session_group_is_no_longer_registered():
 
 
 def test_revert_image_nothing_to_revert(monkeypatch):
-    class FakeImageUpdater:
+    class FakeCharacterImageService:
+        def __init__(self, **_kwargs):
+            pass
+
         def revert(self):
             return None
 
-    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+    override_character_image_service(monkeypatch, FakeCharacterImageService)
 
     result = runner.invoke(app, ["image-revert"])
     assert result.exit_code == 0
@@ -300,11 +307,14 @@ def test_revert_image_nothing_to_revert(monkeypatch):
 
 
 def test_revert_image_deleted_and_restored(monkeypatch):
-    class FakeImageUpdater:
+    class FakeCharacterImageService:
+        def __init__(self, **_kwargs):
+            pass
+
         def revert(self):
             return None
 
-    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+    override_character_image_service(monkeypatch, FakeCharacterImageService)
 
     result = runner.invoke(app, ["image-revert"])
     assert result.exit_code == 0
@@ -312,10 +322,13 @@ def test_revert_image_deleted_and_restored(monkeypatch):
 
 
 def test_revert_image_not_available(monkeypatch):
-    class FakeImageUpdater:
+    class FakeCharacterImageService:
+        def __init__(self, **_kwargs):
+            pass
+
         pass
 
-    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+    override_character_image_service(monkeypatch, FakeCharacterImageService)
 
     result = runner.invoke(app, ["image-revert"])
     assert result.exit_code == 1
@@ -326,14 +339,14 @@ def test_revert_image_not_available(monkeypatch):
 def test_revert_image_does_not_trigger_refresh(monkeypatch):
     calls: list[str] = []
 
-    class FakeImageUpdater:
+    class FakeCharacterImageService:
+        def __init__(self, **_kwargs):
+            pass
+
         def revert(self):
             calls.append("revert")
 
-        def refresh_image_with_current_prompt(self):
-            calls.append("refresh")
-
-    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+    override_character_image_service(monkeypatch, FakeCharacterImageService)
 
     result = runner.invoke(app, ["image-revert"])
 
@@ -345,11 +358,14 @@ def test_revert_image_does_not_trigger_refresh(monkeypatch):
 def test_image_merge_scene_calls_updater(monkeypatch):
     calls: list[str] = []
 
-    class FakeImageUpdater:
+    class FakeCharacterImageService:
+        def __init__(self, **_kwargs):
+            pass
+
         def merge_with_scene(self):
             calls.append("merge_with_scene")
 
-    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+    override_character_image_service(monkeypatch, FakeCharacterImageService)
 
     result = runner.invoke(app, ["image-merge-scene"])
 
@@ -359,11 +375,14 @@ def test_image_merge_scene_calls_updater(monkeypatch):
 
 
 def test_image_merge_scene_propagates_errors(monkeypatch):
-    class FakeImageUpdater:
+    class FakeCharacterImageService:
+        def __init__(self, **_kwargs):
+            pass
+
         def merge_with_scene(self):
             raise RuntimeError("merge_failed")
 
-    monkeypatch.setattr(cli_module, "ImageUpdater", FakeImageUpdater)
+    override_character_image_service(monkeypatch, FakeCharacterImageService)
 
     result = runner.invoke(app, ["image-merge-scene"])
 
@@ -381,7 +400,7 @@ def test_image_refresh_command_removed():
 
 def test_removed_top_level_aliases_fail():
     for command in (
-        ["refresh", "ltm", "--npc", "vika"],
+        ["refresh", "relationship", "--npc", "vika"],
         ["refresh", "state", "--npc", "vika"],
         ["refresh", "image", "--npc", "vika"],
         ["dump-system-prompt", "--npc", "vika"],
@@ -419,7 +438,10 @@ def test_icons_command_runs_pipeline(monkeypatch, tmp_path):
     input_path = icons_dir / "origin.png"
     input_path.write_bytes(b"png")
 
-    captured: dict[str, object] = {"saves": []}
+    captured: dict[str, object] = {}
+    saved_paths: list[tuple[Path, str | None, object]] = []
+    resize_calls: list[tuple[object, object]] = []
+    pasted: tuple[object, tuple[int, int], object] | None = None
 
     class FakeSource:
         width = 320
@@ -431,13 +453,15 @@ def test_icons_command_runs_pipeline(monkeypatch, tmp_path):
 
     class FakeBase:
         def paste(self, source, xy, mask):
+            nonlocal pasted
+            pasted = (source, xy, mask)
             captured["paste"] = (source, xy, mask)
 
         def save(self, path, format=None, sizes=None):
-            captured["saves"].append((Path(path), format, sizes))
+            saved_paths.append((Path(path), format, sizes))
 
         def resize(self, size, resample):
-            captured.setdefault("resizes", []).append((size, resample))
+            resize_calls.append((size, resample))
             return self
 
     monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
@@ -448,8 +472,10 @@ def test_icons_command_runs_pipeline(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
     assert captured["convert_mode"] == "RGBA"
-    assert captured["paste"][1] == ((1024 - 320) // 2, (1024 - 640) // 2)
-    assert captured["saves"][0][0] == icons_dir / "base.png"
+    assert pasted is not None
+    assert pasted[1] == ((1024 - 320) // 2, (1024 - 640) // 2)
+    assert saved_paths[0][0] == icons_dir / "base.png"
+    assert resize_calls
     assert "Icons erfolgreich generiert." in result.output
 
 

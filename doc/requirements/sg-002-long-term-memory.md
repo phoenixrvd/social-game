@@ -1,12 +1,14 @@
 ---
-state: implemented
+state: removed
 ---
 
-# SG-002: Long-Term-Memory
+# SG-002: Long-Term-Memory (entfernt)
 
 ## Kontext
-Das System verwaltet ein langfristiges Gedächtnis für relevante Informationen.  
-Der fachliche Fokus liegt auf der dauerhaften Verfügbarkeit wichtiger Inhalte.
+Die dedizierte Long-Term-Memory-Funktion wurde aus dem System entfernt.
+Frühere Gesprächsinhalte werden über Episodic Term Memory (ETM) als abrufbare Episoden geführt.
+Die initiale Beziehungsgrundlage liegt statisch in `npcs/<npc_id>/relationship.md` und wird beim ersten Laden an den initialen Charakterzustand angehängt.
+Ein separates LTM-Artefakt ist dafür fachlich nicht mehr notwendig.
 
 ## Annahmen
 - Keine
@@ -16,30 +18,12 @@ Der fachliche Fokus liegt auf der dauerhaften Verfügbarkeit wichtiger Inhalte.
 
 ## Anforderungen
 
-### Langfristige Merkbarkeit
+### Kein separates Long-Term-Memory-Artefakt
 **Typ:** Funktional  
-**Beschreibung:** Das System muss langfristig relevante Informationen speichern.  
+**Beschreibung:** Das System führt kein eigenes LTM-Dateiartefakt mehr.  
 **Akzeptanzkriterien:**
-- Relevante Ereignisse können über längere Zeiträume wiederverwendet werden.
-- Gespeicherte Inhalte stehen in späteren Interaktionen weiterhin zur Verfügung.
+- Es gibt kein fachlich verwendetes `ltm.md` mehr.
+- Frühere abrufbare Erinnerungen werden über ETM geladen.
+- Initiale Beziehungsgrundlagen werden über `relationship.md` in den initialen State eingebracht.
 
-**Referenzen:** Keine
-
-### Konsistenz des Langzeitgedächtnisses
-**Typ:** Nicht-funktional  
-**Beschreibung:** Das System muss langfristige Informationen widerspruchsarm halten.  
-**Akzeptanzkriterien:**
-- Neu hinzugefügte Inhalte widersprechen bestehenden Einträgen nicht ohne erkennbaren Anlass.
-- Wiederholt abgefragte Informationen bleiben inhaltlich stabil.
-
-**Referenzen:** Keine
-
-### Relevanzfokus
-**Typ:** Randbedingung  
-**Beschreibung:** Das System muss nur langfristig relevante Inhalte im Long-Term-Memory führen.  
-**Akzeptanzkriterien:**
-- Kurzfristige oder nebensächliche Details werden nicht dauerhaft priorisiert.
-- Langzeitinhalte sind auf die jeweilige Interaktion und Spielwelt bezogen.
-
-**Referenzen:** Keine
-
+**Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-015-episodic-term-memory.md`

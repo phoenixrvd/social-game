@@ -4,15 +4,13 @@ from typing import Iterator, TypeVar, cast
 
 import openai
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam, ChatCompletionStreamOptionsParam
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionUserMessageParam
 from pydantic import BaseModel
 from PIL import Image
 
-from engine.logging import get_logger, log_info
 from engine.config import config
 
 TStructured = TypeVar("TStructured", bound=BaseModel)
-LOGGER = get_logger("llm_client")
 
 _OPENAI_ERROR_CODES: dict[str, str] = {
     "insufficient_quota": "Kontingent erschöpft – Plan und Abrechnung prüfen.",
@@ -63,13 +61,19 @@ def hello_llm():
     ])
 
 
+def embed_texts(texts: list[str], model: str = config.MODEL_EMBEDDING) -> list[list[float]]:
+    """Erzeugt Embedding-Vektoren fuer eine Liste von Texten."""
+    client = OpenAI(api_key=config.OPENAI_API_KEY)
+    try:
+        response = client.embeddings.create(model=model, input=texts)
+        return [item.embedding for item in response.data]
+    except openai.OpenAIError as exc:
+        raise RuntimeError(_openai_error_message(exc)) from exc
+
+
 def stream_prompt(messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
     """Streamt die NPC-Antwort tokenweise/chunkweise."""
     client = OpenAI(api_key=config.OPENAI_API_KEY)
-
-    stream_options: ChatCompletionStreamOptionsParam = {
-        "include_usage": True,
-    }
 
     try:
         stream = client.chat.completions.create(
@@ -77,29 +81,14 @@ def stream_prompt(messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
             store=False,
             messages=messages,
             stream=True,
-            stream_options=stream_options
         )
 
-        usage = None
-
         for chunk in stream:
-            chunk_usage = getattr(chunk, "usage", None)
-            if chunk_usage is not None:
-                usage = chunk_usage
-
             if not chunk.choices:
                 continue
             delta_text = chunk.choices[0].delta.content
             if delta_text:
                 yield delta_text
-
-        if usage is None:
-            log_info(LOGGER, "chat_tokens", unavailable=True, message_count=len(messages))
-            return
-
-        prompt_tokens_details = getattr(usage, "prompt_tokens_details", None)
-        cached_tokens = 0 if prompt_tokens_details is None else getattr(prompt_tokens_details, "cached_tokens", 0) or 0
-        log_info(LOGGER, "chat_tokens", prompt_tokens=usage.prompt_tokens, completion_tokens=usage.completion_tokens, total_tokens=usage.total_tokens, cached_tokens=cached_tokens, unavailable=False, message_count=len(messages))
     except openai.OpenAIError as exc:
         raise RuntimeError(_openai_error_message(exc)) from exc
 

@@ -5,8 +5,8 @@ from PIL import Image
 
 from engine.config import config
 from engine.llm_client import hello_llm
+from engine.services.character_image_service import CharacterImageService
 from engine.stores.session_store import SessionStore
-from engine.updater.image_updater import ImageUpdater
 from engine.updater.schedule import AVAILABLE_UPDATERS, UPDATER_CLASSES
 from engine.updater.updater import AbstractUpdater
 
@@ -21,6 +21,10 @@ def resolve_updater(updater_name: str) -> AbstractUpdater:
         return updater_cls()
 
     raise typer.BadParameter(f"Unbekannter Updater '{updater_name}'. Verfuegbar: {AVAILABLE_UPDATERS}")
+
+
+def _character_image_service() -> CharacterImageService:
+    return CharacterImageService()
 
 
 @app.callback()
@@ -80,15 +84,13 @@ def web(
 @app.command("image-revert")
 def image_revert():
     """Setzt das Charakterbild auf das letzte Backup zurueck."""
-    updater = ImageUpdater()
-
-    updater.revert()
+    _character_image_service().revert()
 
 
 @app.command("image-merge-scene")
 def image_merge_scene() -> None:
     """Fuegt aktives Charakterbild und Szenenbild zu einem neuen Laufzeitbild zusammen."""
-    ImageUpdater().merge_with_scene()
+    _character_image_service().merge_with_scene()
 
 
 @app.command("icons")

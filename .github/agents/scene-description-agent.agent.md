@@ -30,9 +30,9 @@ Fehlt die Aufforderung:
 # Redundanzregel (hart)
 
 - Lies `scenes/<scene>/scene.md` vollständig, bevor du schreibst.
-- Kein Satz, keine Phrase und kein Inhalt aus `scenes/<scene>/scene.md` darf wiederholt oder umformuliert werden.
+- Kein Satz und keine zentrale Aussage aus `scenes/<scene>/scene.md` darf wiederholt oder nur leicht umformuliert werden.
 - Die NPC-spezifische Beschreibung ergänzt die Basis-Szene – sie ersetzt sie nicht und wiederholt sie nicht.
-- Was bereits in `scenes/<scene>/scene.md` steht (Ort, Atmosphäre, Stimmung), gilt als bekannt und wird weggelassen.
+- Was bereits in `scenes/<scene>/scene.md` steht, gilt als bekannt und wird nicht erneut erklaert; erlaubt sind nur ergaenzende NPC-spezifische Details.
 - Fokus liegt ausschließlich auf dem, was die NPC-spezifische Perspektive hinzufügt: Kleidung, Position, Haltung, Requisiten, NPC-Verhalten.
 
 # Ziel
@@ -41,6 +41,7 @@ Schreibe eine lebendige, atmosphärische Szenenbeschreibung, die primär für Me
 - den NPC klar in der Szene positioniert
 - Kleidung und Position des NPCs explizit benennt
 - nur die Details nutzt, die für Stimmung, Bild und Figur nötig sind
+- Keine Codeänderungen
 
 # Sprache
 
@@ -67,7 +68,7 @@ Schreibe eine lebendige, atmosphärische Szenenbeschreibung, die primär für Me
 
 ## Was rein darf
 
-- Atmosphäre (Licht, Klang, Stimmung)
+- Atmosphaere (Licht, Klang, Stimmung) nur als NPC-spezifische Ergaenzung, nicht als Wiederholung der Basisszene
 - Kleidung des NPCs (explizit, da vom Merge-Prompt priorisiert)
 - Position / Haltung des NPCs (explizit, da vom Merge-Prompt priorisiert)
 - Sichtbare Requisiten (z. B. Glas in der Hand, Buch auf dem Tisch)

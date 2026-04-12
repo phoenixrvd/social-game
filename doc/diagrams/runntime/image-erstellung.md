@@ -159,14 +159,9 @@ Damit steht sowohl das neue aktive Bild als auch der letzte gültige Prompt für
 `POST /api/image/refresh-active` ruft `schedule(force=True)` auf.
 Dadurch wird ein neues Bild auch dann erzeugt, wenn der neue Prompt dem alten sehr ähnlich ist.
 
-### Reines Re-Rendering mit bestehendem Prompt
-
-`ImageUpdater.refresh_image_with_current_prompt()` rendert ein Bild mit dem bereits persistierten Prompt neu.
-Dabei wird kein neuer Prompt erzeugt und der alte Prompt nicht überschrieben.
-
 ### Merge mit Szenenbild
 
-`ImageUpdater.merge_with_scene()` ist ein separater Pfad.
+`CharacterImageService.merge_with_scene()` ist ein separater Pfad.
 Hier werden Charakterbild und Szenenbild zusammen mit `prompts/image_scene.md` an das Bildmodell gegeben.
 Fachlich setzt dieser Pfad den aktiven NPC mit stabiler Identität in den aktuellen Szenenkontext ein und übernimmt Umgebung, Komposition sowie explizite Szenenvorgaben aus der zusammengeführten Szenenbeschreibung.
 Damit erfüllt er insbesondere den Einbezug des aktiven NPC als Charaktergrundlage und den Einbezug der zusammengeführten Szenenbeschreibung aus `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`.
@@ -202,7 +197,7 @@ if (run.flag vorhanden?) then (ja)
     :Neues Bild nach .data/.../img.png schreiben;
     :Regulären Initial-Update-Prompt\nvia image_build_prompt.md erzeugen;
     :Initialwert für\nimage_updater_update_prompt.txt persistieren;
-    note right
+    note left
       In diesem schedule()-Zweig existiert
       .data/.../img.png noch nicht.
       Deshalb entsteht hier kein Backup.

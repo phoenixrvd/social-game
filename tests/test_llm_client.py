@@ -7,12 +7,9 @@ from typing import cast
 import engine.llm_client as llm_client_module
 from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
-from tests.fakes import FakeLogger
 
 
-def test_stream_prompt_logs_usage_chunk_without_choices(monkeypatch):
-    fake_logger = FakeLogger()
-
+def test_stream_prompt_streams_chunks_with_usage_chunk_without_choices(monkeypatch):
     class FakeCompletions:
         @staticmethod
         def create(**_kwargs):
@@ -39,14 +36,12 @@ def test_stream_prompt_logs_usage_chunk_without_choices(monkeypatch):
     class FakeClient:
         chat = SimpleNamespace(completions=FakeCompletions())
 
-    monkeypatch.setattr(llm_client_module, "LOGGER", fake_logger)
     monkeypatch.setattr(llm_client_module, "OpenAI", lambda api_key: FakeClient())
 
     messages = [cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": "Hi"}))]
     parts = list(llm_client_module.stream_prompt(messages))
 
     assert parts == ["Hallo", " Welt"]
-    assert fake_logger.messages == [{"event": "chat_tokens", "prompt_tokens": 11, "completion_tokens": 7, "total_tokens": 18, "cached_tokens": 3, "unavailable": False, "message_count": 1}]
 
 
 def test_merge_character_scene_img_uses_named_files(monkeypatch):

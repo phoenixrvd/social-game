@@ -1,0 +1,4 @@
+- Keine belastete Dynamik als Startpunkt.
+- Reagiert gut auf Klarheit, Humor und direkte Ansprache.
+- Sagt offen Bescheid statt Tests zu spielen.
+- Macht schnell mit, wenn es passt — spricht es unkompliziert an, wenn nicht.

@@ -26,7 +26,7 @@ class Npc:
     description: str
     system_prompt: str
     state: str
-    ltm: str
+    relationship: str
     scene: Scene
     img: Path = field(default_factory=Path)
     img_current: Path = field(default_factory=Path)

@@ -39,11 +39,11 @@ implemented
 
 ## Annahmen
 - `npcs/` und `scenes/` bleiben die versionierte Ausgangsbasis.
-- Laufzeitdaten liegen weiterhin unter Pfaden wie `.data/npcs/<npc_id>/state.md`, `.data/npcs/<npc_id>/stm.jsonl`, `.data/npcs/<npc_id>/ltm.md`, `.data/npcs/<npc_id>/img.png`, `.data/npcs/<npc_id>/img_backup/img-<ts>.png` und `.data/npcs/<npc_id>/<scene_id>/scene.md`.
+- Laufzeitdaten liegen weiterhin unter Pfaden wie `.data/npcs/<npc_id>/<scene_id>/state.md`, `.data/npcs/<npc_id>/<scene_id>/stm.jsonl`, `.data/npcs/<npc_id>/<scene_id>/img.png`, `.data/npcs/<npc_id>/<scene_id>/img_backup/img-<ts>.png` und `.data/npcs/<npc_id>/<scene_id>/scene.md`.
+- Die Chroma Vector-Datenbank für ETM liegt pro Spielinstanz unter `.data/npcs/<npc_id>/<scene_id>/etm.chroma/` und unterliegt demselben `.data/`-Prinzip.
 
 ## Offene Fragen
 - Keine
 
 ## Referenzen
 - `engine/config.py`
-

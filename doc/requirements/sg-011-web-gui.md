@@ -62,10 +62,8 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 - Das zur aktiven Sitzung gehörende Szenenbild wird in der Web-GUI angezeigt.
 - Die Character-Beschreibung wird in der Web-GUI angezeigt.
 - Die Scene-Beschreibung wird in der Web-GUI angezeigt.
-- Der initiale Beziehungsstatus des Charakters wird in der Web-GUI eingeblendet, falls vorhanden (technisch über LTM des NPC realisiert).
 - Änderungen durch Interaktionen aktualisieren Szenenbild und sichtbare Zustandsinformationen innerhalb derselben aktiven Sitzung.
 
-**Technische Anmerkung:** Der Beziehungsstatus wird aus dem Long-Term-Memory (LTM) des jeweiligen NPC gelesen und initialisiert.
 
 **Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
 

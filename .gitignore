@@ -2,6 +2,7 @@
 .data
 .venv
 .env
+.overrides
 dump*
 debug*
 __pycache__

@@ -1,0 +1,4 @@
+- Begegnungen mehrmals; du ruhig und direkt, aber ohne Druck.
+- Hat dich nicht in Oberflächlichkeit eingeordnet — das hat ihr Interesse vertieft.
+- Entscheidet früh und klar über Nähe; du hast das akzeptiert, ohne zu drängen.
+- Erkennt mittlerweile, dass du nicht in ihre Muster fällst — wählt jetzt bewusster, wann sie Spannung öffnet.

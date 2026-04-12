@@ -27,6 +27,20 @@ function getErrorMessage(payload, fallbackMessage) {
   return typeof payload?.detail === "string" && payload.detail.trim() ? payload.detail.trim() : fallbackMessage
 }
 
+function parseChatStreamEvent(line) {
+  try {
+    return JSON.parse(line)
+  } catch {
+    throw new Error("Ungültige Streaming-Antwort vom Server.")
+  }
+}
+
+function waitForNextPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => resolve())
+  })
+}
+
 class SocialGameApp extends HTMLElement {
   constructor() {
     super()
@@ -43,7 +57,6 @@ class SocialGameApp extends HTMLElement {
       scenes: [],
       npcId: "",
       sceneId: "",
-      relationshipStatus: "",
       isImageExpanded: false,
       isSelectorPanelOpen: false,
       theme: localStorage.getItem("theme") === "light" ? "light" : "dark",
@@ -170,6 +183,7 @@ class SocialGameApp extends HTMLElement {
     this.$.image?.setState({
       imageUrl: this.state.imageUrl,
       isExpanded: this.state.isImageExpanded,
+      isLoading: this.state.isImageRefreshLoading,
     })
   }
 
@@ -274,6 +288,8 @@ class SocialGameApp extends HTMLElement {
     }
 
     this.setInputState({isImageRefreshLoading: true, errorMessage: ""})
+    this.renderImage()
+    await waitForNextPaint()
     try {
       const response = await fetch("/api/image/refresh-active", {method: "POST"})
       const payload = await readJsonResponse(response)
@@ -304,6 +320,7 @@ class SocialGameApp extends HTMLElement {
       this.setInputState({errorMessage: error instanceof Error ? error.message : "Bild konnte nicht aktualisiert werden."})
     } finally {
       this.setInputState({isImageRefreshLoading: false})
+      this.renderImage()
     }
   }
 
@@ -334,6 +351,29 @@ class SocialGameApp extends HTMLElement {
     }
   }
 
+  handleChatStreamEvent(event, assistantMessage) {
+    if (!event || typeof event.type !== "string") {
+      throw new Error("Ungültige Streaming-Antwort vom Server.")
+    }
+
+    if (event.type === "chunk") {
+      const delta = typeof event.delta === "string" ? event.delta : ""
+      assistantMessage.content += delta
+      this.renderChat()
+      return false
+    }
+
+    if (event.type === "done") {
+      return true
+    }
+
+    if (event.type === "error") {
+      throw new Error(getErrorMessage(event, "Nachricht konnte nicht gesendet werden."))
+    }
+
+    throw new Error("Ungültige Streaming-Antwort vom Server.")
+  }
+
   async streamAssistantReply(text, assistantMessage) {
     const response = await fetch("/api/chat/stream", {
       method: "POST",
@@ -348,19 +388,36 @@ class SocialGameApp extends HTMLElement {
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder("utf-8")
+    let buffer = ""
+    let isDone = false
 
     while (true) {
       const {done, value} = await reader.read()
+      buffer += decoder.decode(value || new Uint8Array(), {stream: !done})
+
+      let newlineIndex = buffer.indexOf("\n")
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim()
+        buffer = buffer.slice(newlineIndex + 1)
+        if (line) {
+          isDone = this.handleChatStreamEvent(parseChatStreamEvent(line), assistantMessage) || isDone
+        }
+        newlineIndex = buffer.indexOf("\n")
+      }
+
       if (done) {
         break
       }
-
-      assistantMessage.content += decoder.decode(value, {stream: true})
-      this.renderChat()
     }
 
-    assistantMessage.content += decoder.decode()
-    this.renderChat()
+    const trailingLine = buffer.trim()
+    if (trailingLine) {
+      isDone = this.handleChatStreamEvent(parseChatStreamEvent(trailingLine), assistantMessage) || isDone
+    }
+
+    if (!isDone) {
+      throw new Error("Nachricht wurde unvollständig übertragen.")
+    }
   }
 
   async handleSubmit(submittedText) {
@@ -395,7 +452,9 @@ class SocialGameApp extends HTMLElement {
     try {
       await this.streamAssistantReply(text, assistantMessage)
     } catch (error) {
-      this.state.messages = this.state.messages.filter((message) => message !== assistantMessage)
+      if (!assistantMessage.content.trim()) {
+        this.state.messages = this.state.messages.filter((message) => message !== assistantMessage)
+      }
       this.setError(error instanceof Error ? error.message : "Nachricht konnte nicht gesendet werden.")
     } finally {
       this.setState({isSending: false, activeAssistantId: ""})

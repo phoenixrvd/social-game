@@ -18,11 +18,11 @@ SG-012 beschreibt nur Platzierung, Bearbeitungsablauf und Betriebsverhalten dies
 
 ### Platzierung der editierbaren Bereiche
 **Typ:** Funktional  
-**Beschreibung:** Das System muss Scene-State und Charakterzustand direkt im Context-Bereich sowie Long-Term-Memory im Panel unter der Session-Auswahl bearbeitbar bereitstellen.  
+**Beschreibung:** Das System muss Scene-State und Charakterzustand direkt im Context-Bereich sowie den statischen Beziehungs-Initialkontext im Panel unter der Session-Auswahl bearbeitbar bereitstellen.  
 **Akzeptanzkriterien:**
 - Die Bearbeitung von Scene-State erfolgt im Context-Bereich.
 - Die Bearbeitung des Charakterzustands erfolgt im Context-Bereich.
-- Die Bearbeitung des Long-Term-Memory erfolgt im Panel unter der Session-Auswahl.
+- Die Bearbeitung von `relationship.md` erfolgt im Panel unter der Session-Auswahl.
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/adr/007-ui-architektur-mit-web-components.md`
 
 ### Icon-Aktionen für die Bearbeitung

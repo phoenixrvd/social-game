@@ -29,15 +29,19 @@ Guidelines:
 
 - doc/guidelines/principles.md
 - doc/guidelines/refactoring.md
-- doc/guidelines/coding-rules.md
+- doc/guidelines/coding-rules.md (alle [BLOCKER] verbindlich)
 - doc/guidelines/error-handling.md
 - optional: doc/guidelines/web-components.md (nur bei Web-Code)
+
+Vor Codeänderungen die relevanten Guidelines lesen. Spezifischere Guidelines haben Vorrang vor allgemeinen Regeln.
 
 # Harte Regeln
 
 - Verhalten darf sich nicht ändern
 - Keine neuen Features
 - Keine zusätzlichen Abstraktionen oder Layer
+- Keine Konstruktoren mit keyword-only `*`-Pattern
+- Keine Store-/Service-Übergabe über Konstruktorparameter; Klassen instanziieren benötigte Stores und Services selbst
 - Lesbarkeit darf nicht schlechter werden
 
 # Scope-Regeln (BLOCKER)

@@ -49,7 +49,7 @@ Zusätzlich werden Szenen und Bilder generiert, die diesen Zustand visuell wider
 ## Was dieses System besonders macht
 
 * Keine vorgegebene Story – Interaktion entsteht vollständig durch den Spieler
-* Persistente Gespräche durch Short-Term und Long-Term Memory
+* Persistente Gespräche durch Short-Term Memory und Episodic Term Memory (ETM)
 * Dynamische Charakterzustände wie Vertrauen, Spannung oder Interesse
 * Szenen entwickeln sich direkt aus dem Dialog
 * Bilder spiegeln emotionale und situative Veränderungen wider
@@ -60,7 +60,7 @@ Zusätzlich werden Szenen und Bilder generiert, die diesen Zustand visuell wider
 Nach jeder Nachricht passiert intern:
 
 * Speicherung im Short-Term-Memory
-* Aufbau des aktuellen Kontexts über State, Szene und Long-Term-Memory
+* Aufbau des aktuellen Kontexts über State, Szene und relevante ETM-Erinnerungen
 * Bewertung durch spezialisierte Updater
 * Aktualisierung von State, Szene oder Bild bei relevanten Änderungen
 

@@ -4,35 +4,42 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv()
 
+_NPC_SUBDIR = "npcs"
+_SCENE_SUBDIR = "scenes"
+
+
 class Config(BaseSettings):
     PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
-    NPC_DIR: Path = PROJECT_ROOT / "npcs"
-    SCENE_DIR: Path = PROJECT_ROOT / "scenes"
+    NPC_DIR: Path = PROJECT_ROOT / _NPC_SUBDIR
+    SCENE_DIR: Path = PROJECT_ROOT / _SCENE_SUBDIR
     DATA_DIR: Path = PROJECT_ROOT / ".data"
-    APP_LOG_PATH: Path = DATA_DIR / "app.log"
-    DATA_NPC_DIR: Path = DATA_DIR / "npcs"
+    DATA_NPC_DIR: Path = DATA_DIR / _NPC_SUBDIR
     SESSION_PATH: Path = DATA_DIR / "session.yaml"
+    OVERRIDES_DIR: Path = PROJECT_ROOT / ".overrides"
+    OVERRIDES_NPC_DIR: Path = OVERRIDES_DIR / _NPC_SUBDIR
+    OVERRIDES_SCENE_DIR: Path = OVERRIDES_DIR / _SCENE_SUBDIR
+    OVERRIDES_PROMPTS_DIR: Path = OVERRIDES_DIR / "prompts"
 
-    # Long-Term Memory (LTM) configuration
+    # Episodic Term Memory (ETM) configuration
     # Anzahl der neuesten Short-Term-Memory-Nachrichten, die im STM bleiben sollen
-    UPDATER_LTM_SHORT_MEMORY_MESSAGES_TO_KEEP: int = 20
-    # Schwellwert für die Anzahl älterer STM-Nachrichten, ab dem ein LTM-Update startet
-    UPDATER_LTM_BATCH_SIZE_THRESHOLD: int = 7
+    UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP: int = 20
+    # Schwellwert für die Anzahl älterer STM-Nachrichten, ab dem ETM-Episoden erstellt werden
+    UPDATER_ETM_BATCH_SIZE_THRESHOLD: int = 7
+    # Anzahl der ETM-Episoden, die im Retrieval zusätzlich in den Prompt geladen werden
+    ETM_RETRIEVAL_TOP_K: int = 4
+    # Maximale Cosine-Distance für ETM-Retrieval-Treffer, kleiner ist relevanter
+    ETM_RETRIEVAL_MAX_DISTANCE: float = 0.75
+    # Anzahl der letzten STM-Nachrichten, die als Kontext in die ETM-Query einfließen
+    ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES: int = 5
 
     # Anzahl der letzten Nachrichten die für State-Updates berücksichtigt werden
     STATE_AUTO_TRIGGER_LAST_N_MESSAGES: int = 5
 
     # Orchestrator updater interval defaults (seconds)
-    UPDATER_LTM_CHECK_INTERVAL_SECONDS: int = 350
+    UPDATER_ETM_CHECK_INTERVAL_SECONDS: int = 350
     UPDATER_SCENE_CHECK_INTERVAL_SECONDS: int = 30
     UPDATER_STATE_CHECK_INTERVAL_SECONDS: int = 30
     UPDATER_IMAGE_CHECK_INTERVAL_SECONDS: int = 60
-
-    # App logging configuration
-    APP_LOG_MAX_SIZE_MB: int = 1
-    APP_LOG_BACKUP_COUNT: int = 2
-    LOG_LEVEL: str = "INFO"
-    LOG_SHOW_IN_CLI: bool = True
 
     # Web GUI
     WEB_DEBUG: bool = False
@@ -42,14 +49,13 @@ class Config(BaseSettings):
     MODEL_LLM_BIG: str = "gpt-5.4"
     MODEL_LLM_SMALL: str = "gpt-5.4-mini"
     MODEL_LLM_IMG_BASE: str = "gpt-image-1.5"
+    MODEL_EMBEDDING: str = "text-embedding-3-small"
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        extra="forbid",
+        extra="ignore",
     )
 
 
 config = Config()
-
-

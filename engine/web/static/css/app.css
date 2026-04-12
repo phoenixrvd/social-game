@@ -509,6 +509,40 @@ sg-context-message {
   inset: 0;
 }
 
+.sg-image-frame.is-loading {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.sg-image-frame.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  --sg-image-loading-angle: 0deg;
+  background: conic-gradient(
+    from var(--sg-image-loading-angle),
+    transparent 0deg 300deg,
+    color-mix(in srgb, var(--primary) 36%, transparent) 320deg,
+    var(--primary) 340deg,
+    color-mix(in srgb, var(--primary) 36%, transparent) 356deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: sg-image-loading-border 2.2s linear infinite;
+}
+
 .sg-image-content {
   display: grid;
   place-items: center;
@@ -532,6 +566,39 @@ sg-context-message {
   height: 100%;
   object-fit: contain;
   cursor: zoom-in;
+}
+
+.sg-image-main.is-updated,
+.sg-image-overlay-main.is-updated {
+  animation: sg-image-in 0.5s ease;
+}
+
+@property --sg-image-loading-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes sg-image-loading-border {
+  0% {
+    --sg-image-loading-angle: 0deg;
+  }
+
+  100% {
+    --sg-image-loading-angle: 360deg;
+  }
+}
+
+@keyframes sg-image-in {
+  0% {
+    opacity: 0;
+    filter: blur(6px);
+  }
+
+  100% {
+    opacity: 1;
+    filter: blur(0);
+  }
 }
 
 .sg-image-overlay {

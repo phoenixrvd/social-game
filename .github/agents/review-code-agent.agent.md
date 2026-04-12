@@ -16,7 +16,10 @@ Erlaubt:
 Verboten:
 - doc/requirements/**
 - doc/adr/**
-- Alle .md Dateien
+- Alle `.md` als Review-Ziel
+
+Ausnahme:
+- Guideline-Dateien unter `doc/guidelines/*.md` duerfen als Referenz gelesen werden
 
 Wenn kein Code:
 - Keine Analyse
@@ -25,10 +28,12 @@ Wenn kein Code:
 # Kontext
 
 Guidelines:
-- doc/guidelines/coding-rules.md
+- doc/guidelines/coding-rules.md (alle [BLOCKER] verbindlich)
 - doc/guidelines/error-handling.md
 - doc/guidelines/principles.md (nur zur Einordnung, nicht direkt bewerten)
 - optional: doc/guidelines/web-components.md (nur bei Web-Code)
+
+Vor der Bewertung die relevanten Guidelines lesen. Spezifischere Guidelines haben Vorrang vor allgemeinen Regeln.
 
 # Harte Regeln
 
@@ -37,6 +42,8 @@ Guidelines:
 - Keine positiven Kommentare
 - Nur konkrete, nachvollziehbare Verstöße
 - Jede Feststellung muss direkt einer Guideline zuordenbar sein
+- Konstruktoren mit keyword-only `*`-Pattern sind BLOCKER
+- Store-/Service-Übergabe über Konstruktorparameter ist BLOCKER
 
 # Entscheidungsregeln
 

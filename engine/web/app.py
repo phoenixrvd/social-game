@@ -12,15 +12,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+import openai
 from PIL import Image
 from pydantic import BaseModel
 import uvicorn
 
 from engine.config import config
-from engine.fs_utils import load_text, load_yaml
 from engine.llm_client import stream_prompt
-from engine.logging import get_logger
 from engine.models import Npc, ShortMemoryMessage
+from engine.storage import SceneStorageView, storage
 from engine.services.npc_turn_service import NpcTurnService
 from engine.stores.npc_store import NpcStore
 from engine.stores.session_store import SessionStore
@@ -30,7 +30,6 @@ from engine.updater.schedule import start_scheduler, stop_scheduler
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 _webp_cache: dict[str, Any] = {"signature": "", "data": b""}
-logger = get_logger("web")
 
 
 def _problem_response(status_code: int, detail: Any) -> Response:
@@ -39,6 +38,14 @@ def _problem_response(status_code: int, detail: Any) -> Response:
         status_code=status_code,
         media_type="application/problem+json",
     )
+
+
+def _stream_event(event_type: str, **payload: Any) -> str:
+    return json.dumps({"type": event_type, **payload}, ensure_ascii=False) + "\n"
+
+
+def _is_user_visible_llm_error(exc: RuntimeError) -> bool:
+    return isinstance(exc.__cause__, openai.OpenAIError)
 
 
 def _get_cached_webp(img_path: Path) -> bytes:
@@ -129,11 +136,7 @@ async def _validation_error_handler(_request: Request, exc: RequestValidationErr
 
 
 @app.exception_handler(Exception)
-async def _internal_error_handler(request: Request, exc: Exception) -> Response:
-    logger.exception(
-        "Unerwarteter Fehler in Web-Request",
-        extra={"path": request.url.path, "method": request.method},
-    )
+async def _internal_error_handler(_request: Request, _exc: Exception) -> Response:
     return _problem_response(500, "Interner Serverfehler.")
 
 
@@ -164,6 +167,7 @@ def _visible_messages(npc: Npc) -> list[dict[str, Any]]:
     if visible:
         return visible
     character_description = npc.description
+    relationship_description = npc.relationship.strip()
     scene_description = (npc.scene.description or "").strip() or "Keine Szenenbeschreibung verfügbar."
     context_messages = [
         {
@@ -182,13 +186,13 @@ def _visible_messages(npc: Npc) -> list[dict[str, Any]]:
         },
     ]
 
-    if npc.ltm.strip():
+    if relationship_description:
         context_messages.append(
             {
-                "id": "context-ltm",
+                "id": "context-relationship",
                 "role": "assistant",
                 "content": "",
-                "html": _render_markdown_to_html(f"# Beziehung\n\n{npc.ltm}"),
+                "html": _render_markdown_to_html(f"# Beziehung\n\n{relationship_description}"),
                 "timestamp": "",
             }
         )
@@ -206,28 +210,29 @@ def _messages_signature(npc: Npc) -> str:
     return f"{len(visible)}|{last_id}"
 
 
-def _read_scene_label(scene_dir: Path) -> str:
-    for line in load_text(scene_dir / "scene.md").splitlines():
+def _read_scene_label(scene_view: SceneStorageView) -> str:
+    scene_id = scene_view.scene_id
+    scene_item = scene_view.scene_original
+    for line in scene_item.get().splitlines():
         if (stripped := line.strip()).startswith("#"):
-            return stripped.lstrip("#").strip() or scene_dir.name
-    return scene_dir.name.replace("_", " ").title()
+            return stripped.lstrip("#").strip() or scene_id
+    return scene_id.replace("_", " ").title()
 
 
 def _list_npcs() -> list[dict[str, str]]:
-    if not config.NPC_DIR.exists():
-        return []
     return [
-        {"id": d.name, "label": str(load_yaml(d / "character.yaml").get("name", d.name)).strip() or d.name}
-        for d in sorted(config.NPC_DIR.iterdir(), key=lambda p: p.name) if d.is_dir()
+        {
+            "id": npc_view.npc_id,
+            "label": str(npc_view.character_original.get().get("name", npc_view.npc_id)).strip() or npc_view.npc_id,
+        }
+        for npc_view in storage.list_npcs()
     ]
 
 
 def _list_scenes() -> list[dict[str, str]]:
-    if not config.SCENE_DIR.exists():
-        return []
     return [
-        {"id": d.name, "label": _read_scene_label(d)}
-        for d in sorted(config.SCENE_DIR.iterdir(), key=lambda p: p.name) if d.is_dir()
+        {"id": scene_view.scene_id, "label": _read_scene_label(scene_view)}
+        for scene_view in storage.list_scenes()
     ]
 
 
@@ -248,7 +253,7 @@ def _state_payload() -> dict[str, Any]:
         "npc_id": npc.npc_id,
         "npc_name": str(npc.character.get("name", npc.npc_id)).strip() or npc.npc_id,
         "character_description": npc.description,
-        "ltm": npc.ltm,
+        "relationship": npc.relationship,
         "scene_id": npc.scene.scene_id,
         "scene_description": npc.scene.description,
         "character_data": npc.character,
@@ -280,7 +285,7 @@ def update_session(request: SessionRequest) -> dict[str, Any]:
 @app.delete("/api/npc/reset-active")
 def reset_active_npc_runtime_data() -> dict[str, Any]:
     session = SessionStore().load()
-    scene_data_dir = config.DATA_NPC_DIR / session.npc_id / session.scene_id
+    scene_data_dir = storage.npc_view(npc_id=session.npc_id, scene_id=session.scene_id).base_runtime
     if scene_data_dir.exists():
         if not scene_data_dir.is_dir():
             raise HTTPException(status_code=500, detail="NPC-Scene-Datenpfad ist kein Verzeichnis.")
@@ -298,21 +303,38 @@ def chat_stream(request: ChatRequest) -> Any:
         raise HTTPException(status_code=400, detail="Nachricht darf nicht leer sein.")
 
     npc_turn = NpcTurnService()
-    user_message = npc_turn.build_user_message(message_text)
-    turn_messages = [*npc_turn.build_turn_messages(), user_message]
+    turn_messages = npc_turn.build_chat_messages(message_text)
+    user_message = npc_turn.user_message
     prompt_stream = stream_prompt(turn_messages)
 
     def event_stream():
         parts: list[str] = []
-        for part in prompt_stream:
-            parts.append(part)
-            yield part
+        try:
+            for part in prompt_stream:
+                parts.append(part)
+                yield _stream_event("chunk", delta=part)
+        except RuntimeError as exc:
+            if _is_user_visible_llm_error(exc):
+                yield _stream_event(
+                    "error",
+                    detail=str(exc).strip() or "Nachricht konnte nicht gesendet werden.",
+                )
+            else:
+                yield _stream_event("error", detail="Interner Serverfehler.")
+            return
+        except Exception:
+            yield _stream_event("error", detail="Interner Serverfehler.")
+            return
 
-        reply = "".join(parts).strip()
-        npc_turn.npc_store.append_stm_turn(str(user_message["content"]), reply)
-        ImageUpdater().emit_update_if_missing()
+        try:
+            reply = "".join(parts).strip()
+            npc_turn.npc_store.append_stm_turn(str(user_message["content"]), reply)
+            ImageUpdater().emit_update_if_missing()
+            yield _stream_event("done")
+        except Exception:
+            yield _stream_event("error", detail="Interner Serverfehler.")
 
-    return StreamingResponse(event_stream(), media_type="text/plain; charset=utf-8")
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 
 
 @app.get("/api/image/current")
@@ -341,8 +363,16 @@ def image_signature() -> dict[str, Any]:
 @app.post("/api/image/refresh-active")
 def refresh_active_image() -> dict[str, Any]:
     updater = ImageUpdater()
-    updater.emit_update()
-    updater.schedule(force=True)
+    try:
+        updater.emit_update()
+        updater.schedule(force=True)
+    except RuntimeError as exc:
+        if _is_user_visible_llm_error(exc):
+            raise HTTPException(
+                status_code=400,
+                detail=str(exc).strip() or "Bild konnte nicht aktualisiert werden.",
+            ) from exc
+        raise
     return {}
 
 

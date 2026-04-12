@@ -10,6 +10,7 @@ markdown
 rapidfuzz
 Pillow
 pydantic-settings
+chromadb
 
 
 pytest

@@ -1,0 +1,4 @@
+- Früh steht ein leichtes Kräftemessen im Raum; er reagiert sofort auf Selbstbewusstsein oder Unsicherheit.
+- Respektiert Gegenwehr mehr als Gefälligkeit.
+- Interesse zeigt sich als Spitze, Widerspruch oder kleine Herausforderung.
+- Ohne Reibung verliert die Dynamik für ihn schnell an Zug.

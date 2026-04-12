@@ -10,9 +10,12 @@ class SocialGameSceneImage extends HTMLElement {
     this._state = {
       imageUrl: "",
       isExpanded: false,
+      isLoading: false,
     }
     this.$ = null
     this._lastFocusedElement = null
+    this._shouldAnimateNextImage = false
+    this._updateAnimationTimer = null
   }
 
   connectedCallback() {
@@ -55,6 +58,13 @@ class SocialGameSceneImage extends HTMLElement {
     this.render()
   }
 
+  disconnectedCallback() {
+    if (this._updateAnimationTimer !== null) {
+      clearTimeout(this._updateAnimationTimer)
+      this._updateAnimationTimer = null
+    }
+  }
+
   setState(nextState = {}) {
     this._state = { ...this._state, ...nextState }
     this.render()
@@ -65,10 +75,26 @@ class SocialGameSceneImage extends HTMLElement {
   }
 
   handleMainLoad() {
+    if (this._shouldAnimateNextImage) {
+      this.$.main.classList.add("is-updated")
+      this.$.overlayMain.classList.add("is-updated")
+      this._shouldAnimateNextImage = false
+      if (this._updateAnimationTimer !== null) {
+        clearTimeout(this._updateAnimationTimer)
+      }
+      this._updateAnimationTimer = window.setTimeout(() => {
+        this.$.main.classList.remove("is-updated")
+        this.$.overlayMain.classList.remove("is-updated")
+        this._updateAnimationTimer = null
+      }, 520)
+    }
     this.emit("sg:image-load")
   }
 
   handleMainError() {
+    this._shouldAnimateNextImage = false
+    this.$.main.classList.remove("is-updated")
+    this.$.overlayMain.classList.remove("is-updated")
     this.emit("sg:image-error")
   }
 
@@ -132,18 +158,24 @@ class SocialGameSceneImage extends HTMLElement {
   render() {
     const hasImage = typeof this._state.imageUrl === "string" && this._state.imageUrl.trim().length > 0
     const overlayIsOpen = Boolean(isMobileViewport() && this._state.isExpanded && hasImage)
+    const showLoadingState = Boolean(this._state.isLoading && hasImage)
 
     this.$.frame.classList.toggle("sg-hidden", !hasImage)
     this.$.empty.classList.toggle("sg-hidden", hasImage)
     this.$.overlay.classList.toggle("is-open", overlayIsOpen)
+    this.$.frame.classList.toggle("is-loading", showLoadingState)
 
     if (!hasImage) {
       return
     }
 
-    if (this.$.main.getAttribute("src") === this._state.imageUrl) {
+    const currentSrc = this.$.main.getAttribute("src") || ""
+    if (currentSrc === this._state.imageUrl) {
       return
     }
+
+    const hasExistingImage = currentSrc && currentSrc !== "data:,"
+    this._shouldAnimateNextImage = hasExistingImage
 
     ;[this.$.bg, this.$.main, this.$.overlayBg, this.$.overlayMain].forEach((img) => {
       img.src = this._state.imageUrl

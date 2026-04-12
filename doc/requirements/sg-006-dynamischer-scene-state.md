@@ -7,6 +7,7 @@ state: implemented
 ## Kontext
 Das System verwaltet einen dynamischen Zustand von Szenen.  
 Der fachliche Fokus liegt auf Veränderungen innerhalb der Spielumgebung.
+Scene-State ist eine abgeleitete Sicht auf die aktive Situation und kann durch relevante Erinnerungen informiert werden.
 
 ## Annahmen
 - Keine
@@ -22,8 +23,9 @@ Der fachliche Fokus liegt auf Veränderungen innerhalb der Spielumgebung.
 **Akzeptanzkriterien:**
 - Ereignisse in der Szene führen zu nachvollziehbaren Zustandsänderungen.
 - Der aktuelle Szenenzustand steht für nachfolgende Interaktionen zur Verfügung.
+- Relevante ETM-Erinnerungen können bei der Aktualisierung des aktuellen Szenenzustands berücksichtigt werden.
 
-**Referenzen:** Keine
+**Referenzen:** `doc/requirements/sg-015-episodic-term-memory.md`
 
 ### Konsistenter Szenenkontext
 **Typ:** Nicht-funktional  
@@ -40,6 +42,6 @@ Der fachliche Fokus liegt auf Veränderungen innerhalb der Spielumgebung.
 **Akzeptanzkriterien:**
 - Szenenfremde Informationen werden nicht als Teil des Scene-State behandelt.
 - Der Scene-State bleibt an die aktive Szene gebunden.
+- Scene-State wird nicht automatisch als separates Memory-Artefakt persistiert.
 
-**Referenzen:** Keine
-
+**Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-015-episodic-term-memory.md`

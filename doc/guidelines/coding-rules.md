@@ -10,11 +10,13 @@
 ## Struktur
 
 - [BLOCKER] Code muss lokal verständlich sein (keine unnötigen Kontextsprünge)
+- [BLOCKER] Konstruktoren nutzen kein keyword-only `*`-Pattern
 - [WARNING] Zusammengehörige Logik räumlich gruppieren
 
 ## Kontext
 
 - [BLOCKER] Kontext nicht unnötig durch mehrere Schichten weiterreichen
+- [BLOCKER] Klassen instanziieren benötigte Stores und Services selbst; keine Store-/Service-Übergabe über Konstruktorparameter
 - [WARNING] Kontext möglichst nah an der Verwendung auflösen
 
 ## Wrapper / Delegation
@@ -30,6 +32,7 @@
 ## Dead Code
 
 - [BLOCKER] Unbenutzten Code sofort entfernen
+- [BLOCKER] Code, der nur noch von Tests oder Doku referenziert wird, gilt als unbenutzt, sofern er keine bewusst erhaltene öffentliche Schnittstelle ist
 - [WARNING] IDE-Warnungen prüfen, aber nicht blind übernehmen
 
 ## Naming

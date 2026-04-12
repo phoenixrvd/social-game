@@ -8,11 +8,12 @@ state: implemented
 implemented
 
 ## Kontext
-- Das System aktualisiert LTM, State, Scene und Image auf Basis von STM, bestehendem Kontext und spezialisierten Prompt-Templates.
+- Das System aktualisiert ETM, State, Scene und Image auf Basis von STM, bestehendem Kontext und spezialisierten Prompt-Templates.
 - Beim Start von `sg web` läuft ein Orchestrator automatisch mit; Ziel sind deterministisches Verhalten, Debuggbarkeit und keine versteckten Hintergrundprozesse.
 
 ## Entscheidung
-- Der Update-Orchestrator läuft synchron und periodisch im Web-Lifecycle von `sg web`; die Updater werden in der Reihenfolge `ltm`, `scene`, `state`, `image` ausgeführt und erledigen Aktivierungsprüfung, Prompt-Aufbau, blockierenden LLM-Call, Persistierung und direkte Folgeaktionen im selben Zyklus.
+- Der Update-Orchestrator läuft synchron und periodisch im Web-Lifecycle von `sg web`; die Updater werden fachlich in der Reihenfolge ETM, Scene, State und Image ausgeführt und erledigen Aktivierungsprüfung, Prompt-Aufbau, blockierenden LLM-Call, Persistierung und direkte Folgeaktionen im selben Zyklus.
+- Die technische Updater-ID für ETM kann vorübergehend aus der bisherigen Implementierung stammen, solange die fachliche Zielverantwortung klar bleibt.
 
 ## Begründung
 - Synchrones Ausführen erhöht Nachvollziehbarkeit und Determinismus.

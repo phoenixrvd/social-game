@@ -1,42 +1,24 @@
 from __future__ import annotations
 
-from engine.logging import get_logger, log_info
 from engine.config import config
-from engine.fs_utils import load_text
-from engine.llm_client import run_prompt
+from engine.services.state_update_service import StateUpdateService
 from engine.stores.npc_store import NpcStore
-from engine.updater.image_updater import ImageUpdater
 from engine.updater.updater import AbstractUpdater
-
-LOGGER = get_logger("updater.state")
 
 
 class StateUpdater(AbstractUpdater):
-
     def __init__(self) -> None:
         self.npc_store = NpcStore()
-        self.image_updater = ImageUpdater()
+        self.service = StateUpdateService()
 
-    def get_update_interval(self) -> int:
+    @staticmethod
+    def get_update_interval() -> int:
         return config.UPDATER_STATE_CHECK_INTERVAL_SECONDS
 
     def schedule(self) -> None:
         npc = self.npc_store.load()
 
         if not self._should_run_for_npc(npc):
-            log_info(LOGGER, "updater_active", updater="state", active=False, prompt_start=False, reason="no_new_messages", stm_count=len(npc.stm))
             return
 
-        log_info(LOGGER, "updater_active", updater="state", active=True, prompt_start=True, stm_count=len(npc.stm))
-        prompt = (
-            load_text(config.PROJECT_ROOT / "prompts" / "state_update.md").strip()
-            .replace("{{CURRENT_STATE}}", npc.state)
-            .replace("{{SHORT_TERM_MEMORY}}", self.format_short_memory(npc.stm))
-            .replace("{{LONG_TERM_MEMORY}}", npc.ltm.strip() or "(leer)")
-        )
-        raw = run_prompt(prompt, model=config.MODEL_LLM_SMALL).strip()
-
-        self.npc_store.save_state(raw)
-        self.image_updater.emit_update()
-
-        log_info(LOGGER, "updater_completed", updater="state", state_length=len(raw))
+        self.service.run(npc)

@@ -18,6 +18,7 @@ Erstelle Anforderungen und entferne Redundanzen.
 - Anforderungen beschreiben WAS, nicht WIE
 - Keine Meta-Kommentare
 - Jede Anforderung = genau ein Sachverhalt
+- Keine Codeänderungen
 
 # Redundanz (hart)
 - Prüfe: existiert Inhalt bereits?

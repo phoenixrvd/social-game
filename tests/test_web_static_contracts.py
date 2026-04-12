@@ -65,6 +65,17 @@ def test_sg_chat_updates_existing_message_elements_during_sync():
     assert "container.insertBefore(element, referenceNode)\n        element.message = renderedMessage" not in source
 
 
+def test_sg_app_parses_structured_chat_stream_events_and_surfaces_errors():
+    source = _read("engine/web/static/js/sg-app.js")
+
+    assert "function parseChatStreamEvent(line)" in source
+    assert "JSON.parse(line)" in source
+    assert 'if (event.type === "error")' in source
+    assert 'if (event.type === "done")' in source
+    assert 'if (!isDone)' in source
+    assert 'if (!assistantMessage.content.trim())' in source
+
+
 def test_sg_chat_routes_context_messages_to_context_component():
     source = _read("engine/web/static/js/sg-chat.js")
 
@@ -72,6 +83,7 @@ def test_sg_chat_routes_context_messages_to_context_component():
     assert '"sg-context-message"' in source
     assert '"context-character"' in source
     assert '"context-scene"' in source
+    assert '"context-relationship"' in source
 
 
 def test_sg_input_keeps_focus_stable_while_sending():

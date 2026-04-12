@@ -1,12 +1,12 @@
 ---
-state: implemented
+state: removed
 ---
 
-# SG-010: Anwendungslogging
+# SG-010: Anwendungslogging (entfernt)
 
 ## Kontext
-Das System führt Anwendungslogging zur Nachvollziehbarkeit von Abläufen.  
-Der fachliche Fokus liegt auf der protokollierten Beobachtbarkeit des Systemverhaltens.
+Anwendungslogging wurde aus dem System entfernt.
+Die Nachvollziehbarkeit erfolgt aktuell über persistierte Laufzeitdaten, Tests und sichtbare Side-Effects.
 
 ## Annahmen
 - Keine
@@ -16,30 +16,12 @@ Der fachliche Fokus liegt auf der protokollierten Beobachtbarkeit des Systemverh
 
 ## Anforderungen
 
-### Protokollierung relevanter Ereignisse
+### Keine Anwendungslogs
 **Typ:** Funktional  
-**Beschreibung:** Das System muss fachlich relevante Ereignisse protokollieren.  
+**Beschreibung:** Das System erzeugt keine eigenen Anwendungslogs.
 **Akzeptanzkriterien:**
-- Wichtige Verarbeitungsschritte erzeugen Logeinträge.
-- Logeinträge können einem konkreten Ablauf zugeordnet werden.
+- Es gibt kein `engine.logging`-Modul.
+- Services und Updater enthalten keine Logger-Injektion.
+- Die Abhängigkeit `injector` wird nicht für Logging oder Service-Aufbau genutzt.
 
 **Referenzen:** Keine
-
-### Nachvollziehbarkeit der Protokolle
-**Typ:** Nicht-funktional  
-**Beschreibung:** Das System muss Logeinträge verständlich und konsistent erfassen.  
-**Akzeptanzkriterien:**
-- Logeinträge enthalten ausreichend Kontext zur Einordnung eines Ereignisses.
-- Gleichartige Ereignisse werden in vergleichbarer Form protokolliert.
-
-**Referenzen:** Keine
-
-### Zweckbindung des Loggings
-**Typ:** Randbedingung  
-**Beschreibung:** Das System muss Logging auf betriebliche Nachvollziehbarkeit begrenzen.  
-**Akzeptanzkriterien:**
-- Logeinträge dienen der Analyse von Anwendungsabläufen.
-- Nicht anwendungsbezogene Inhalte werden nicht als Loggingzweck geführt.
-
-**Referenzen:** Keine
-

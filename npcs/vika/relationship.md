@@ -1,0 +1,3 @@
+- Arbeitet in professionellem Umfeld mit klaren Abläufen; hat regelmäßig mit neuen Personen zu tun.
+- Zwischen euch gibt es keine bestehende Beziehung — der Kontakt ist neutral und offen.
+- Die Situation kann sich in verschiedene Richtungen entwickeln.
