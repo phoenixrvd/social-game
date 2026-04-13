@@ -1,14 +1,12 @@
 import "./sg-message.js"
 import "./sg-context-message.js"
-import { trustedHtml } from "./trusted-types.js"
+import { appStore } from "./app-store.js"
 
 class SocialGameChat extends HTMLElement {
   constructor() {
     super()
     this._state = {
       messages: [],
-      isSending: false,
-      activeAssistantId: "",
     }
     this.$ = {
       messages: null,
@@ -17,7 +15,7 @@ class SocialGameChat extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = trustedHtml(`
+    this.innerHTML = `
       <div
         class="sg-chat-messages chat-scrollbar sg-chat-messages-panel"
         role="log"
@@ -25,14 +23,19 @@ class SocialGameChat extends HTMLElement {
         aria-live="polite"
         aria-relevant="additions"
       ></div>
-    `)
+    `
     this.$.messages = this.querySelector(".sg-chat-messages")
-    this.render()
+    const subscriptions = [
+      ["messages", this.onMessagesChanged.bind(this)],
+    ]
+
+    for (const [key, listener] of subscriptions) {
+      appStore.subscribe(key, listener)
+    }
   }
 
-
-  setState(nextState = {}) {
-    this._state = { ...this._state, ...nextState }
+  onMessagesChanged(messages) {
+    this._state.messages = Array.isArray(messages) ? messages : []
     this.render()
   }
 
@@ -43,20 +46,11 @@ class SocialGameChat extends HTMLElement {
   syncMessages() {
     const container = this.$.messages
     const nextMessageElements = new Map()
-    const activeAssistantMessage = this._state.messages.find((message) => message?.id === this._state.activeAssistantId)
-    const showTypingDotsForActiveAssistant =
-      this._state.isSending &&
-      activeAssistantMessage?.role === "assistant" &&
-      (!activeAssistantMessage?.content || !String(activeAssistantMessage.content).trim())
 
     for (const [index, message] of this._state.messages.entries()) {
       const key = typeof message?.id === "string" && message.id ? `id:${message.id}` : `index:${index}:${message?.role || ""}`
       const contextMessageIds = ["context-character", "context-scene", "context-relationship"]
       const componentName = contextMessageIds.includes(message?.id) ? "sg-context-message" : "sg-message"
-      const renderedMessage = {
-        ...message,
-        showTypingDots: message?.id === this._state.activeAssistantId ? showTypingDotsForActiveAssistant : false,
-      }
       let element = this._messageElements.get(key)
 
       if (element && element.localName !== componentName) {
@@ -72,7 +66,7 @@ class SocialGameChat extends HTMLElement {
       if (referenceNode !== element) {
         container.insertBefore(element, referenceNode)
       }
-      element.message = renderedMessage
+      element.message = message
 
       nextMessageElements.set(key, element)
     }

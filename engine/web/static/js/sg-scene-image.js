@@ -1,4 +1,5 @@
-import { trustedHtml } from "./trusted-types.js"
+import { appActions } from "./app-actions.js"
+import { appStore } from "./app-store.js"
 
 function isMobileViewport() {
   return window.matchMedia("(max-width: 1023px)").matches
@@ -19,7 +20,7 @@ class SocialGameSceneImage extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = trustedHtml(`
+    this.innerHTML = `
       <div class="sg-image-pane">
         <div class="sg-image-empty sg-hidden">Kein Bild geladen</div>
         <div class="sg-image-frame">
@@ -36,7 +37,7 @@ class SocialGameSceneImage extends HTMLElement {
           <img class="sg-image-overlay-main" src="data:," alt="Szenenbild" loading="lazy" decoding="async" />
         </div>
       </div>
-    `)
+    `
 
     this.$ = {
       frame: this.querySelector(".sg-image-frame"),
@@ -55,6 +56,16 @@ class SocialGameSceneImage extends HTMLElement {
     this.$.overlay.addEventListener("click", this.handleOverlayClick.bind(this))
     this.$.overlay.addEventListener("keydown", this.handleOverlayKeyDown.bind(this))
 
+    const subscriptions = [
+      ["imageUrl", this.onImageUrlChanged.bind(this)],
+      ["isImageExpanded", this.onImageExpandedChanged.bind(this)],
+      ["isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this)],
+    ]
+
+    for (const [key, listener] of subscriptions) {
+      appStore.subscribe(key, listener)
+    }
+
     this.render()
   }
 
@@ -63,15 +74,6 @@ class SocialGameSceneImage extends HTMLElement {
       clearTimeout(this._updateAnimationTimer)
       this._updateAnimationTimer = null
     }
-  }
-
-  setState(nextState = {}) {
-    this._state = { ...this._state, ...nextState }
-    this.render()
-  }
-
-  emit(name, detail = {}) {
-    this.dispatchEvent(new CustomEvent(name, { bubbles: true, composed: true, detail }))
   }
 
   handleMainLoad() {
@@ -88,14 +90,13 @@ class SocialGameSceneImage extends HTMLElement {
         this._updateAnimationTimer = null
       }, 520)
     }
-    this.emit("sg:image-load")
   }
 
   handleMainError() {
     this._shouldAnimateNextImage = false
     this.$.main.classList.remove("is-updated")
     this.$.overlayMain.classList.remove("is-updated")
-    this.emit("sg:image-error")
+    appActions.setImageError()
   }
 
   handleMainClick(event) {
@@ -139,8 +140,7 @@ class SocialGameSceneImage extends HTMLElement {
       return
     }
     const nextExpanded = !this._state.isExpanded
-    this.setState({ isExpanded: nextExpanded })
-    this.emit("sg:image-expand-toggle", { expanded: nextExpanded })
+    appActions.toggleImageExpand(nextExpanded)
 
     if (nextExpanded) {
       this.$.overlay.focus()
@@ -148,11 +148,25 @@ class SocialGameSceneImage extends HTMLElement {
   }
 
   collapseOverlay() {
-    this.setState({ isExpanded: false })
-    this.emit("sg:image-expand-toggle", { expanded: false })
+    appActions.toggleImageExpand(false)
     if (this._lastFocusedElement instanceof HTMLElement) {
       this._lastFocusedElement.focus()
     }
+  }
+
+  onImageUrlChanged(imageUrl) {
+    this._state.imageUrl = typeof imageUrl === "string" ? imageUrl : ""
+    this.render()
+  }
+
+  onImageExpandedChanged(isImageExpanded) {
+    this._state.isExpanded = Boolean(isImageExpanded)
+    this.render()
+  }
+
+  onImageRefreshLoadingChanged(isImageRefreshLoading) {
+    this._state.isLoading = Boolean(isImageRefreshLoading)
+    this.render()
   }
 
   render() {
@@ -174,8 +188,7 @@ class SocialGameSceneImage extends HTMLElement {
       return
     }
 
-    const hasExistingImage = currentSrc && currentSrc !== "data:,"
-    this._shouldAnimateNextImage = hasExistingImage
+    this._shouldAnimateNextImage = Boolean(currentSrc && currentSrc !== "data:,")
 
     ;[this.$.bg, this.$.main, this.$.overlayBg, this.$.overlayMain].forEach((img) => {
       img.src = this._state.imageUrl

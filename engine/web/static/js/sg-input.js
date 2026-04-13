@@ -1,4 +1,5 @@
-import { trustedHtml } from "./trusted-types.js"
+import { appActions } from "./app-actions.js"
+import { appStore } from "./app-store.js"
 
 const SVG_SEND = `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-md" aria-hidden="true">
@@ -82,8 +83,8 @@ class SocialGameInput extends HTMLElement {
       isSessionLoading: false,
       isImageRefreshLoading: false,
       errorMessage: "",
-      selectorPanelOpen: false,
-      theme: "dark",
+      isSelectorPanelOpen: false,
+      theme: localStorage.getItem("theme") === "light" ? "light" : "dark",
       npcs: [],
       scenes: [],
       npcId: "",
@@ -94,9 +95,9 @@ class SocialGameInput extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = trustedHtml(`
+    this.innerHTML = `
       <form class="sg-chat-form" aria-busy="false">
-        <div class="sg-session-row" hidden>
+        <div class="sg-session-row sg-hidden">
           <label class="sg-selector-field">
             <span class="sg-selector-legend">NPC</span>
             <select class="sg-npc-select sg-session-select"></select>
@@ -165,7 +166,7 @@ class SocialGameInput extends HTMLElement {
           </div>
         </div>
       </form>
-    `)
+    `
 
     this.$ = {
       form: this.querySelector(".sg-chat-form"),
@@ -188,16 +189,84 @@ class SocialGameInput extends HTMLElement {
     this.$.npcSelect.addEventListener("change", this.handleNpcChange.bind(this))
     this.$.sceneSelect.addEventListener("change", this.handleSceneChange.bind(this))
 
-    this.$.refreshButton.addEventListener("click", this.handleRefreshClick.bind(this))
-    this.$.selectorButton.addEventListener("click", this.handleSelectorClick.bind(this))
-    this.$.themeButton.addEventListener("click", this.handleThemeClick.bind(this))
-    this.$.resetButton.addEventListener("click", this.handleResetClick.bind(this))
+    this.$.refreshButton.addEventListener("click", this.handleRefreshImage.bind(this))
+    this.$.selectorButton.addEventListener("click", this.handleSelectorToggle.bind(this))
+    this.$.themeButton.addEventListener("click", this.handleThemeToggle.bind(this))
+    this.$.resetButton.addEventListener("click", this.handleResetNpc.bind(this))
+
+    const subscriptions = [
+      ["input", this.onInputChanged.bind(this)],
+      ["isSending", this.onIsSendingChanged.bind(this)],
+      ["isSessionLoading", this.onSessionLoadingChanged.bind(this)],
+      ["isImageRefreshLoading", this.onImageRefreshChanged.bind(this)],
+      ["errorMessage", this.onErrorMessageChanged.bind(this)],
+      ["isSelectorPanelOpen", this.onSelectorPanelChanged.bind(this)],
+      ["theme", this.onThemeChanged.bind(this)],
+      ["npcs", this.onNpcsChanged.bind(this)],
+      ["scenes", this.onScenesChanged.bind(this)],
+      ["npcId", this.onNpcIdChanged.bind(this)],
+      ["sceneId", this.onSceneIdChanged.bind(this)],
+    ]
+
+    for (const [key, listener] of subscriptions) {
+      appStore.subscribe(key, listener)
+    }
 
     this.render()
   }
 
-  setState(nextState = {}) {
-    this._state = { ...this._state, ...nextState }
+  onInputChanged(input) {
+    this._state.input = typeof input === "string" ? input : ""
+    this.render()
+  }
+
+  onIsSendingChanged(isSending) {
+    this._state.isSending = Boolean(isSending)
+    this.render()
+  }
+
+  onSessionLoadingChanged(isSessionLoading) {
+    this._state.isSessionLoading = Boolean(isSessionLoading)
+    this.render()
+  }
+
+  onImageRefreshChanged(isImageRefreshLoading) {
+    this._state.isImageRefreshLoading = Boolean(isImageRefreshLoading)
+    this.render()
+  }
+
+  onErrorMessageChanged(errorMessage) {
+    this._state.errorMessage = typeof errorMessage === "string" ? errorMessage : ""
+    this.render()
+  }
+
+  onSelectorPanelChanged(isSelectorPanelOpen) {
+    this._state.isSelectorPanelOpen = Boolean(isSelectorPanelOpen)
+    this.render()
+  }
+
+  onThemeChanged(theme) {
+    this._state.theme = theme === "light" ? "light" : "dark"
+    this.render()
+  }
+
+  onNpcsChanged(npcs) {
+    this._state.npcs = Array.isArray(npcs) ? npcs : []
+    this.render()
+  }
+
+  onScenesChanged(scenes) {
+    this._state.scenes = Array.isArray(scenes) ? scenes : []
+    this.render()
+  }
+
+  onNpcIdChanged(npcId) {
+    this._state.npcId = typeof npcId === "string" ? npcId : ""
+    this.render()
+  }
+
+  onSceneIdChanged(sceneId) {
+    this._state.sceneId = typeof sceneId === "string" ? sceneId : ""
     this.render()
   }
 
@@ -220,10 +289,6 @@ class SocialGameInput extends HTMLElement {
     textarea.style.height = `${Math.max(textarea.scrollHeight, 46)}px`
   }
 
-  emit(name, detail = {}) {
-    this.dispatchEvent(new CustomEvent(name, { bubbles: true, composed: true, detail }))
-  }
-
   isSubmitBlocked() {
     return this._state.isSending || this._state.isSessionLoading
   }
@@ -233,13 +298,12 @@ class SocialGameInput extends HTMLElement {
     if (this.isSubmitBlocked()) {
       return
     }
-    this.emit("sg:message-submit", { message: this._state.input })
+    appActions.submitMessage(this.$.textarea.value)
   }
 
   handleInput(event) {
-    this._state.input = event.currentTarget.value
     this.syncTextareaHeight()
-    this.emit("sg:input-change", { value: event.currentTarget.value })
+    appActions.setInput(event.currentTarget.value)
   }
 
   handleKeyDown(event) {
@@ -248,32 +312,38 @@ class SocialGameInput extends HTMLElement {
       if (this.isSubmitBlocked()) {
         return
       }
-      this.emit("sg:message-submit", { message: this._state.input })
+      appActions.submitMessage(this.$.textarea.value)
     }
   }
 
   handleNpcChange(event) {
-    this.emit("sg:session-change", { npc_id: event.currentTarget.value, scene_id: this._state.sceneId })
+    appActions.updateSession({
+      npc_id: event.currentTarget.value,
+      scene_id: this._state.sceneId,
+    })
   }
 
   handleSceneChange(event) {
-    this.emit("sg:session-change", { npc_id: this._state.npcId, scene_id: event.currentTarget.value })
+    appActions.updateSession({
+      npc_id: this._state.npcId,
+      scene_id: event.currentTarget.value,
+    })
   }
 
-  handleRefreshClick() {
-    this.emit("sg:image-refresh")
+  handleRefreshImage() {
+    appActions.refreshImage()
   }
 
-  handleSelectorClick() {
-    this.emit("sg:selector-toggle")
+  handleSelectorToggle() {
+    appActions.toggleSelectorPanel()
   }
 
-  handleThemeClick() {
-    this.emit("sg:theme-toggle")
+  handleThemeToggle() {
+    appActions.toggleTheme()
   }
 
-  handleResetClick() {
-    this.emit("sg:reset-active-npc")
+  handleResetNpc() {
+    appActions.resetNpc()
   }
 
   handleSendPointerDown(event) {
@@ -288,10 +358,10 @@ class SocialGameInput extends HTMLElement {
     const errorText = this._state.errorMessage
 
     this.$.form.setAttribute("aria-busy", controlsDisabled ? "true" : "false")
-    this.$.sessionRow.toggleAttribute("hidden", !this._state.selectorPanelOpen)
+    this.$.sessionRow.classList.toggle("sg-hidden", !this._state.isSelectorPanelOpen)
 
-    this.$.npcSelect.innerHTML = trustedHtml(renderOptions(this._state.npcs, this._state.npcId))
-    this.$.sceneSelect.innerHTML = trustedHtml(renderOptions(this._state.scenes, this._state.sceneId))
+    this.$.npcSelect.innerHTML = renderOptions(this._state.npcs, this._state.npcId)
+    this.$.sceneSelect.innerHTML = renderOptions(this._state.scenes, this._state.sceneId)
     this.$.npcSelect.disabled = controlsDisabled
     this.$.sceneSelect.disabled = controlsDisabled
 
@@ -306,12 +376,12 @@ class SocialGameInput extends HTMLElement {
     if (errorText) {
       this.$.meta.textContent = errorText
     } else {
-      this.$.meta.innerHTML = trustedHtml('<span class="sg-keyboard-hint">Enter = senden, Shift+Enter = neue Zeile</span>')
+      this.$.meta.innerHTML = '<span class="sg-keyboard-hint">Enter = senden, Shift+Enter = neue Zeile</span>'
     }
 
     this.$.refreshButton.disabled = controlsDisabled || this._state.isImageRefreshLoading
-    this.$.selectorButton.setAttribute("aria-pressed", this._state.selectorPanelOpen ? "true" : "false")
-    this.$.themeButton.innerHTML = trustedHtml(getThemeToggleIcon(this._state.theme))
+    this.$.selectorButton.setAttribute("aria-pressed", this._state.isSelectorPanelOpen ? "true" : "false")
+    this.$.themeButton.innerHTML = getThemeToggleIcon(this._state.theme)
     this.$.resetButton.disabled = controlsDisabled
 
     this.syncTextareaHeight()

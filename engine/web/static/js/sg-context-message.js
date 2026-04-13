@@ -23,6 +23,9 @@ export class SocialGameContextMessage extends HTMLElement {
   }
 
   render() {
+    if (!this.$.initialContextHtml) {
+      return
+    }
     this.$.initialContextHtml.innerHTML = this._message?.html || ""
   }
 }

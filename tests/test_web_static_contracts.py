@@ -25,15 +25,11 @@ def test_sg_message_has_no_domparser_sanitizer_path():
     assert "template.innerHTML" not in source
 
 
-def test_trusted_types_policy_is_defined():
-    source = _read("engine/web/static/js/trusted-types.js")
-
-    assert "trustedTypes.createPolicy" in source
-    assert '"sg"' in source
-    assert "export function trustedHtml" in source
+def test_trusted_types_helper_is_removed():
+    assert not (ROOT_DIR / "engine/web/static/js/trusted-types.js").exists()
 
 
-def test_components_with_direct_html_injection_use_trusted_html():
+def test_components_no_longer_use_trusted_html_helper():
     for rel_path in (
         "engine/web/static/js/sg-chat.js",
         "engine/web/static/js/sg-input.js",
@@ -41,8 +37,8 @@ def test_components_with_direct_html_injection_use_trusted_html():
         "engine/web/static/js/sg-message.js",
     ):
         source = _read(rel_path)
-        assert 'from "./trusted-types.js"' in source, f"{rel_path} importiert trusted-types nicht"
-        assert "trustedHtml(" in source, f"{rel_path} verwendet kein trustedHtml"
+        assert 'from "./trusted-types.js"' not in source, f"{rel_path} importiert trusted-types noch"
+        assert "trustedHtml(" not in source, f"{rel_path} verwendet trustedHtml noch"
 
 
 def test_index_has_no_inline_scripts():
@@ -58,22 +54,66 @@ def test_sg_chat_exposes_scroll_method():
     assert "scrollMessagesToBottom(" in source
 
 
+def test_sg_chat_subscribes_directly_to_messages_only():
+    source = _read("engine/web/static/js/sg-chat.js")
+
+    assert 'import { appStore } from "./app-store.js"' in source
+    assert '["messages", this.onMessagesChanged.bind(this)]' in source
+    assert '["isAssistantTyping", this.onAssistantTypingChanged.bind(this)]' not in source
+    assert '["activeAssistantId", this.onActiveAssistantIdChanged.bind(this)]' not in source
+    assert "appStore.subscribe(key, listener)" in source
+    assert "setState(nextState = {})" not in source
+
+
+def test_sg_message_subscribes_directly_to_typing_flags_without_cleanup_wrapper():
+    source = _read("engine/web/static/js/sg-message.js")
+
+    assert 'import { appStore } from "./app-store.js"' in source
+    assert '["isAssistantTyping", this.onAssistantTypingChanged.bind(this)]' in source
+    assert '["activeAssistantId", this.onActiveAssistantIdChanged.bind(this)]' not in source
+    assert "disconnectedCallback()" not in source
+    assert "cleanupSubscriptions()" not in source
+    assert "subscribeToStore()" not in source
+    assert "appStore.getState()" not in source
+    assert "message.isAssistantTyping" not in source
+
+
 def test_sg_chat_updates_existing_message_elements_during_sync():
     source = _read("engine/web/static/js/sg-chat.js")
 
-    assert "element.message = renderedMessage" in source
-    assert "container.insertBefore(element, referenceNode)\n        element.message = renderedMessage" not in source
+    assert "element.message = message" in source
+    assert "renderedMessage" not in source
+    assert "isAssistantTypingForActiveMessage" not in source
+    assert "container.insertBefore(element, referenceNode)\n      element.message = message" not in source
 
 
-def test_sg_app_parses_structured_chat_stream_events_and_surfaces_errors():
-    source = _read("engine/web/static/js/sg-app.js")
+def test_chat_streaming_logic_is_in_app_actions_and_surfaces_errors():
+    source = _read("engine/web/static/js/app-actions.js")
 
     assert "function parseChatStreamEvent(line)" in source
     assert "JSON.parse(line)" in source
     assert 'if (event.type === "error")' in source
     assert 'if (event.type === "done")' in source
-    assert 'if (!isDone)' in source
-    assert 'if (!assistantMessage.content.trim())' in source
+    assert "if (!isDone)" in source
+    assert "assistantMessage" in source
+    assert "messages.filter((message) => message.id !== assistantId)" in source
+
+
+def test_app_store_supports_key_based_subscriptions_and_set_state():
+    source = _read("engine/web/static/js/app-store.js")
+
+    assert "_listeners = new Map()" in source
+    assert "_globalListeners = new Set()" not in source
+    assert "subscribe(key, listener)" in source
+    assert "subscribeAll(listener)" not in source
+    assert "getState()" in source
+    assert "setState(patch = {})" in source
+    assert "dispatch(" not in source
+    assert "const nextState = { ...prevState, ...(patch || {}) }" in source
+
+
+def test_app_events_module_no_longer_contains_event_bus():
+    assert not (ROOT_DIR / "engine/web/static/js/app-events.js").exists()
 
 
 def test_sg_chat_routes_context_messages_to_context_component():
@@ -100,3 +140,94 @@ def test_sg_input_keeps_focus_stable_while_sending():
     assert "if (this.isSubmitBlocked())" in source
     assert "_restoreFocusAfterSend" not in source
     assert "requestAnimationFrame(() => this.focusInput())" not in source
+    # Components call appActions directly, not emit
+    assert "appActions.submitMessage(" in source
+    assert "appActions.setInput(" in source
+    assert "appActions.refreshImage(" in source
+    assert "appActions.toggleTheme(" in source
+    assert "appActions.toggleSelectorPanel(" in source
+    assert "appActions.resetNpc(" in source
+    assert "appActions.updateSession(" in source
+
+
+def test_sg_input_subscribes_directly_to_store_keys():
+    source = _read("engine/web/static/js/sg-input.js")
+
+    assert 'import { appStore } from "./app-store.js"' in source
+    assert '["input", this.onInputChanged.bind(this)]' in source
+    assert '["isSending", this.onIsSendingChanged.bind(this)]' in source
+    assert '["isSessionLoading", this.onSessionLoadingChanged.bind(this)]' in source
+    assert '["isImageRefreshLoading", this.onImageRefreshChanged.bind(this)]' in source
+    assert '["isSelectorPanelOpen", this.onSelectorPanelChanged.bind(this)]' in source
+    assert "appStore.subscribe(key, listener)" in source
+    assert "setState(nextState = {})" not in source
+
+
+def test_sg_scene_image_subscribes_directly_to_store_keys():
+    source = _read("engine/web/static/js/sg-scene-image.js")
+
+    assert 'import { appStore } from "./app-store.js"' in source
+    assert '["imageUrl", this.onImageUrlChanged.bind(this)]' in source
+    assert '["isImageExpanded", this.onImageExpandedChanged.bind(this)]' in source
+    assert '["isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this)]' in source
+    assert "appStore.subscribe(key, listener)" in source
+    assert "setState(nextState = {})" not in source
+
+
+def test_sg_app_is_thin_orchestrator_for_layout_initial_load_and_focus():
+    source = _read("engine/web/static/js/sg-app.js")
+
+    assert "loadInitialState()" in source
+    assert 'appStore.subscribe("focusRequestedAt", this.onInputFocusRequested.bind(this))' in source
+    assert 'this.$ = {\n      input: this.querySelector("sg-input"),' in source
+    assert "this.$.input?.focusInput()" in source
+    assert "onImageUrlChanged(" not in source
+    assert "onImageExpandedChanged(" not in source
+    assert "onInputChanged(" not in source
+    assert "onThemeChanged(" not in source
+
+
+def test_app_actions_dispatches_loading_flags_for_session_and_image_refresh():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "appStore.setState({ isSessionLoading: true })" in source
+    assert "appStore.setState({ isSessionLoading: false })" in source
+    assert "appStore.setState({ isImageRefreshLoading: true })" in source
+    assert "appStore.setState({ isImageRefreshLoading: false })" in source
+
+
+def test_app_actions_toggles_assistant_typing_between_send_start_and_end():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "isAssistantTyping: true" in source
+    assert "isAssistantTyping: false" in source
+
+
+def test_sg_app_maps_image_state_keys_to_image_component():
+    source = _read("engine/web/static/js/sg-app.js")
+
+    assert "onImageUrlChanged(" not in source
+    assert "onImageExpandedChanged(" not in source
+    assert "setState({ imageUrl" not in source
+    assert "setState({ isExpanded" not in source
+
+
+def test_sg_app_registers_store_subscriptions_via_loop_without_cleanup_wrapper():
+    source = _read("engine/web/static/js/sg-app.js")
+
+    assert "const subscriptions = [" not in source
+    assert "for (const [action, listener] of subscriptions)" not in source
+    assert 'appStore.subscribe("focusRequestedAt", this.onInputFocusRequested.bind(this))' in source
+    assert "cleanupSubscriptions(" not in source
+    assert "_cleanupCallbacks" not in source
+
+
+def test_app_actions_uses_direct_initial_load_and_polling_without_init_wrapper():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "async function loadInitialState()" in source
+    assert "export async function loadInitialState()" not in source
+    assert "setInterval(() => {" in source
+    assert "pollImageSignature()" in source
+    assert "initializeAppActions" not in source
+    assert "isAppActionsInitialized" not in source

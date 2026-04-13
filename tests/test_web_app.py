@@ -229,8 +229,8 @@ def test_security_headers_are_present_on_index(tmp_path, monkeypatch):
     assert "script-src 'self'" in csp, "CSP fehlt script-src 'self'"
     assert "object-src 'none'" in csp, "CSP fehlt object-src 'none'"
     assert "frame-ancestors 'none'" in csp, "CSP fehlt frame-ancestors"
-    assert "require-trusted-types-for 'script'" in csp, "CSP fehlt Trusted Types"
-    assert "trusted-types sg" in csp, "CSP fehlt trusted-types Policy-Name"
+    assert "require-trusted-types-for" not in csp, "Trusted Types sollte nicht erzwungen sein"
+    assert "trusted-types " not in csp, "Trusted Types Policy sollte nicht gesetzt sein"
 
     assert response.headers.get("x-frame-options", "").upper() == "DENY"
     assert response.headers.get("x-content-type-options", "").lower() == "nosniff"
