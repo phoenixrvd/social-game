@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from chromadb import errors as chroma_errors
+
 from engine.stores.etm_vector_store import EtmVectorStore
 
 
@@ -61,3 +63,60 @@ def test_query_filters_by_max_distance(tmp_path):
     results = store.query([1.0, 0.0], top_k=5, max_distance=0.35)
 
     assert results == ["Naher Treffer."]
+
+
+def test_query_resets_store_on_dimension_mismatch(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    events: list[str] = []
+
+    class FakeCollection:
+        @staticmethod
+        def count() -> int:
+            return 1
+
+        @staticmethod
+        def query(**_kwargs):
+            raise chroma_errors.InvalidArgumentError("Collection expecting embedding with dimension of 1536, got 384")
+
+    monkeypatch.setattr(store, "_collection", FakeCollection())
+    monkeypatch.setattr(store, "_reset_store", lambda: events.append("reset"))
+
+    assert store.query(_embedding(0.2), top_k=2) == []
+    assert events == ["reset"]
+
+
+def test_add_resets_store_and_retries_on_dimension_mismatch(tmp_path, monkeypatch):
+    store = _store(tmp_path)
+    events: list[str] = []
+    captured: dict[str, list[object]] = {}
+
+    class FailingCollection:
+        @staticmethod
+        def add(**_kwargs):
+            raise chroma_errors.InvalidArgumentError("Collection expecting embedding with dimension of 1536, got 384")
+
+    class RecoveredCollection:
+        @staticmethod
+        def add(*, ids, documents, embeddings):
+            captured["ids"] = ids
+            captured["documents"] = documents
+            captured["embeddings"] = embeddings
+
+    def fake_reset_store() -> None:
+        events.append("reset")
+        store._collection = RecoveredCollection()
+        store._fallback = False
+
+    monkeypatch.setattr(store, "_collection", FailingCollection())
+    monkeypatch.setattr(store, "_reset_store", fake_reset_store)
+
+    store.add("Neue Episode", [0.1, 0.2], "id-1")
+
+    assert events == ["reset"]
+    assert captured == {
+        "ids": ["id-1"],
+        "documents": ["Neue Episode"],
+        "embeddings": [[0.1, 0.2]],
+    }
+
+

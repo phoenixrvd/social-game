@@ -29,6 +29,12 @@ def test_hallo_llm(monkeypatch):
     assert "pong" in result.output
 
 
+def test_warmup_embeddings_command_removed():
+    result = runner.invoke(app, ["warmup-embeddings"])
+    assert result.exit_code != 0
+    assert "No such command" in result.output
+
+
 def test_web_command_starts_web_gui(monkeypatch):
     captured: dict[str, object] = {}
 

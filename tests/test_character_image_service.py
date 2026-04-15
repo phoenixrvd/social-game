@@ -83,8 +83,8 @@ def test_image_updater_schedule_generates_image_and_persists_prompt(tmp_path, mo
 
     monkeypatch.setattr(
         character_image_service_module,
-        "run_prompt",
-        lambda prompt, model: captured_prompt.__setitem__("value", prompt) or "optimized prompt",
+        "run_prompt_small",
+        lambda prompt: captured_prompt.__setitem__("value", prompt) or "optimized prompt",
     )
     monkeypatch.setattr(character_image_service_module, "refresh_img", fake_refresh)
 
@@ -114,7 +114,7 @@ def test_image_updater_schedule_skips_when_prompt_is_unchanged(tmp_path, monkeyp
     _npc_paths().image_prompt.path.parent.mkdir(parents=True, exist_ok=True)
     _npc_paths().image_prompt.save("same prompt")
 
-    monkeypatch.setattr(character_image_service_module, "run_prompt", lambda _prompt, model: "same prompt")
+    monkeypatch.setattr(character_image_service_module, "run_prompt_small", lambda _prompt: "same prompt")
     monkeypatch.setattr(
         character_image_service_module,
         "refresh_img",
@@ -216,8 +216,8 @@ def test_image_updater_merge_with_scene_persists_merged_image(tmp_path, monkeypa
     monkeypatch.setattr(character_image_service_module, "merge_character_scene_img", fake_merge)
     monkeypatch.setattr(
         character_image_service_module,
-        "run_prompt",
-        lambda prompt, model: captured.__setitem__("update_prompt_source", prompt) or "initial update prompt",
+        "run_prompt_small",
+        lambda prompt: captured.__setitem__("update_prompt_source", prompt) or "initial update prompt",
     )
 
     updater = ImageUpdater()
@@ -277,8 +277,8 @@ def test_image_updater_schedule_uses_initial_merge_when_runtime_image_is_missing
 
     monkeypatch.setattr(
         character_image_service_module,
-        "run_prompt",
-        lambda prompt, model: captured.__setitem__("update_prompt_source", prompt) or "initial update prompt",
+        "run_prompt_small",
+        lambda prompt: captured.__setitem__("update_prompt_source", prompt) or "initial update prompt",
     )
     monkeypatch.setattr(character_image_service_module, "merge_character_scene_img", fake_merge)
     monkeypatch.setattr(
@@ -311,7 +311,7 @@ def test_image_updater_schedule_propagates_errors_without_exception_handling(tmp
     )
 
     prompts = iter(["first prompt", "second prompt"])
-    monkeypatch.setattr(character_image_service_module, "run_prompt", lambda _prompt, model: next(prompts))
+    monkeypatch.setattr(character_image_service_module, "run_prompt_small", lambda _prompt: next(prompts))
 
     def failing_refresh(_prompt: str, _img: bytes, _identity: bytes | None = None) -> bytes:
         raise RuntimeError("moderation_blocked")

@@ -34,6 +34,15 @@ SG-005 beschreibt Verfügbarkeit, Auswahl und Zuordnung von NPC-Bildern; die ini
 
 **Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`
 
+### Rücksetzung auf das letzte Bild-Backup
+**Typ:** Funktional  
+**Beschreibung:** Das System muss das aktive Laufzeitbild eines NPC-Szenen-Kontexts auf das letzte verfügbare Backup zurücksetzen können.  
+**Akzeptanzkriterien:**
+- Für den aktiven NPC-Szenen-Kontext kann das aktive Laufzeitbild auf das letzte verfügbare Backup zurückgesetzt werden.
+- Nach erfolgreicher Rücksetzung entspricht das aktive Laufzeitbild dem zuletzt verfügbaren Backup.
+
+**Referenzen:** `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`
+
 ### Initiale Bilderzeugung ohne bestehendes szenenspezifisches Bild
 **Typ:** Funktional  
 **Beschreibung:** Das System muss für die Aktualisierung des aktiven NPC-Bildes die initiale Bilderzeugung gemäß SG-014 verwenden, wenn im aktiven NPC-Szenen-Kontext weder ein aktives Laufzeitbild noch ein szenenspezifisches NPC-Bild vorliegt.  

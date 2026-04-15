@@ -2,64 +2,90 @@ from __future__ import annotations
 
 import json
 import math
+import shutil
 from pathlib import Path
 from typing import Any
 
 import chromadb
+from chromadb import errors as chroma_errors
 
 _COLLECTION_NAME = "etm"
 
 
 class EtmVectorStore:
     def __init__(self, path: Path) -> None:
+        self._path = path
         self._fallback_path = path / "records.json"
-        path.mkdir(parents=True, exist_ok=True)
+        self._client = None
+        self._collection = None
+        self._fallback = False
+        self._initialize_store()
+
+    def _initialize_store(self) -> None:
+        self._path.mkdir(parents=True, exist_ok=True)
         try:
-            self._client = chromadb.PersistentClient(path=str(path))
+            self._client = chromadb.PersistentClient(path=str(self._path))
             self._collection = self._client.get_or_create_collection(
                 name=_COLLECTION_NAME,
                 metadata={"hnsw:space": "cosine"},
             )
             self._fallback = False
-        except chromadb.errors.ChromaError:
+        except chroma_errors.ChromaError:
             self._client = None
             self._collection = None
             self._fallback = True
 
     def add(self, text: str, embedding: list[float], entry_id: str) -> None:
-        if self._fallback:
+        if self._fallback and self._collection is None:
             self._add_fallback(text, embedding, entry_id)
             return
+        self._add_to_collection(text, embedding, entry_id)
 
-        if self._collection is None:
-            raise RuntimeError("ETM vector store collection is not initialized")
-
-        self._collection.add(
-            ids=[entry_id],
-            documents=[text],
-            embeddings=[embedding],
-        )
+    def _add_to_collection(self, text: str, embedding: list[float], entry_id: str) -> None:
+        collection = self._require_collection()
+        try:
+            collection.add(ids=[entry_id], documents=[text], embeddings=[embedding])
+        except chroma_errors.ChromaError as exc:
+            if not self._is_dimension_mismatch(exc):
+                raise
+            self._reset_store()
+            if self._fallback:
+                self._add_fallback(text, embedding, entry_id)
+                return
+            self._require_collection().add(ids=[entry_id], documents=[text], embeddings=[embedding])
 
     def query(self, embedding: list[float], top_k: int, max_distance: float | None = None) -> list[str]:
-        if self._fallback:
+        if self._fallback and self._collection is None:
             return self._query_fallback(embedding, top_k, max_distance)
-
-        if self._collection is None:
-            raise RuntimeError("ETM vector store collection is not initialized")
-
-        count = self._collection.count()
+        collection = self._require_collection()
+        count = collection.count()
         if count == 0:
             return []
-        results = self._collection.query(
-            query_embeddings=[embedding],
-            n_results=min(top_k, count),
-            include=["documents", "distances"],
-        )
+        return self._query_collection(collection, embedding, top_k, count, max_distance)
+
+    def _query_collection(
+        self,
+        collection: Any,
+        embedding: list[float],
+        top_k: int,
+        count: int,
+        max_distance: float | None,
+    ) -> list[str]:
+        try:
+            results = collection.query(
+                query_embeddings=[embedding],
+                n_results=min(top_k, count),
+                include=["documents", "distances"],
+            )
+        except chroma_errors.ChromaError as exc:
+            if not self._is_dimension_mismatch(exc):
+                raise
+            self._reset_store()
+            return []
         docs = results.get("documents") or []
         distances = results.get("distances") or []
         if not docs:
             return []
-
         return self._filter_by_distance(docs[0], distances[0] if distances else [], max_distance)
 
     def _add_fallback(self, text: str, embedding: list[float], entry_id: str) -> None:
@@ -87,6 +113,20 @@ class EtmVectorStore:
 
     def _save_fallback_records(self, records: list[dict[str, Any]]) -> None:
         self._fallback_path.write_text(json.dumps(records, ensure_ascii=False), encoding="utf-8")
+
+    def _reset_store(self) -> None:
+        if self._path.exists():
+            shutil.rmtree(self._path)
+        self._initialize_store()
+
+    def _require_collection(self) -> Any:
+        if self._collection is None:
+            raise RuntimeError("ETM vector store collection is not initialized")
+        return self._collection
+
+    @staticmethod
+    def _is_dimension_mismatch(exc: chroma_errors.ChromaError) -> bool:
+        return isinstance(exc, (chroma_errors.InvalidArgumentError, chroma_errors.InvalidDimensionException)) and "dimension" in str(exc).lower()
 
     @staticmethod
     def _cosine_similarity(a: list[float], b: list[float]) -> float:

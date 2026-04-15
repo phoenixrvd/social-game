@@ -133,7 +133,17 @@ Im Projektverzeichnis eine `.env` anlegen.
 
 ```env
 OPENAI_API_KEY=<your_openai_api_key>
+GROK_API_KEY=<your_grok_api_key>
+
+# Provider-Schalter pro Fähigkeit (Optional. Standardmäßig alle auf openai)
+LLM_BIG=grok
+LLM_SMALL=grok
+IMAGE=grok
+EMBEDDING=grok
 ```
+
+Hinweis: Pro Fähigkeit kann `openai` oder `grok` gewählt werden.
+Modelle, API-Keys und Base-URLs werden dann automatisch aus den jeweiligen `OPENAI_*`- bzw. `GROK_*`-Feldern verwendet.
 
 ## Schnellstart (Docker – Quick Preview)
 

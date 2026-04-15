@@ -4,7 +4,7 @@ import typer
 from PIL import Image
 
 from engine.config import config
-from engine.llm_client import hello_llm
+from engine.llm.client import hello_llm
 from engine.services.character_image_service import CharacterImageService
 from engine.stores.session_store import SessionStore
 from engine.updater.schedule import AVAILABLE_UPDATERS, UPDATER_CLASSES

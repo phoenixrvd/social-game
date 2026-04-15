@@ -61,7 +61,7 @@ def _patch_etm_updater(monkeypatch):
         npc = None
 
     monkeypatch.setattr(etm_update_service_module, "storage", FakeStorage())
-    monkeypatch.setattr(etm_update_service_module, "run_prompt", lambda prompt, model: "updated episode")
+    monkeypatch.setattr(etm_update_service_module, "run_prompt_small", lambda prompt: "updated episode")
     monkeypatch.setattr(etm_update_service_module, "embed_texts", lambda texts, **_: [_FAKE_EMBEDDING for _ in texts])
     monkeypatch.setattr(etm_update_service_module, "EtmVectorStore", FakeEtmVectorStore)
 
@@ -97,8 +97,8 @@ def test_schedule_with_insufficient_batch_does_not_trigger(monkeypatch, tmp_path
 
     monkeypatch.setattr(
         etm_update_service_module,
-        "run_prompt",
-        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM darf ohne batch nicht aufgerufen werden")),
+        "run_prompt_small",
+        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM darf ohne batch nicht aufgerufen werden")),
     )
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
@@ -119,7 +119,7 @@ def test_schedule_with_batch_and_messages_creates_etm_episode(monkeypatch, tmp_p
     captured_stores: list[FakeEtmVectorStore] = []
     call_count = {"n": 0}
 
-    def fake_run_prompt(prompt: str, model: str) -> str:
+    def fake_run_prompt(prompt: str) -> str:
         call_count["n"] += 1
         assert "msg-0" in prompt
         assert "msg-1" in prompt
@@ -134,7 +134,7 @@ def test_schedule_with_batch_and_messages_creates_etm_episode(monkeypatch, tmp_p
         captured_stores.append(store)
         return store
 
-    monkeypatch.setattr(etm_update_service_module, "run_prompt", fake_run_prompt)
+    monkeypatch.setattr(etm_update_service_module, "run_prompt_small", fake_run_prompt)
     monkeypatch.setattr(etm_update_service_module, "EtmVectorStore", fake_vector_store)
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
@@ -157,8 +157,8 @@ def test_schedule_without_new_messages_does_not_trigger(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         etm_update_service_module,
-        "run_prompt",
-        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM darf ohne neue messages nicht aufgerufen werden")),
+        "run_prompt_small",
+        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM darf ohne neue messages nicht aufgerufen werden")),
     )
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
@@ -180,7 +180,7 @@ def test_schedule_with_first_eligible_batch_triggers_immediately(monkeypatch, tm
     )
     npc_store = FakeNpcStore(stm=stm)
 
-    monkeypatch.setattr(etm_update_service_module, "run_prompt", lambda prompt, model: "fresh episode")
+    monkeypatch.setattr(etm_update_service_module, "run_prompt_small", lambda prompt: "fresh episode")
     updater = _build_updater(monkeypatch, npc_store, tmp_path)
 
     updater.schedule()

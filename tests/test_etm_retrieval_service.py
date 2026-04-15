@@ -65,6 +65,14 @@ def test_load_relevant_uses_top_k_and_max_distance(monkeypatch, tmp_path):
     monkeypatch.setattr(etm_retrieval_service_module, "embed_texts", lambda texts: [[0.1, 0.2, 0.3]])
     monkeypatch.setattr(etm_retrieval_service_module, "EtmVectorStore", FakeEtmVectorStore)
 
+    # Make storage bootstrap deterministic for this test run.
+    import engine.storage as storage_module
+    from engine.models import Session
+
+    monkeypatch.setattr(storage_module.storage, "_session", staticmethod(lambda: Session(npc_id="vika", scene_id="office")))
+    storage_module.storage._npc_view = None
+    storage_module.storage._scene_view = None
+
     result = EtmRetrievalService().load_relevant(npc, "Wollen wir wieder in eine Bar gehen?")
 
     assert result == "- Er erinnert sich an eine ruhige Bar mit guten Gläsern.\n- Kennt den Spieler"

@@ -13,14 +13,16 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import openai
+import requests
 from PIL import Image
 from pydantic import BaseModel
 import uvicorn
 
 from engine.config import config
-from engine.llm_client import stream_prompt
+from engine.llm.client import stream_prompt
 from engine.models import Npc, ShortMemoryMessage
 from engine.storage import SceneStorageView, storage
+from engine.services.character_image_service import CharacterImageService
 from engine.services.npc_turn_service import NpcTurnService
 from engine.stores.npc_store import NpcStore
 from engine.stores.session_store import SessionStore
@@ -45,7 +47,7 @@ def _stream_event(event_type: str, **payload: Any) -> str:
 
 
 def _is_user_visible_llm_error(exc: RuntimeError) -> bool:
-    return isinstance(exc.__cause__, openai.OpenAIError)
+    return isinstance(exc.__cause__, (openai.OpenAIError, requests.RequestException))
 
 
 def _get_cached_webp(img_path: Path) -> bytes:
@@ -371,6 +373,12 @@ def refresh_active_image() -> dict[str, Any]:
                 detail=str(exc).strip() or "Bild konnte nicht aktualisiert werden.",
             ) from exc
         raise
+    return {}
+
+
+@app.post("/api/image/revert-active")
+def revert_active_image() -> dict[str, Any]:
+    CharacterImageService().revert()
     return {}
 
 

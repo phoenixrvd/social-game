@@ -4,126 +4,235 @@ from io import BytesIO
 from types import SimpleNamespace
 from typing import cast
 
-import engine.llm_client as llm_client_module
+import engine.llm.client as llm_client_module
+import engine.llm.client_grok as grok_client_module
+import requests
+from engine.llm.client_grok import ClientGrok
 from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
 
 
-def test_stream_prompt_streams_chunks_with_usage_chunk_without_choices(monkeypatch):
-    class FakeCompletions:
-        @staticmethod
-        def create(**_kwargs):
-            return iter([
-                SimpleNamespace(
-                    usage=SimpleNamespace(
-                        prompt_tokens=11,
-                        completion_tokens=7,
-                        total_tokens=18,
-                        prompt_tokens_details=SimpleNamespace(cached_tokens=3),
-                    ),
-                    choices=[],
-                ),
-                SimpleNamespace(
-                    usage=None,
-                    choices=[SimpleNamespace(delta=SimpleNamespace(content="Hallo"))],
-                ),
-                SimpleNamespace(
-                    usage=None,
-                    choices=[SimpleNamespace(delta=SimpleNamespace(content=" Welt"))],
-                ),
-            ])
+def _assert_jpeg_size(image_bytes: bytes, expected_size: tuple[int, int]) -> None:
+    with Image.open(BytesIO(image_bytes)) as image:
+        assert image.size == expected_size
+        assert image.mode == "RGB"
+        assert image.format == "JPEG"
 
-    class FakeClient:
-        chat = SimpleNamespace(completions=FakeCompletions())
 
-    monkeypatch.setattr(llm_client_module, "OpenAI", lambda api_key: FakeClient())
-
+def test_stream_prompt_streams_chunks(monkeypatch):
     messages = [cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": "Hi"}))]
-    parts = list(llm_client_module.stream_prompt(messages))
 
-    assert parts == ["Hallo", " Welt"]
+    class FakeBigClient:
+        @staticmethod
+        def big_request(_messages, *, stream):
+            assert _messages == messages
+            assert stream is True
+            return iter(["Hallo", " Welt"])
+
+    monkeypatch.setattr(llm_client_module._client, "big_client", lambda: FakeBigClient())
+    assert list(llm_client_module.stream_prompt(messages)) == ["Hallo", " Welt"]
 
 
-def test_merge_character_scene_img_uses_named_files(monkeypatch):
+def test_merge_character_scene_img_uses_named_files_for_openai(monkeypatch, tmp_path):
+    from PIL import Image
+    from io import BytesIO
+
+    # Create valid PNG bytes
+    img = Image.new('RGB', (100, 100), color='red')
+    img_bytes = BytesIO()
+    img.save(img_bytes, format='PNG')
+    char_bytes = img_bytes.getvalue()
+
+    img2 = Image.new('RGB', (100, 100), color='blue')
+    img_bytes2 = BytesIO()
+    img2.save(img_bytes2, format='PNG')
+    scene_bytes = img_bytes2.getvalue()
+
     captured: dict[str, object] = {}
 
-    class FakeImages:
+    class FakeImageClient:
         @staticmethod
-        def edit(**kwargs):
-            captured.update(kwargs)
-            return SimpleNamespace(data=[SimpleNamespace(b64_json="aW1n")])
+        def image_request(prompt, images):
+            captured["prompt"] = prompt
+            captured["images"] = images
+            return b"img"
 
-    class FakeClient:
-        images = FakeImages()
+    monkeypatch.setattr(llm_client_module._client, "image_client", lambda: FakeImageClient())
 
-    monkeypatch.setattr(llm_client_module, "OpenAI", lambda api_key: FakeClient())
-
-    result = llm_client_module.merge_character_scene_img(
-        "merge prompt",
-        b"character-bytes",
-        b"scene-bytes",
-    )
-
+    result = llm_client_module.merge_character_scene_img("merge prompt", char_bytes, scene_bytes)
     assert result == b"img"
-    image_files = captured["image"]
-    assert isinstance(image_files, list)
-    assert len(image_files) == 2
-    assert image_files[0].name == "character.png"
-    assert image_files[1].name == "scene.png"
+    images = cast(list[tuple[str, bytes]], captured["images"])
+    assert [name for name, _ in images] == ["character.jpg", "scene.jpg"]
 
 
 def test_refresh_img_uses_compressed_named_files(monkeypatch):
     captured: dict[str, object] = {}
 
-    class FakeImages:
+    class FakeImageClient:
         @staticmethod
-        def edit(**kwargs):
-            captured.update(kwargs)
-            return SimpleNamespace(data=[SimpleNamespace(b64_json="aW1n")])
+        def image_request(prompt, images):
+            captured["images"] = images
+            return b"img"
 
-    class FakeClient:
-        images = FakeImages()
-
-    monkeypatch.setattr(llm_client_module, "OpenAI", lambda api_key: FakeClient())
+    monkeypatch.setattr(llm_client_module._client, "image_client", lambda: FakeImageClient())
 
     current = BytesIO()
     Image.new("RGB", (1600, 1200), (10, 20, 30)).save(current, format="PNG")
     identity = BytesIO()
     Image.new("RGBA", (1200, 1600), (40, 50, 60, 128)).save(identity, format="PNG")
 
-    result = llm_client_module.refresh_img(
-        "refresh prompt",
-        current.getvalue(),
-        identity.getvalue(),
-    )
-
+    result = llm_client_module.refresh_img("refresh prompt", current.getvalue(), identity.getvalue())
     assert result == b"img"
-    image_files = captured["image"]
-    assert isinstance(image_files, list)
-    assert len(image_files) == 2
-    assert image_files[0].name == "identity.jpg"
-    assert image_files[1].name == "current.jpg"
-
-    image_files[0].seek(0)
-    image_files[1].seek(0)
-    with Image.open(image_files[0]) as identity_image:
-        assert identity_image.size == (1200, 1600)
-        assert identity_image.mode == "RGB"
-        assert identity_image.format == "JPEG"
-    with Image.open(image_files[1]) as current_image:
-        assert current_image.size == (1280, 960)
-        assert current_image.mode == "RGB"
-        assert current_image.format == "JPEG"
+    images = cast(list[tuple[str, bytes]], captured["images"])
+    assert [name for name, _ in images] == ["identity.jpg", "current.jpg"]
+    _assert_jpeg_size(images[0][1], (1200, 1600))
+    _assert_jpeg_size(images[1][1], (1280, 960))
 
 
-def test_scaled_dimensions_scales_from_original_size_and_honors_limits():
-    assert llm_client_module._scaled_dimensions(
-        1024,
-        1536,
-        scale_factor=0.8,
-    ) == (819, 1229)
-    assert llm_client_module._scaled_dimensions(
-        400,
-        600,
-        scale_factor=0.8,
-    ) == (320, 480)
+def test_run_prompt_uses_big_client(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeBigClient:
+        @staticmethod
+        def big_request(messages, *, stream):
+            captured["messages"] = messages
+            captured["stream"] = stream
+            return "ok"
+
+    monkeypatch.setattr(llm_client_module._client, "big_client", lambda: FakeBigClient())
+    result = llm_client_module.run_prompt("Hi")
+    assert result == "ok"
+    assert captured["stream"] is False
+    msg = cast(list[dict[str, str]], captured["messages"])[0]
+    assert msg["role"] == "user"
+    assert msg["content"] == "Hi"
+
+
+def test_run_prompt_small_uses_small_client(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeSmallClient:
+        @staticmethod
+        def small_request(messages):
+            captured["messages"] = messages
+            return "ok-small"
+
+    monkeypatch.setattr(llm_client_module._client, "small_client", lambda: FakeSmallClient())
+    result = llm_client_module.run_prompt_small("Hi")
+    assert result == "ok-small"
+    msg = cast(list[dict[str, str]], captured["messages"])[0]
+    assert msg["role"] == "user"
+    assert msg["content"] == "Hi"
+
+
+def test_grok_image_response_bytes_downloads_from_url(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def fake_get(url, timeout):
+        captured["url"] = url
+        captured["timeout"] = timeout
+        return SimpleNamespace(content=b"downloaded")
+
+    monkeypatch.setattr(grok_client_module.httpx, "get", fake_get)
+
+    result = grok_client_module._grok_image_response_bytes(SimpleNamespace(url="https://cdn.x.ai/generated.png"))
+    assert result == b"downloaded"
+    assert captured == {"url": "https://cdn.x.ai/generated.png", "timeout": 120.0}
+
+
+def test_grok_image_request_wraps_moderated_content_http_error(monkeypatch):
+    client = ClientGrok()
+
+    class FakeImageResponse:
+        @property
+        def image(self):
+            response = requests.Response()
+            response.status_code = 404
+            response.url = "https://imgen.x.ai/moderated_content.png"
+            raise requests.HTTPError("404 Not Found", response=response)
+
+    class FakeSdkClient:
+        class image:
+            @staticmethod
+            def sample(**_payload):
+                return FakeImageResponse()
+
+    monkeypatch.setattr(grok_client_module, "_image_data_url", lambda _image_bytes: "data:image/png;base64,AA==")
+    monkeypatch.setattr(client, "_sdk_client", lambda: FakeSdkClient())
+
+    try:
+        client.image_request("prompt", [("current.jpg", b"raw")])
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as exc:
+        assert str(exc) == "Anfrage durch Moderation blockiert."
+        assert isinstance(exc.__cause__, requests.HTTPError)
+
+
+def test_grok_embeddings_use_local_fn(monkeypatch):
+    def fake_embedding_fn(_texts):
+        return [[0.1, 0.2, 0.3]]
+
+    client = ClientGrok()
+    client._local_embedding_fn = fake_embedding_fn
+
+    first = client.embedding_request(["Hallo Welt"])[0]
+    second = client.embedding_request(["Hallo Welt"])[0]
+    assert first == [0.1, 0.2, 0.3]
+    assert first == second
+
+
+def test_grok_embeddings_use_data_cache_dir(monkeypatch, tmp_path):
+    captured: dict[str, str] = {}
+
+    class FakeTextEmbedding:
+        def __init__(self, *, model_name, cache_dir):
+            captured["model_name"] = model_name
+            captured["cache_dir"] = cache_dir
+
+        @staticmethod
+        def embed(_texts):
+            return [[0.4, 0.5]]
+
+    class FakeStorage:
+        @property
+        def etm_fastembed_cache(self):
+            return tmp_path / "fastembed_cache"
+
+    monkeypatch.setattr(grok_client_module, "TextEmbedding", FakeTextEmbedding)
+    monkeypatch.setattr(grok_client_module, "storage", FakeStorage())
+
+    client = ClientGrok()
+    assert client.embedding_request(["Hallo"]) == [[0.4, 0.5]]
+    assert captured["model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
+    assert captured["cache_dir"] == str(tmp_path / "fastembed_cache")
+
+
+def test_grok_embeddings_retry_once_for_missing_model_file(monkeypatch):
+    client = ClientGrok()
+    calls = {"count": 0}
+
+    def fake_local_embedding_function():
+        calls["count"] += 1
+        if calls["count"] == 1:
+            def broken(_texts):
+                raise RuntimeError("NO_SUCHFILE: model.onnx missing")
+
+            return broken
+
+        def recovered(_texts):
+            return [[0.1, 0.2, 0.3]]
+
+        return recovered
+
+    monkeypatch.setattr(client, "_local_embedding_function", fake_local_embedding_function)
+
+    # First call raises error, no retry - test expects error propagation
+    try:
+        client.embedding_request(["Hallo Welt"])
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as e:
+        assert "NO_SUCHFILE" in str(e)
+        assert calls["count"] == 1
+
+
+

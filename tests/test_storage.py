@@ -45,12 +45,9 @@ def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
 
 def test_storage_base_paths_exposed(tmp_path, monkeypatch):
     monkeypatch.setattr(storage_module.config, "DATA_DIR", tmp_path / ".data")
-    monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
-    monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(storage_module.config, "OVERRIDES_DIR", tmp_path / ".overrides")
 
     assert storage_module.storage.data == tmp_path / ".data"
-    assert storage_module.storage.npc_root == tmp_path / "npcs"
-    assert storage_module.storage.scene_root == tmp_path / "scenes"
+    assert storage_module.storage.etm_fastembed_cache == tmp_path / ".data" / "fastembed_cache"
     assert storage_module.storage.overrides_root == tmp_path / ".overrides"
 

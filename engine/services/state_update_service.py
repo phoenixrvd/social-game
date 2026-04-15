@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from engine.config import config
-from engine.llm_client import run_prompt
+from engine.llm.client import run_prompt_small
 from engine.models import Npc
 from engine.services.etm_retrieval_service import EtmRetrievalService
 from engine.services.memory_format import format_update_memory
@@ -16,7 +15,7 @@ class StateUpdateService:
 
     def run(self, npc: Npc) -> str:
         prompt = self._build_prompt(npc)
-        state = run_prompt(prompt, config.MODEL_LLM_SMALL).strip()
+        state = run_prompt_small(prompt).strip()
 
         storage.npc.state_runtime.save(state)
         self.image_updater.emit_update()

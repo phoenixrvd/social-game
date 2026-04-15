@@ -64,8 +64,19 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 - Die Scene-Beschreibung wird in der Web-GUI angezeigt.
 - Änderungen durch Interaktionen aktualisieren Szenenbild und sichtbare Zustandsinformationen innerhalb derselben aktiven Sitzung.
 
-
 **Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
+
+### Bild-Rücksetzung über die Werkzeugleiste
+**Typ:** Funktional  
+**Beschreibung:** Das System muss in der Web-GUI für das aktive Sitzungsbild eine Rücksetzungsaktion über die Werkzeugleiste bereitstellen.  
+**Akzeptanzkriterien:**
+- In der Werkzeugleiste der Web-GUI ist eine Aktion zur Rücksetzung des aktiven Sitzungsbildes vorhanden.
+- Die Rücksetzungsaktion ist links von `refresh-image` angeordnet.
+- Beim Klick auf die Rücksetzungsaktion erscheint vor der Ausführung ein Bestätigungsdialog.
+- Wird die Bestätigung erteilt, wird die Rücksetzung des aktiven Sitzungsbildes gemäß SG-005 ausgelöst.
+- Wird die Bestätigung abgebrochen, bleibt das aktive Sitzungsbild unverändert.
+
+**Referenzen:** `doc/requirements/sg-005-npc-bilder.md`
 
 ### Vergrößerbare Overlay-Ansicht des Szenenbilds auf mobilen Geräten
 **Typ:** Funktional  

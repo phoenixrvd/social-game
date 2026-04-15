@@ -96,7 +96,7 @@ async function loadInitialState() {
       appStore.setState({ errorMessage: getErrorMessage(payload, "State konnte nicht geladen werden.") })
       return
     }
-    appStore.setState(mapStatePayload(payload))
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Backend nicht erreichbar." })
   } finally {
@@ -122,7 +122,7 @@ async function updateSession(nextSession = {}) {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Session konnte nicht aktualisiert werden.") })
       return
     }
-    appStore.setState(mapStatePayload(payload))
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Session konnte nicht aktualisiert werden." })
   } finally {
@@ -147,10 +147,40 @@ async function refreshImage() {
       return
     }
 
-    appStore.setState({ imageUrl: appendCacheBuster("/api/image/current") })
+    appStore.setState({ imageUrl: appendCacheBuster("/api/image/current"), errorMessage: "" })
     await pollImageSignature(true)
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht aktualisiert werden." })
+  } finally {
+    appStore.setState({ isImageRefreshLoading: false })
+  }
+}
+
+async function revertImage() {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isImageRefreshLoading) {
+    return
+  }
+
+  if (!window.confirm("Soll das aktive Bild wirklich auf das letzte Backup zurueckgesetzt werden?")) {
+    return
+  }
+
+  appStore.setState({ isImageRefreshLoading: true })
+  await waitForNextPaint()
+
+  try {
+    const response = await fetch("/api/image/revert-active", { method: "POST" })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Bild konnte nicht zurueckgesetzt werden.") })
+      return
+    }
+
+    appStore.setState({ imageUrl: appendCacheBuster("/api/image/current"), errorMessage: "" })
+    await pollImageSignature(true)
+  } catch (error) {
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht zurueckgesetzt werden." })
   } finally {
     appStore.setState({ isImageRefreshLoading: false })
   }
@@ -174,7 +204,7 @@ async function resetNpc() {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf konnte nicht geloescht werden.") })
       return
     }
-    appStore.setState(mapStatePayload(payload))
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf konnte nicht geloescht werden." })
   } finally {
@@ -279,6 +309,7 @@ async function submitMessage(payload = {}) {
 
   try {
     await streamAssistantReply(text, assistantId)
+    appStore.setState({ errorMessage: "" })
   } catch (error) {
     const latestState = appStore.getState()
     const assistantMessage = latestState.messages.find((message) => message.id === assistantId)
@@ -324,6 +355,7 @@ export const appActions = {
   submitMessage,
   updateSession,
   refreshImage,
+  revertImage,
   resetNpc,
   setInput,
   toggleTheme,

@@ -424,12 +424,8 @@ class Storage:
         return config.DATA_DIR
 
     @property
-    def npc_root(self) -> Path:
-        return config.NPC_DIR
-
-    @property
-    def scene_root(self) -> Path:
-        return config.SCENE_DIR
+    def etm_fastembed_cache(self) -> Path:
+        return config.DATA_DIR / "fastembed_cache"
 
     @property
     def overrides_root(self) -> Path:

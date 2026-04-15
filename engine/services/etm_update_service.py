@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from engine.config import config
-from engine.llm_client import embed_texts, run_prompt
+from engine.llm.client import embed_texts, run_prompt_small
 from engine.models import Npc, ShortMemoryMessage
 from engine.storage import storage
 from engine.services.memory_format import format_short_memory
@@ -33,5 +32,5 @@ class EtmUpdateService:
             .strip()
             .replace("{{SHORT_TERM_MEMORY}}", stm_text)
         )
-        return run_prompt(prompt, config.MODEL_LLM_SMALL).strip()
+        return run_prompt_small(prompt).strip()
 

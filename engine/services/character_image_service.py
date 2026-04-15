@@ -6,7 +6,7 @@ from pathlib import Path
 from rapidfuzz import fuzz
 
 from engine.config import config
-from engine.llm_client import merge_character_scene_img, refresh_img, run_prompt
+from engine.llm.client import merge_character_scene_img, refresh_img, run_prompt_small
 from engine.models import Npc
 from engine.storage import ImageItem, NpcStorageView, storage
 from engine.services.memory_format import format_short_memory
@@ -136,7 +136,7 @@ class CharacterImageService:
 
     def _generate_update_prompt(self, npc: Npc, old_prompt: str) -> str:
         optimization_prompt = self.get_preview(old_prompt, npc)
-        return run_prompt(optimization_prompt, config.MODEL_LLM_SMALL).strip()
+        return run_prompt_small(optimization_prompt).strip()
 
     @staticmethod
     def _token_overlap(a: str, b: str) -> float:

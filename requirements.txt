@@ -1,6 +1,7 @@
 typer
 pyyaml
 openai
+xai-sdk
 python-dotenv
 apscheduler
 fastapi
@@ -11,6 +12,7 @@ rapidfuzz
 Pillow
 pydantic-settings
 chromadb
+fastembed
 
 
 pytest

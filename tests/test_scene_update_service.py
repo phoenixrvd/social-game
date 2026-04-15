@@ -118,7 +118,7 @@ def test_schedule_updates_scene_when_active(monkeypatch, tmp_path):
         captured_prompt.append(prompt)
         return "cafe"
 
-    monkeypatch.setattr(scene_update_service_module, "run_prompt", lambda prompt, model: fake_run_prompt(prompt))
+    monkeypatch.setattr(scene_update_service_module, "run_prompt_small", lambda prompt: fake_run_prompt(prompt))
 
     updater.schedule()
 
@@ -145,8 +145,8 @@ def test_schedule_is_noop_without_stm(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         scene_update_service_module,
-        "run_prompt",
-        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM must not run")),
+        "run_prompt_small",
+        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM must not run")),
     )
 
     updater.schedule()
@@ -185,8 +185,8 @@ def test_schedule_is_noop_without_new_messages_after_last_check(monkeypatch, tmp
 
     monkeypatch.setattr(
         scene_update_service_module,
-        "run_prompt",
-        lambda _prompt, model: (_ for _ in ()).throw(AssertionError("LLM must not run")),
+        "run_prompt_small",
+        lambda _prompt: (_ for _ in ()).throw(AssertionError("LLM must not run")),
     )
 
     updater.schedule()

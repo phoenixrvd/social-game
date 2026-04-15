@@ -17,6 +17,15 @@ const SVG_REFRESH = `
   </svg>
 `
 
+const SVG_REVERT = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+    <path d="M3 7v6h6"></path>
+    <path d="M21 17v-6h-6"></path>
+    <path d="M3 13a8 8 0 0 0 14.9 3"></path>
+    <path d="M21 11A8 8 0 0 0 6.1 8"></path>
+  </svg>
+`
+
 const SVG_THEME_DARK = `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <circle cx="12" cy="12" r="4"></circle>
@@ -132,6 +141,14 @@ class SocialGameInput extends HTMLElement {
           <div class="sg-composer-tools" aria-label="Werkzeuge">
             <button
               type="button"
+              data-action="revert-image"
+              class="sg-toolbar-button"
+              aria-label="Bild auf letztes Backup zuruecksetzen"
+            >
+              ${SVG_REVERT}
+            </button>
+            <button
+              type="button"
               data-action="refresh-image"
               class="sg-toolbar-button"
               aria-label="Bild aktualisieren"
@@ -176,6 +193,7 @@ class SocialGameInput extends HTMLElement {
       textarea: this.querySelector(".sg-chat-input"),
       sendButton: this.querySelector(".sg-send-button"),
       meta: this.querySelector(".sg-composer-meta"),
+      revertButton: this.querySelector('[data-action="revert-image"]'),
       refreshButton: this.querySelector('[data-action="refresh-image"]'),
       selectorButton: this.querySelector('[data-action="toggle-selector"]'),
       themeButton: this.querySelector('[data-action="toggle-theme"]'),
@@ -189,6 +207,7 @@ class SocialGameInput extends HTMLElement {
     this.$.npcSelect.addEventListener("change", this.handleNpcChange.bind(this))
     this.$.sceneSelect.addEventListener("change", this.handleSceneChange.bind(this))
 
+    this.$.revertButton.addEventListener("click", this.handleRevertImage.bind(this))
     this.$.refreshButton.addEventListener("click", this.handleRefreshImage.bind(this))
     this.$.selectorButton.addEventListener("click", this.handleSelectorToggle.bind(this))
     this.$.themeButton.addEventListener("click", this.handleThemeToggle.bind(this))
@@ -330,6 +349,10 @@ class SocialGameInput extends HTMLElement {
     })
   }
 
+  handleRevertImage() {
+    appActions.revertImage()
+  }
+
   handleRefreshImage() {
     appActions.refreshImage()
   }
@@ -379,6 +402,7 @@ class SocialGameInput extends HTMLElement {
       this.$.meta.innerHTML = '<span class="sg-keyboard-hint">Enter = senden, Shift+Enter = neue Zeile</span>'
     }
 
+    this.$.revertButton.disabled = controlsDisabled || this._state.isImageRefreshLoading
     this.$.refreshButton.disabled = controlsDisabled || this._state.isImageRefreshLoading
     this.$.selectorButton.setAttribute("aria-pressed", this._state.isSelectorPanelOpen ? "true" : "false")
     this.$.themeButton.innerHTML = getThemeToggleIcon(this._state.theme)

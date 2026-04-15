@@ -8,6 +8,7 @@ from typing import Any, cast
 from fastapi import HTTPException
 import openai
 from PIL import Image
+import requests
 
 import engine.web.app as web_app_module
 import engine.storage as storage_module
@@ -203,6 +204,20 @@ def _make_user_visible_runtime_error(detail: str) -> RuntimeError:
             raise RuntimeError(detail) from cause
         except RuntimeError as exc:
             return exc
+
+
+def _make_user_visible_http_runtime_error(detail: str) -> RuntimeError:
+    response = requests.Response()
+    response.status_code = 404
+    response.url = "https://imgen.x.ai/moderated_content.png"
+    cause = requests.HTTPError("404 Not Found", response=response)
+    try:
+        raise cause
+    except requests.HTTPError as exc:
+        try:
+            raise RuntimeError(detail) from exc
+        except RuntimeError as wrapped:
+            return wrapped
 
 
 async def _apply_headers(path: str, response, method: str = "GET"):
@@ -504,6 +519,63 @@ def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp
     assert b"generation_failed" not in response.body
 
 
+def test_refresh_active_image_returns_400_with_detail_for_user_visible_http_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeImageUpdater:
+        def emit_update(self) -> None:
+            pass
+
+        def schedule(self, force: bool = False) -> None:
+            raise _make_user_visible_http_runtime_error("Anfrage durch Moderation blockiert.")
+
+    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+
+    try:
+        web_app_module.refresh_active_image()
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Anfrage durch Moderation blockiert."
+
+
+def test_revert_active_image_calls_character_image_service(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    calls: list[str] = []
+
+    class FakeCharacterImageService:
+        def revert(self) -> None:
+            calls.append("revert")
+
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+
+    response = web_app_module.revert_active_image()
+
+    assert response == {}
+    assert calls == ["revert"]
+
+
+def test_revert_active_image_returns_500_on_internal_runtime_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeCharacterImageService:
+        def revert(self) -> None:
+            raise RuntimeError("revert_failed")
+
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+
+    try:
+        web_app_module.revert_active_image()
+        raise AssertionError("Expected RuntimeError")
+    except RuntimeError as exc:
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/revert-active", "POST"), exc))
+
+    assert response.status_code == 500
+    assert response.media_type == "application/problem+json"
+    assert b"Interner Serverfehler." in response.body
+    assert b"revert_failed" not in response.body
+
+
 def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     calls: list[str] = []
@@ -677,3 +749,18 @@ def test_web_lifecycle_starts_and_stops_watchers(monkeypatch):
     web_app_module._stop_watchers_for_web()
     assert events["stopped"] == "SCHED"
     assert web_app_module.app.state.watch_scheduler is None
+
+
+def test_web_lifespan_starts_watchers_without_embedding_warmup(monkeypatch):
+    events: list[str] = []
+
+    monkeypatch.setattr(web_app_module, "_start_watchers_for_web", lambda: events.append("start"))
+    monkeypatch.setattr(web_app_module, "_stop_watchers_for_web", lambda: events.append("stop"))
+
+    async def run_lifespan():
+        async with web_app_module._lifespan(web_app_module.app):
+            events.append("inside")
+
+    _run_async(run_lifespan())
+    assert events == ["start", "inside", "stop"]
+

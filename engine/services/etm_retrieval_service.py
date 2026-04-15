@@ -3,7 +3,7 @@ from __future__ import annotations
 from rapidfuzz import fuzz
 
 from engine.config import config
-from engine.llm_client import embed_texts
+from engine.llm.client import embed_texts
 from engine.models import Npc
 from engine.storage import storage
 from engine.stores.etm_vector_store import EtmVectorStore
@@ -17,7 +17,7 @@ class EtmRetrievalService:
         if not cleaned_query:
             return EMPTY_ETM_TEXT
 
-        store_path = storage.npc_view(npc_id=npc.npc_id, scene_id=npc.scene.scene_id).etm_chroma
+        store_path = storage.npc.etm_chroma
         if not store_path.exists():
             return EMPTY_ETM_TEXT
 

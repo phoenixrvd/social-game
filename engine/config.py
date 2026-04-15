@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Literal
+
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,6 +8,7 @@ load_dotenv()
 
 _NPC_SUBDIR = "npcs"
 _SCENE_SUBDIR = "scenes"
+Provider = Literal["openai", "grok"]
 
 
 class Config(BaseSettings):
@@ -44,12 +47,25 @@ class Config(BaseSettings):
     # Web GUI
     WEB_DEBUG: bool = False
 
-    # LLM/OpenAI configuration
-    OPENAI_API_KEY: str  # required
-    MODEL_LLM_BIG: str = "gpt-5.4"
-    MODEL_LLM_SMALL: str = "gpt-5.4-mini"
-    MODEL_LLM_IMG_BASE: str = "gpt-image-1.5"
-    MODEL_EMBEDDING: str = "text-embedding-3-small"
+    # LLM configuration
+    LLM_BIG: Provider = "openai"
+    LLM_SMALL: Provider = "openai"
+    IMAGE: Provider = "openai"
+    EMBEDDING: Provider = "openai"
+
+    OPENAI_API_KEY: str | None = None
+    OPENAI_BASE_URL: str | None = None
+    OPENAI_MODEL_LLM_BIG: str = "gpt-5.4"
+    OPENAI_MODEL_LLM_SMALL: str = "gpt-5.4-mini"
+    OPENAI_MODEL_IMG_BASE: str = "gpt-image-1.5"
+    OPENAI_MODEL_EMBEDDING: str = "text-embedding-3-small"
+
+    GROK_API_KEY: str | None = None
+    GROK_BASE_URL: str = "https://api.x.ai/v1"
+    GROK_MODEL_LLM_BIG: str = "grok-4.20-0309-non-reasoning"
+    GROK_MODEL_LLM_SMALL: str = "grok-4-1-fast-non-reasoning"
+    GROK_MODEL_LLM_IMG_BASE: str = "grok-imagine-image"
+    GROK_MODEL_EMBEDDING: str = "text-embedding-3-small"
 
     model_config = SettingsConfigDict(
         env_file=".env",

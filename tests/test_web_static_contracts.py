@@ -143,11 +143,32 @@ def test_sg_input_keeps_focus_stable_while_sending():
     # Components call appActions directly, not emit
     assert "appActions.submitMessage(" in source
     assert "appActions.setInput(" in source
+    assert "appActions.revertImage(" in source
     assert "appActions.refreshImage(" in source
     assert "appActions.toggleTheme(" in source
     assert "appActions.toggleSelectorPanel(" in source
     assert "appActions.resetNpc(" in source
     assert "appActions.updateSession(" in source
+
+
+def test_sg_input_places_revert_button_left_of_refresh_button():
+    source = _read("engine/web/static/js/sg-input.js")
+
+    revert_index = source.find('data-action="revert-image"')
+    refresh_index = source.find('data-action="refresh-image"')
+
+    assert revert_index != -1
+    assert refresh_index != -1
+    assert revert_index < refresh_index
+
+
+def test_app_actions_revert_image_uses_confirm_and_revert_endpoint():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "async function revertImage()" in source
+    assert "window.confirm(" in source
+    assert "/api/image/revert-active" in source
+    assert "method: \"POST\"" in source
 
 
 def test_sg_input_subscribes_directly_to_store_keys():
