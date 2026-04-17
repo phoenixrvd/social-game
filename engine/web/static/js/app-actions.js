@@ -29,7 +29,7 @@ function parseChatStreamEvent(line) {
   try {
     return JSON.parse(line)
   } catch {
-    throw new Error("Ungueltige Streaming-Antwort vom Server.")
+    throw new Error("Ungültige Streaming-Antwort vom Server.")
   }
 }
 
@@ -49,6 +49,20 @@ function mapStatePayload(payload = {}) {
     npcId: typeof payload.npc_id === "string" ? payload.npc_id : null,
     sceneId: typeof payload.scene_id === "string" ? payload.scene_id : null,
   }
+}
+
+function appendAssistantChunk(messages, assistantId, assistantTimestamp, delta) {
+  const assistantMessage = messages.find((message) => message.id === assistantId)
+  if (!assistantMessage) {
+    return [...messages, { id: assistantId, role: "assistant", content: delta, timestamp: assistantTimestamp }]
+  }
+
+  return messages.map((message) => {
+    if (message.id !== assistantId) {
+      return message
+    }
+    return { ...message, content: `${message.content || ""}${delta}` }
+  })
 }
 
 function startImagePolling(intervalMs = 5000) {
@@ -162,7 +176,7 @@ async function revertImage() {
     return
   }
 
-  if (!window.confirm("Soll das aktive Bild wirklich auf das letzte Backup zurueckgesetzt werden?")) {
+  if (!window.confirm("Soll das aktive Bild wirklich auf das letzte Backup zurückgesetzt werden?")) {
     return
   }
 
@@ -173,14 +187,42 @@ async function revertImage() {
     const response = await fetch("/api/image/revert-active", { method: "POST" })
     const payload = await readJsonResponse(response)
     if (!response.ok) {
-      appStore.setState({ errorMessage: getErrorMessage(payload, "Bild konnte nicht zurueckgesetzt werden.") })
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Bild konnte nicht zurückgesetzt werden.") })
       return
     }
 
     appStore.setState({ imageUrl: appendCacheBuster("/api/image/current"), errorMessage: "" })
     await pollImageSignature(true)
   } catch (error) {
-    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht zurueckgesetzt werden." })
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht zurückgesetzt werden." })
+  } finally {
+    appStore.setState({ isImageRefreshLoading: false })
+  }
+}
+
+async function deleteImage() {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isImageRefreshLoading) {
+    return
+  }
+
+  if (!window.confirm("Soll das aktuelle Bild wirklich gelöscht werden?")) {
+    return
+  }
+
+  appStore.setState({ isImageRefreshLoading: true })
+  await waitForNextPaint()
+
+  try {
+    const response = await fetch("/api/image/delete-active", { method: "DELETE" })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Bild konnte nicht gelöscht werden.") })
+      return
+    }
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "", isImageExpanded: false })
+  } catch (error) {
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht gelöscht werden." })
   } finally {
     appStore.setState({ isImageRefreshLoading: false })
   }
@@ -192,7 +234,7 @@ async function resetNpc() {
     return
   }
 
-  if (!window.confirm("Soll der Verlauf des aktiven NPC wirklich geloescht werden?")) {
+  if (!window.confirm("Soll der Verlauf des aktiven NPC wirklich gelöscht werden?")) {
     return
   }
 
@@ -201,32 +243,31 @@ async function resetNpc() {
     const response = await fetch("/api/npc/reset-active", { method: "DELETE" })
     const payload = await readJsonResponse(response)
     if (!response.ok) {
-      appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf konnte nicht geloescht werden.") })
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf konnte nicht gelöscht werden.") })
       return
     }
     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
   } catch (error) {
-    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf konnte nicht geloescht werden." })
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf konnte nicht gelöscht werden." })
   } finally {
     appStore.setState({ isSessionLoading: false })
   }
 }
 
-function handleChatStreamEvent(event, assistantId) {
+function handleChatStreamEvent(event, assistantId, assistantTimestamp) {
   if (!event || typeof event.type !== "string") {
-    throw new Error("Ungueltige Streaming-Antwort vom Server.")
+    throw new Error("Ungültige Streaming-Antwort vom Server.")
   }
 
   if (event.type === "chunk") {
     const delta = typeof event.delta === "string" ? event.delta : ""
+    if (!delta) {
+      return false
+    }
+
     const state = appStore.getState()
     appStore.setState({
-      messages: state.messages.map((message) => {
-        if (message.id !== assistantId) {
-          return message
-        }
-        return { ...message, content: `${message.content || ""}${delta}` }
-      }),
+      messages: appendAssistantChunk(state.messages, assistantId, assistantTimestamp, delta),
     })
     return false
   }
@@ -239,10 +280,10 @@ function handleChatStreamEvent(event, assistantId) {
     throw new Error(getErrorMessage(event, "Nachricht konnte nicht gesendet werden."))
   }
 
-  throw new Error("Ungueltige Streaming-Antwort vom Server.")
+  throw new Error("Ungültige Streaming-Antwort vom Server.")
 }
 
-async function streamAssistantReply(text, assistantId) {
+async function streamAssistantReply(text, assistantId, assistantTimestamp) {
   const response = await fetch("/api/chat/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -267,7 +308,7 @@ async function streamAssistantReply(text, assistantId) {
       const line = buffer.slice(0, newlineIndex).trim()
       buffer = buffer.slice(newlineIndex + 1)
       if (line) {
-        isDone = handleChatStreamEvent(parseChatStreamEvent(line), assistantId) || isDone
+        isDone = handleChatStreamEvent(parseChatStreamEvent(line), assistantId, assistantTimestamp) || isDone
       }
       newlineIndex = buffer.indexOf("\n")
     }
@@ -279,11 +320,11 @@ async function streamAssistantReply(text, assistantId) {
 
   const trailingLine = buffer.trim()
   if (trailingLine) {
-    isDone = handleChatStreamEvent(parseChatStreamEvent(trailingLine), assistantId) || isDone
+    isDone = handleChatStreamEvent(parseChatStreamEvent(trailingLine), assistantId, assistantTimestamp) || isDone
   }
 
   if (!isDone) {
-    throw new Error("Nachricht wurde unvollstaendig uebertragen.")
+    throw new Error("Nachricht wurde unvollständig übertragen.")
   }
 }
 
@@ -296,19 +337,18 @@ async function submitMessage(payload = {}) {
   }
 
   const assistantId = `assistant-local-${Date.now()}`
+  const assistantTimestamp = createNowTimestamp()
   const messages = state.messages.filter((message) => !String(message?.id || "").startsWith("context-"))
   messages.push({ id: `user-${Date.now()}`, role: "user", content: text, timestamp: createNowTimestamp() })
-  messages.push({ id: assistantId, role: "assistant", content: "", timestamp: createNowTimestamp() })
   appStore.setState({
     messages,
     input: "",
     isSending: true,
     isAssistantTyping: true,
-    activeAssistantId: assistantId,
   })
 
   try {
-    await streamAssistantReply(text, assistantId)
+    await streamAssistantReply(text, assistantId, assistantTimestamp)
     appStore.setState({ errorMessage: "" })
   } catch (error) {
     const latestState = appStore.getState()
@@ -320,7 +360,7 @@ async function submitMessage(payload = {}) {
       errorMessage: error instanceof Error ? error.message : "Nachricht konnte nicht gesendet werden.",
     })
   } finally {
-    appStore.setState({ isSending: false, isAssistantTyping: false, activeAssistantId: null })
+    appStore.setState({ isSending: false, isAssistantTyping: false })
   }
 }
 
@@ -356,6 +396,7 @@ export const appActions = {
   updateSession,
   refreshImage,
   revertImage,
+  deleteImage,
   resetNpc,
   setInput,
   toggleTheme,

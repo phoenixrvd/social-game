@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Iterable, Literal, cast
 from uuid import uuid4
 
-from engine.models import Npc, Scene, ShortMemoryMessage
+from engine.models import Npc, Scene, ShortMemoryMessage, Stm
 from engine.storage import storage
 
 
@@ -38,20 +38,22 @@ class NpcStore:
 
         return Scene(scene_id=scene_paths.scene_id, description=default, img=scene_img)
 
-    def _load_stm(self) -> list[ShortMemoryMessage]:
+    def _load_stm(self) -> Stm:
         valid_roles = {"user", "assistant", "system"}
         rows = storage.npc.stm.get()
 
-        return [
-            ShortMemoryMessage(
-                id=str(row.get("id", "")),
-                timestamp_utc=str(row.get("timestamp_utc", "")),
-                role=cast(Literal["user", "assistant", "system"], role),
-                content=str(row.get("content", "")),
-            )
-            for row in rows
-            if (role := row.get("role")) in valid_roles
-        ]
+        return Stm(
+            [
+                ShortMemoryMessage(
+                    id=str(row.get("id", "")),
+                    timestamp_utc=str(row.get("timestamp_utc", "")),
+                    role=cast(Literal["user", "assistant", "system"], role),
+                    content=str(row.get("content", "")),
+                )
+                for row in rows
+                if (role := row.get("role")) in valid_roles
+            ]
+        )
 
     def load(self) -> Npc:
         npc_paths = storage.npc
@@ -59,6 +61,7 @@ class NpcStore:
         character = npc_paths.character_original.get()
         scene = self._load_scene()
         relationship = npc_paths.relationship.get()
+        stm = self._load_stm()
 
         return Npc(
             npc_id=npc_paths.npc_id,
@@ -68,7 +71,7 @@ class NpcStore:
             state=self._load_state(),
             relationship=relationship,
             scene=scene,
-            stm=self._load_stm(),
+            stm=stm,
             img=storage.npc.img_original.get(),
             img_current=storage.npc.img_current.get(),
         )

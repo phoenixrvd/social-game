@@ -43,6 +43,16 @@ SG-005 beschreibt Verfügbarkeit, Auswahl und Zuordnung von NPC-Bildern; die ini
 
 **Referenzen:** `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`
 
+### Löschen des aktiven Laufzeitbildes ohne Backup-Wiederherstellung
+**Typ:** Funktional  
+**Beschreibung:** Das System muss das aktive Laufzeitbild eines NPC-Szenen-Kontexts löschen können, ohne dabei ein verfügbares Backup als neues aktives Laufzeitbild wiederherzustellen.  
+**Akzeptanzkriterien:**
+- Für den aktiven NPC-Szenen-Kontext kann das aktive Laufzeitbild gelöscht werden.
+- Nach erfolgreicher Löschung ist für den aktiven NPC-Szenen-Kontext kein aktives Laufzeitbild mehr vorhanden.
+- Durch die Löschung wird kein verfügbares Backup als aktives Laufzeitbild übernommen.
+
+**Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`
+
 ### Initiale Bilderzeugung ohne bestehendes szenenspezifisches Bild
 **Typ:** Funktional  
 **Beschreibung:** Das System muss für die Aktualisierung des aktiven NPC-Bildes die initiale Bilderzeugung gemäß SG-014 verwenden, wenn im aktiven NPC-Szenen-Kontext weder ein aktives Laufzeitbild noch ein szenenspezifisches NPC-Bild vorliegt.  

@@ -78,6 +78,18 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** `doc/requirements/sg-005-npc-bilder.md`
 
+### Bild-Löschung über die Werkzeugleiste
+**Typ:** Funktional  
+**Beschreibung:** Das System muss in der Web-GUI zusätzlich zur Bild-Rücksetzung eine separate Werkzeugleisten-Aktion bereitstellen, die nur das aktive Sitzungsbild löscht.  
+**Akzeptanzkriterien:**
+- In der Werkzeugleiste der Web-GUI ist zusätzlich zur Rücksetzungsaktion eine separate Aktion zum Löschen des aktiven Sitzungsbildes vorhanden.
+- Die Löschaktion ist fachlich von der Rücksetzungsaktion getrennt und stellt kein Backup wieder her.
+- Beim Klick auf die Löschaktion erscheint vor der Ausführung ein Bestätigungsdialog.
+- Wird die Bestätigung erteilt, wird die Löschung des aktiven Sitzungsbildes gemäß SG-005 ausgelöst.
+- Wird die Bestätigung abgebrochen, bleibt das aktive Sitzungsbild unverändert.
+
+**Referenzen:** `doc/requirements/sg-005-npc-bilder.md`
+
 ### Vergrößerbare Overlay-Ansicht des Szenenbilds auf mobilen Geräten
 **Typ:** Funktional  
 **Beschreibung:** Das System muss auf mobilen Geräten für das angezeigte Szenenbild eine vergrößerte Overlay-Ansicht ohne Beschneidung bereitstellen.  

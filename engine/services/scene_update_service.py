@@ -4,7 +4,6 @@ from engine.config import config
 from engine.llm.client import run_prompt_small
 from engine.models import Npc
 from engine.services.etm_retrieval_service import EtmRetrievalService
-from engine.services.memory_format import format_update_memory
 from engine.storage import storage
 from engine.updater.image_updater import ImageUpdater
 
@@ -23,8 +22,7 @@ class SceneUpdateService:
         return scene
 
     def _build_prompt(self, npc: Npc) -> str:
-        stm = npc.stm[-config.STATE_AUTO_TRIGGER_LAST_N_MESSAGES:]
-        stm_text = format_update_memory(stm)
+        stm_text = npc.stm.as_string_long(last_n=config.STATE_AUTO_TRIGGER_LAST_N_MESSAGES)
         etm_text = self.etm_retrieval.load_relevant(npc, stm_text)
         return (
             storage.prompts.scene_update.get().strip()

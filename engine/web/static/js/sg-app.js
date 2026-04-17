@@ -8,6 +8,7 @@ class SocialGameApp extends HTMLElement {
   constructor() {
     super()
     this.$ = {}
+    this._viewportEvents = null
   }
 
   connectedCallback() {
@@ -32,7 +33,35 @@ class SocialGameApp extends HTMLElement {
     }
 
     appStore.subscribe("focusRequestedAt", this.onInputFocusRequested.bind(this))
+    this.registerViewportSync()
+    this.syncViewportHeight()
     appActions.loadInitialState()
+  }
+
+  disconnectedCallback() {
+    this._viewportEvents?.abort()
+    this._viewportEvents = null
+  }
+
+  registerViewportSync() {
+    const controller = new AbortController()
+    const visualViewport = window.visualViewport
+
+    this._viewportEvents?.abort()
+    this._viewportEvents = controller
+    window.addEventListener("resize", this.syncViewportHeight.bind(this), { signal: controller.signal })
+
+    if (!visualViewport) {
+      return
+    }
+
+    visualViewport.addEventListener("resize", this.syncViewportHeight.bind(this), { signal: controller.signal })
+    visualViewport.addEventListener("scroll", this.syncViewportHeight.bind(this), { signal: controller.signal })
+  }
+
+  syncViewportHeight() {
+    const height = Math.max(Math.round(window.visualViewport?.height || window.innerHeight), 1)
+    document.documentElement.style.setProperty("--app-vh", `${height}px`)
   }
 
   focusInput() {

@@ -12,7 +12,6 @@ from engine.config import config
 from engine.models import Npc
 from engine.storage import storage
 from engine.services.etm_retrieval_service import EMPTY_ETM_TEXT, EtmRetrievalService
-from engine.services.memory_format import format_short_memory
 from engine.stores.npc_store import NpcStore
 
 EMPTY_PLACEHOLDER = "(leer)"
@@ -79,8 +78,7 @@ class NpcTurnService:
 
     @staticmethod
     def _build_retrieval_query(npc: Npc, player_input: str) -> str:
-        recent_messages = npc.stm[-config.ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES :]
-        context_block = format_short_memory(recent_messages) if recent_messages else ""
+        context_block = npc.stm.as_string_short(last_n=config.ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES) if npc.stm else ""
         player_line = f"user: {player_input.strip()}"
         if not context_block:
             return player_line

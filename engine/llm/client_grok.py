@@ -4,6 +4,7 @@ import base64
 from typing import Callable, Iterable, Iterator
 
 import httpx
+import openai
 import requests
 from fastembed import TextEmbedding
 from openai import OpenAI
@@ -13,6 +14,7 @@ from io import BytesIO
 
 from engine.config import config
 from engine.llm.client_interface import ClientInterface, NamedImage
+from engine.llm.error_utils import llm_error_message
 from engine.storage import storage
 
 
@@ -65,21 +67,27 @@ class ClientGrok(ClientInterface):
         *,
         stream: bool,
     ) -> str | Iterator[str]:
-        response = self._text_client().chat.completions.create(
-            model=config.GROK_MODEL_LLM_BIG, store=False, messages=messages, stream=stream,
-        )
-        if not stream:
-            return response.choices[0].message.content or ""
-        return self._stream_chunks(response)
+        try:
+            response = self._text_client().chat.completions.create(
+                model=config.GROK_MODEL_LLM_BIG, store=False, messages=messages, stream=stream,
+            )
+            if not stream:
+                return response.choices[0].message.content or ""
+            return self._stream_chunks(response, provider_name="Grok")
+        except openai.OpenAIError as exc:
+            raise RuntimeError(llm_error_message(exc, "Grok")) from exc
 
     def small_request(
         self,
         messages: list[ChatCompletionMessageParam],
     ) -> str:
-        response = self._text_client().chat.completions.create(
-            model=config.GROK_MODEL_LLM_SMALL, store=False, messages=messages, stream=False,
-        )
-        return response.choices[0].message.content or ""
+        try:
+            response = self._text_client().chat.completions.create(
+                model=config.GROK_MODEL_LLM_SMALL, store=False, messages=messages, stream=False,
+            )
+            return response.choices[0].message.content or ""
+        except openai.OpenAIError as exc:
+            raise RuntimeError(llm_error_message(exc, "Grok")) from exc
 
     def image_request(self, prompt: str, images: list[NamedImage]) -> bytes:
         image_urls = [_image_data_url(image_bytes) for _name, image_bytes in images]
@@ -138,12 +146,15 @@ class ClientGrok(ClientInterface):
         return Client(api_key=config.GROK_API_KEY)
 
     @staticmethod
-    def _stream_chunks(stream: Iterable[object]) -> Iterator[str]:
-        for chunk in stream:
-            choices = getattr(chunk, "choices", None)
-            if not choices:
-                continue
-            delta = getattr(choices[0], "delta", None)
-            content = getattr(delta, "content", None)
-            if isinstance(content, str) and content:
-                yield content
+    def _stream_chunks(stream: Iterable[object], *, provider_name: str) -> Iterator[str]:
+        try:
+            for chunk in stream:
+                choices = getattr(chunk, "choices", None)
+                if not choices:
+                    continue
+                delta = getattr(choices[0], "delta", None)
+                content = getattr(delta, "content", None)
+                if isinstance(content, str) and content:
+                    yield content
+        except openai.OpenAIError as exc:
+            raise RuntimeError(llm_error_message(exc, provider_name)) from exc

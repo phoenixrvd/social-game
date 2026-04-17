@@ -9,7 +9,6 @@ from engine.config import config
 from engine.llm.client import merge_character_scene_img, refresh_img, run_prompt_small
 from engine.models import Npc
 from engine.storage import ImageItem, NpcStorageView, storage
-from engine.services.memory_format import format_short_memory
 from engine.stores.npc_store import NpcStore
 
 
@@ -48,7 +47,7 @@ class CharacterImageService:
             .replace("{{CURRENT_SCENE}}", current_npc.scene.description)
             .replace(
                 "{{CURRENT_STM}}",
-                format_short_memory(current_npc.stm, config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP),
+                current_npc.stm.as_string_short(last_n=config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP),
             )
         )
 
@@ -84,6 +83,13 @@ class CharacterImageService:
 
         image_path.parent.mkdir(parents=True, exist_ok=True)
         backup_path.replace(image_path)
+
+    def delete_current(self) -> None:
+        npc = self.npc_store.load()
+        image_path = self._npc_paths_for(npc).img_runtime.path
+        if not image_path.exists():
+            return
+        image_path.unlink()
 
     def _refresh_from_prompt(self, npc: Npc, npc_paths: NpcStorageView, image_path: ImageItem, new_prompt: str) -> None:
         new_img = refresh_img(

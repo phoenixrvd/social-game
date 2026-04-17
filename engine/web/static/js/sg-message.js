@@ -1,5 +1,3 @@
-import { appStore } from "./app-store.js"
-
 function formatTimestamp(timestamp) {
   if (!timestamp) {
     return ""
@@ -20,9 +18,6 @@ class SocialGameMessage extends HTMLElement {
   constructor() {
     super()
     this._message = null
-    this._state = {
-      isAssistantTyping: false,
-    }
     this.$ = {}
   }
 
@@ -30,8 +25,7 @@ class SocialGameMessage extends HTMLElement {
     this.innerHTML = `
       <div class="msg-bubble msg-bubble-standard sg-hidden">
         <div class="msg-content">
-          <div class="typing-dots sg-hidden"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></div>
-          <div class="msg-body sg-hidden"></div>
+          <div class="msg-body msg-content-prewrap"></div>
         </div>
         <div class="msg-timestamp sg-hidden"></div>
       </div>
@@ -39,24 +33,10 @@ class SocialGameMessage extends HTMLElement {
 
     this.$ = {
       bubble: this.querySelector(".msg-bubble"),
-      typingDots: this.querySelector(".typing-dots"),
       body: this.querySelector(".msg-body"),
       timestamp: this.querySelector(".msg-timestamp"),
     }
 
-    const subscriptions = [
-      ["isAssistantTyping", this.onAssistantTypingChanged.bind(this)],
-    ]
-
-    for (const [key, listener] of subscriptions) {
-      appStore.subscribe(key, listener)
-    }
-
-    this.render()
-  }
-
-  onAssistantTypingChanged(isAssistantTyping) {
-    this._state.isAssistantTyping = Boolean(isAssistantTyping)
     this.render()
   }
 
@@ -65,18 +45,18 @@ class SocialGameMessage extends HTMLElement {
     this.render()
   }
 
-  isAssistantTypingMessage(message) {
-    if (message?.role !== "assistant" || !this._state.isAssistantTyping) {
-      return false
-    }
-    return !String(message.content || "").trim()
-  }
-
   render() {
     const message = this._message
-    if (!message || !this.$.bubble) {
+    if (!message) {
       return
     }
+
+    const content = typeof message.content === "string" ? message.content : ""
+    if (message.role === "assistant" && !content) {
+      this.$.bubble.className = "msg-bubble msg-bubble-standard sg-hidden"
+      return
+    }
+
     const formattedTimestamp = formatTimestamp(message.timestamp)
 
     this.$.timestamp.className = formattedTimestamp
@@ -87,17 +67,7 @@ class SocialGameMessage extends HTMLElement {
 
     this.$.bubble.className = `msg-bubble msg-bubble-standard ${message.role === "user" ? "msg-user msg-bubble-user-align" : "msg-assistant"}`
     this.$.bubble.classList.remove("sg-hidden")
-
-    if (this.isAssistantTypingMessage(message)) {
-      this.$.typingDots.classList.remove("sg-hidden")
-      this.$.body.classList.add("sg-hidden")
-      return
-    }
-
-    this.$.typingDots.classList.add("sg-hidden")
-    this.$.body.classList.remove("sg-hidden")
-    this.$.body.className = "msg-body msg-content-prewrap"
-    this.$.body.textContent = message.content
+    this.$.body.textContent = content
   }
 }
 

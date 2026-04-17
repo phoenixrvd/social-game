@@ -1,11 +1,9 @@
-from typing import cast
 from pathlib import Path
 
-from apscheduler.schedulers.background import BackgroundScheduler
 from typer.testing import CliRunner
 
 import engine.cli as cli_module
-import engine.updater.schedule as schedule_module
+import engine.updater.scheduer as schedule_module
 from engine.cli import app
 from engine.models import Session
 
@@ -107,7 +105,7 @@ def test_update_help_uses_user_facing_text():
         assert "SG-" not in result.output
 
 
-def test_start_scheduler_uses_dedicated_scheduler_intervals(monkeypatch):
+def test_scheduler_start_uses_dedicated_scheduler_intervals(monkeypatch):
     class FakeEtmUpdater:
         schedule_calls = 0
 
@@ -161,21 +159,18 @@ def test_start_scheduler_uses_dedicated_scheduler_intervals(monkeypatch):
 
     fake_scheduler = FakeScheduler()
 
+    monkeypatch.setattr(schedule_module, "BackgroundScheduler", lambda: fake_scheduler)
     monkeypatch.setattr(
-        schedule_module,
-        "UPDATER_CLASSES",
-        (
-            ("etm", FakeEtmUpdater),
-            ("scene", FakeSceneUpdater),
-            ("state", FakeStateUpdater),
-            ("image", FakeImageUpdater),
+        schedule_module.Scheduler,
+        "_find_updater_classes",
+        staticmethod(
+            lambda: [FakeEtmUpdater, FakeSceneUpdater, FakeStateUpdater, FakeImageUpdater]
         ),
     )
-    monkeypatch.setattr(schedule_module, "BackgroundScheduler", lambda: fake_scheduler)
 
-    scheduler, _updaters = schedule_module.start_scheduler(run_immediately=True)
+    scheduler = schedule_module.Scheduler()
+    scheduler.start()
 
-    assert scheduler is fake_scheduler
     assert FakeEtmUpdater.schedule_calls == 1
     assert FakeSceneUpdater.schedule_calls == 1
     assert FakeStateUpdater.schedule_calls == 1
@@ -199,7 +194,7 @@ def test_start_scheduler_uses_dedicated_scheduler_intervals(monkeypatch):
     assert image_job[1] == "interval"
     assert image_job[2]["seconds"] == 45
 
-    schedule_module.stop_scheduler(cast(BackgroundScheduler, cast(object, fake_scheduler)))
+    scheduler.stop()
     assert fake_scheduler.shutdown_called is True
 
 
@@ -233,26 +228,36 @@ def test_update_calls_schedule(monkeypatch):
             self.schedule_calls += 1
 
     fake_updater = FakeUpdater()
-    monkeypatch.setattr(cli_module, "resolve_updater", lambda _name: fake_updater)
+    monkeypatch.setattr(cli_module.Scheduler, "create_updater", classmethod(lambda cls, _name: fake_updater))
 
     result = runner.invoke(app, ["update", "scene"])
     assert result.exit_code == 0
     assert fake_updater.schedule_calls == 1
 
 
-def test_update_unknown_updater():
+def test_update_unknown_updater(monkeypatch):
+    monkeypatch.setattr(
+        cli_module.Scheduler,
+        "create_updater",
+        staticmethod(lambda _name: (_ for _ in ()).throw(ValueError("Unbekannter Updater 'unknown-updater'."))),
+    )
+
     result = runner.invoke(app, ["update", "unknown-updater"])
     assert result.exit_code != 0
-    assert "Unbekannter Updater" in result.output
+    assert "Unbekannter Updater" in str(result.exception)
 
 
-def test_resolve_updater_uses_current_updater_classes(monkeypatch):
+def test_scheduler_create_updater_uses_current_updater_classes(monkeypatch):
     class FakeDynamicUpdater:
         pass
 
-    monkeypatch.setattr(cli_module, "UPDATER_CLASSES", (("dynamic", FakeDynamicUpdater),))
+    monkeypatch.setattr(
+        schedule_module.Scheduler,
+        "_updater_classes",
+        classmethod(lambda cls: {"dynamic": FakeDynamicUpdater}),
+    )
 
-    resolved = cli_module.resolve_updater("dynamic")
+    resolved = schedule_module.Scheduler.create_updater("dynamic")
 
     assert isinstance(resolved, FakeDynamicUpdater)
 

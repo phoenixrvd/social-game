@@ -12,6 +12,11 @@ class SocialGameChat extends HTMLElement {
       messages: null,
     }
     this._messageElements = new Map()
+    this._observedLastMessage = null
+    this._lastMessageResizeObserver = new ResizeObserver(() => {
+      this.scrollMessagesToBottom("instant")
+    })
+    this._hasRenderedMessages = false
   }
 
   connectedCallback() {
@@ -52,6 +57,7 @@ class SocialGameChat extends HTMLElement {
       const contextMessageIds = ["context-character", "context-scene", "context-relationship"]
       const componentName = contextMessageIds.includes(message?.id) ? "sg-context-message" : "sg-message"
       let element = this._messageElements.get(key)
+      let isNewElement = false
 
       if (element && element.localName !== componentName) {
         element.remove()
@@ -60,14 +66,19 @@ class SocialGameChat extends HTMLElement {
 
       if (!element) {
         element = document.createElement(componentName)
+        isNewElement = true
       }
 
       const referenceNode = container.children[index] || null
       if (referenceNode !== element) {
         container.insertBefore(element, referenceNode)
       }
-      element.message = message
 
+      if (this.shouldAnimateMessage(componentName, isNewElement)) {
+        element.classList.add("sg-message-enter")
+      }
+
+      element.message = message
       nextMessageElements.set(key, element)
     }
 
@@ -78,12 +89,44 @@ class SocialGameChat extends HTMLElement {
     })
 
     this._messageElements = nextMessageElements
+    this._hasRenderedMessages = true
+  }
+
+  shouldAnimateMessage(componentName, isNewElement) {
+    if (!this._hasRenderedMessages) {
+      return false
+    }
+    return componentName === "sg-message" && isNewElement
+  }
+
+  disconnectLastMessageObserver() {
+    if (!this._observedLastMessage) {
+      return
+    }
+    this._lastMessageResizeObserver.unobserve(this._observedLastMessage)
+    this._observedLastMessage = null
+  }
+
+  syncLastMessageObserver() {
+    const nextLastMessage = this.$.messages.lastElementChild
+    if (nextLastMessage === this._observedLastMessage) {
+      return
+    }
+
+    this.disconnectLastMessageObserver()
+
+    if (!nextLastMessage) {
+      return
+    }
+
+    this._lastMessageResizeObserver.observe(nextLastMessage)
+    this._observedLastMessage = nextLastMessage
   }
 
   render() {
-    const hadMessages = this._messageElements.size > 0
     this.syncMessages()
-    this.scrollMessagesToBottom(hadMessages ? "smooth" : "instant")
+    this.syncLastMessageObserver()
+    this.scrollMessagesToBottom("instant")
   }
 }
 

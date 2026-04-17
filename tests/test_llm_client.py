@@ -6,8 +6,11 @@ from typing import cast
 
 import engine.llm.client as llm_client_module
 import engine.llm.client_grok as grok_client_module
+import engine.llm.client_openai as openai_client_module
+import openai
 import requests
 from engine.llm.client_grok import ClientGrok
+from engine.llm.client_openai import ClientOpenAi
 from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
 
@@ -166,6 +169,98 @@ def test_grok_image_request_wraps_moderated_content_http_error(monkeypatch):
     except RuntimeError as exc:
         assert str(exc) == "Anfrage durch Moderation blockiert."
         assert isinstance(exc.__cause__, requests.HTTPError)
+
+
+def test_grok_big_request_wraps_direct_openai_error_with_main_message(monkeypatch):
+    client = ClientGrok()
+
+    class FakePermissionDenied(openai.OpenAIError):
+        pass
+
+    class FakeTextClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**_kwargs):
+                    raise FakePermissionDenied(
+                        "PermissionDeniedError(\"Error code: 403 - {'code': 'forbidden', 'error': 'Content violates "
+                        "usage guidelines. Team: abc Failed check: SAFETY_CHECK_TYPE_CSAM'}\")"
+                    )
+
+    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
+
+    try:
+        client.big_request([], stream=False)
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as exc:
+        assert str(exc) == "Content violates usage guidelines."
+        assert isinstance(exc.__cause__, FakePermissionDenied)
+
+
+def test_grok_streaming_wraps_iteration_error_with_main_message(monkeypatch):
+    client = ClientGrok()
+
+    class FakePermissionDenied(openai.OpenAIError):
+        pass
+
+    class FailingStream:
+        def __iter__(self):
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hallo"))])
+            raise FakePermissionDenied(
+                "PermissionDeniedError(\"Error code: 403 - {'code': 'forbidden', 'error': 'Content violates usage "
+                "guidelines. Team: abc Failed check: SAFETY_CHECK_TYPE_CSAM'}\")"
+            )
+
+    class FakeTextClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**_kwargs):
+                    return FailingStream()
+
+    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
+
+    stream = client.big_request([], stream=True)
+    assert next(stream) == "Hallo"
+    try:
+        next(stream)
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as exc:
+        assert str(exc) == "Content violates usage guidelines."
+        assert isinstance(exc.__cause__, FakePermissionDenied)
+
+
+def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
+    client = ClientOpenAi()
+
+    class FakePermissionDenied(openai.OpenAIError):
+        pass
+
+    class FailingStream:
+        def __iter__(self):
+            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hallo"))])
+            raise FakePermissionDenied(
+                "PermissionDeniedError(\"Error code: 403 - {'code': 'forbidden', 'error': 'Content violates usage "
+                "guidelines. Team: abc Failed check: SAFETY_CHECK_TYPE_CSAM'}\")"
+            )
+
+    class FakeClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**_kwargs):
+                    return FailingStream()
+
+    monkeypatch.setattr(openai_client_module.ClientOpenAi, "_client", staticmethod(lambda: FakeClient()))
+
+    stream = client.big_request([], stream=True)
+    assert next(stream) == "Hallo"
+    try:
+        next(stream)
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as exc:
+        assert str(exc) == "Content violates usage guidelines."
+        assert isinstance(exc.__cause__, FakePermissionDenied)
 
 
 def test_grok_embeddings_use_local_fn(monkeypatch):

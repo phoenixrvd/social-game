@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import engine.services.npc_turn_service as npc_turn_service_module
-from engine.models import Npc, Scene, ShortMemoryMessage
+from engine.models import Npc, Scene, ShortMemoryMessage, Stm
 from engine.services.npc_turn_service import NpcTurnService
 
 
@@ -17,6 +17,8 @@ def _build_npc(**overrides) -> Npc:
         character={"name": "Vika", "hobby": "Kaffee"},
     )
     for key, value in overrides.items():
+        if key == "stm" and not isinstance(value, Stm):
+            value = Stm(value)
         setattr(base, key, value)
     return base
 

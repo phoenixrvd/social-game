@@ -7,20 +7,12 @@ from engine.config import config
 from engine.llm.client import hello_llm
 from engine.services.character_image_service import CharacterImageService
 from engine.stores.session_store import SessionStore
-from engine.updater.schedule import AVAILABLE_UPDATERS, UPDATER_CLASSES
-from engine.updater.updater import AbstractUpdater
+from engine.updater.scheduer import Scheduler
 
 app = typer.Typer(
     no_args_is_help=True,
     help="Werkzeuge fuer Web-GUI, Session, Updater und LLM-Pruefung im Social Game.",
 )
-def resolve_updater(updater_name: str) -> AbstractUpdater:
-    key = updater_name.strip().lower()
-    updater_cls = dict(UPDATER_CLASSES).get(key)
-    if updater_cls is not None:
-        return updater_cls()
-
-    raise typer.BadParameter(f"Unbekannter Updater '{updater_name}'. Verfuegbar: {AVAILABLE_UPDATERS}")
 
 
 def _character_image_service() -> CharacterImageService:
@@ -135,14 +127,13 @@ def icons(
 
 @app.command("update")
 def update(
-    updatername: str = typer.Argument(
+    updater: str = typer.Argument(
         ...,
-        help=f"Name des Updaters. Verfuegbar: {AVAILABLE_UPDATERS}.",
+        help=f"Name des Updaters. Verfuegbar: {Scheduler.available_updaters()}.",
     ),
 ):
     """Fuehrt den gewaehlten Updater einmal ueber `schedule()` aus."""
-    updater = resolve_updater(updatername)
-    updater.schedule()
+    Scheduler.create_updater(updater).schedule()
 
 
 if __name__ == "__main__":

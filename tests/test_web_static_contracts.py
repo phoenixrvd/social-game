@@ -48,6 +48,12 @@ def test_index_has_no_inline_scripts():
     assert "theme-init.js" in source
 
 
+def test_index_viewport_meta_requests_resized_content_for_mobile_keyboard():
+    source = _read("engine/web/static/index.html")
+
+    assert 'interactive-widget=resizes-content' in source
+
+
 def test_sg_chat_exposes_scroll_method():
     source = _read("engine/web/static/js/sg-chat.js")
 
@@ -65,17 +71,14 @@ def test_sg_chat_subscribes_directly_to_messages_only():
     assert "setState(nextState = {})" not in source
 
 
-def test_sg_message_subscribes_directly_to_typing_flags_without_cleanup_wrapper():
+def test_sg_message_renders_only_message_content_without_typing_state():
     source = _read("engine/web/static/js/sg-message.js")
 
-    assert 'import { appStore } from "./app-store.js"' in source
-    assert '["isAssistantTyping", this.onAssistantTypingChanged.bind(this)]' in source
-    assert '["activeAssistantId", this.onActiveAssistantIdChanged.bind(this)]' not in source
-    assert "disconnectedCallback()" not in source
-    assert "cleanupSubscriptions()" not in source
-    assert "subscribeToStore()" not in source
+    assert 'import { appStore } from "./app-store.js"' not in source
+    assert '["isAssistantTyping", this.onAssistantTypingChanged.bind(this)]' not in source
+    assert "typing-dots" not in source
+    assert 'message.role === "assistant" && !content' in source
     assert "appStore.getState()" not in source
-    assert "message.isAssistantTyping" not in source
 
 
 def test_sg_chat_updates_existing_message_elements_during_sync():
@@ -92,6 +95,7 @@ def test_chat_streaming_logic_is_in_app_actions_and_surfaces_errors():
 
     assert "function parseChatStreamEvent(line)" in source
     assert "JSON.parse(line)" in source
+    assert "function appendAssistantChunk(" in source
     assert 'if (event.type === "error")' in source
     assert 'if (event.type === "done")' in source
     assert "if (!isDone)" in source
@@ -143,23 +147,31 @@ def test_sg_input_keeps_focus_stable_while_sending():
     # Components call appActions directly, not emit
     assert "appActions.submitMessage(" in source
     assert "appActions.setInput(" in source
-    assert "appActions.revertImage(" in source
-    assert "appActions.refreshImage(" in source
-    assert "appActions.toggleTheme(" in source
-    assert "appActions.toggleSelectorPanel(" in source
-    assert "appActions.resetNpc(" in source
+    assert "appActions.revertImage" in source
+    assert "appActions.deleteImage" in source
+    assert "appActions.refreshImage" in source
+    assert "appActions.toggleTheme" in source
+    assert "appActions.toggleSelectorPanel" in source
+    assert "appActions.resetNpc" in source
     assert "appActions.updateSession(" in source
 
 
-def test_sg_input_places_revert_button_left_of_refresh_button():
+def test_sg_input_renders_options_trigger_and_panel_actions_in_order():
     source = _read("engine/web/static/js/sg-input.js")
 
-    revert_index = source.find('data-action="revert-image"')
     refresh_index = source.find('data-action="refresh-image"')
+    revert_index = source.find('data-action="revert-image"')
+    delete_index = source.find('data-action="delete-image"')
 
-    assert revert_index != -1
+    assert 'id="sg-options-panel"' in source
+    assert 'class="sg-options-toggle"' in source
+    assert 'aria-controls="sg-options-panel"' in source
+    assert 'aria-expanded="false"' in source
+    assert "Optionen" in source
     assert refresh_index != -1
-    assert revert_index < refresh_index
+    assert revert_index != -1
+    assert delete_index != -1
+    assert refresh_index < revert_index < delete_index
 
 
 def test_app_actions_revert_image_uses_confirm_and_revert_endpoint():
@@ -171,17 +183,41 @@ def test_app_actions_revert_image_uses_confirm_and_revert_endpoint():
     assert "method: \"POST\"" in source
 
 
+def test_app_actions_delete_image_uses_confirm_and_delete_endpoint():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "async function deleteImage()" in source
+    assert "window.confirm(" in source
+    assert "/api/image/delete-active" in source
+    assert "method: \"DELETE\"" in source
+
+
 def test_sg_input_subscribes_directly_to_store_keys():
     source = _read("engine/web/static/js/sg-input.js")
 
     assert 'import { appStore } from "./app-store.js"' in source
     assert '["input", this.onInputChanged.bind(this)]' in source
     assert '["isSending", this.onIsSendingChanged.bind(this)]' in source
+    assert '["isAssistantTyping", this.onAssistantTypingChanged.bind(this)]' in source
     assert '["isSessionLoading", this.onSessionLoadingChanged.bind(this)]' in source
     assert '["isImageRefreshLoading", this.onImageRefreshChanged.bind(this)]' in source
     assert '["isSelectorPanelOpen", this.onSelectorPanelChanged.bind(this)]' in source
     assert "appStore.subscribe(key, listener)" in source
     assert "setState(nextState = {})" not in source
+
+
+def test_sg_input_renders_typing_dots_in_composer_meta():
+    source = _read("engine/web/static/js/sg-input.js")
+
+    assert "sg-composer-meta" in source
+    assert "sg-composer-error sg-hidden" in source
+    assert "sg-composer-status" in source
+    assert "typing-dots" in source
+    assert "Antwort wird geladen" in source
+    assert "this._state.isAssistantTyping" in source
+    assert "meta.innerHTML" not in source
+    assert "this.$.typingStatus.classList.toggle(\"sg-hidden\"" in source
+    assert "this.$.keyboardHint.classList.toggle(\"sg-hidden\"" in source
 
 
 def test_sg_scene_image_subscribes_directly_to_store_keys():
@@ -208,6 +244,29 @@ def test_sg_app_is_thin_orchestrator_for_layout_initial_load_and_focus():
     assert "onThemeChanged(" not in source
 
 
+def test_sg_app_syncs_app_viewport_height_with_visual_viewport():
+    source = _read("engine/web/static/js/sg-app.js")
+
+    assert "registerViewportSync()" in source
+    assert "syncViewportHeight()" in source
+    assert "window.visualViewport" in source
+    assert 'setProperty("--app-vh"' in source
+
+
+def test_mobile_css_uses_fixed_app_shell_with_app_vh_and_local_composer_anchor():
+    source = _read("engine/web/static/css/app.css")
+
+    assert ".app-viewport {\n    position: fixed;" in source
+    assert "grid-template-rows: minmax(0, 1fr) 0;" in source
+    assert "height: var(--app-vh);" in source
+    assert "min-height: var(--app-vh);" in source
+    assert "overscroll-behavior: none;" in source
+    assert "transition: height 180ms ease-out, min-height 180ms ease-out;" in source
+    assert ".sg-input-component {\n    position: absolute;" in source
+    assert "calc(var(--app-vh) * 0.25)" in source
+    assert "transition: height 180ms ease-out;" in source
+
+
 def test_app_actions_dispatches_loading_flags_for_session_and_image_refresh():
     source = _read("engine/web/static/js/app-actions.js")
 
@@ -222,6 +281,14 @@ def test_app_actions_toggles_assistant_typing_between_send_start_and_end():
 
     assert "isAssistantTyping: true" in source
     assert "isAssistantTyping: false" in source
+
+
+def test_submit_message_inserts_assistant_message_only_after_first_chunk():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "const assistantTimestamp = createNowTimestamp()" in source
+    assert "await streamAssistantReply(text, assistantId, assistantTimestamp)" in source
+    assert "messages.push({ id: assistantId, role: \"assistant\"" not in source
 
 
 def test_sg_app_maps_image_state_keys_to_image_component():

@@ -16,12 +16,11 @@ class EtmUpdater(AbstractUpdater):
 
     def schedule(self) -> None:
         npc = self.npc_store.load()
-        batch = npc.stm[:-config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP]
 
-        if len(batch) <= config.UPDATER_ETM_BATCH_SIZE_THRESHOLD:
+        if not npc.stm.get_batch():
             return
 
         if not self._should_run_for_npc(npc):
             return
 
-        self.service.run(npc, batch)
+        self.service.run()

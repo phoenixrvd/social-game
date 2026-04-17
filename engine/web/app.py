@@ -12,26 +12,33 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-import openai
-import requests
 from PIL import Image
 from pydantic import BaseModel
 import uvicorn
 
 from engine.config import config
 from engine.llm.client import stream_prompt
+from engine.llm.error_utils import user_visible_provider_error_detail
 from engine.models import Npc, ShortMemoryMessage
-from engine.storage import SceneStorageView, storage
 from engine.services.character_image_service import CharacterImageService
 from engine.services.npc_turn_service import NpcTurnService
+from engine.storage import SceneStorageView, storage
 from engine.stores.npc_store import NpcStore
 from engine.stores.session_store import SessionStore
 from engine.updater.image_updater import ImageUpdater
-from engine.updater.schedule import start_scheduler, stop_scheduler
+from engine.updater.scheduer import Scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 _webp_cache: dict[str, Any] = {"signature": "", "data": b""}
+_scheduler: Scheduler | None = None
+
+
+def _get_scheduler() -> Scheduler:
+    global _scheduler
+    if _scheduler is None:
+        _scheduler = Scheduler()
+    return _scheduler
 
 
 def _problem_response(status_code: int, detail: Any) -> Response:
@@ -46,8 +53,11 @@ def _stream_event(event_type: str, **payload: Any) -> str:
     return json.dumps({"type": event_type, **payload}, ensure_ascii=False) + "\n"
 
 
-def _is_user_visible_llm_error(exc: RuntimeError) -> bool:
-    return isinstance(exc.__cause__, (openai.OpenAIError, requests.RequestException))
+def _stream_error_event(exc: Exception) -> str:
+    detail = user_visible_provider_error_detail(exc)
+    if detail is None:
+        return _stream_event("error", detail="Interner Serverfehler.")
+    return _stream_event("error", detail=detail)
 
 
 def _get_cached_webp(img_path: Path) -> bytes:
@@ -62,29 +72,17 @@ def _get_cached_webp(img_path: Path) -> bytes:
     return _webp_cache["data"]
 
 
-def _start_watchers_for_web() -> None:
-    if app.state.watch_scheduler is not None:
-        return
-    scheduler, _ = start_scheduler(run_immediately=True)
-    app.state.watch_scheduler = scheduler
-
-
-def _stop_watchers_for_web() -> None:
-    stop_scheduler(app.state.watch_scheduler)
-    app.state.watch_scheduler = None
-
-
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    _start_watchers_for_web()
+    scheduler = _get_scheduler()
+    scheduler.start()
     try:
         yield
     finally:
-        _stop_watchers_for_web()
+        scheduler.stop()
 
 
 app = FastAPI(title="Social Game Web GUI", lifespan=_lifespan)
-app.state.watch_scheduler = None
 
 
 _CSP = (
@@ -135,8 +133,16 @@ async def _validation_error_handler(_request: Request, exc: RequestValidationErr
     return _problem_response(422, exc.errors())
 
 
+@app.exception_handler(ValueError)
+async def _value_error_handler(_request: Request, exc: ValueError) -> Response:
+    return _problem_response(400, str(exc))
+
+
 @app.exception_handler(Exception)
-async def _internal_error_handler(_request: Request, _exc: Exception) -> Response:
+async def _internal_error_handler(_request: Request, exc: Exception) -> Response:
+    detail = user_visible_provider_error_detail(exc)
+    if detail is not None:
+        return _problem_response(400, detail)
     return _problem_response(500, "Interner Serverfehler.")
 
 
@@ -275,10 +281,7 @@ def get_state() -> dict[str, Any]:
 def update_session(request: SessionRequest) -> dict[str, Any]:
     if request.npc_id is None and request.scene_id is None:
         raise HTTPException(status_code=400, detail="Mindestens npc_id oder scene_id muss gesetzt sein.")
-    try:
-        SessionStore().save(npc=request.npc_id, scene=request.scene_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    SessionStore().save(npc=request.npc_id, scene=request.scene_id)
     return _state_payload()
 
 
@@ -287,12 +290,7 @@ def reset_active_npc_runtime_data() -> dict[str, Any]:
     session = SessionStore().load()
     scene_data_dir = storage.npc_view(npc_id=session.npc_id, scene_id=session.scene_id).base_runtime
     if scene_data_dir.exists():
-        if not scene_data_dir.is_dir():
-            raise HTTPException(status_code=500, detail="NPC-Scene-Datenpfad ist kein Verzeichnis.")
-        try:
-            shutil.rmtree(scene_data_dir)
-        except OSError as exc:
-            raise HTTPException(status_code=500, detail=f"NPC-Scene-Daten konnten nicht gelöscht werden: {exc}") from exc
+        shutil.rmtree(scene_data_dir)
     return _state_payload()
 
 
@@ -313,17 +311,8 @@ def chat_stream(request: ChatRequest) -> Any:
             for part in prompt_stream:
                 parts.append(part)
                 yield _stream_event("chunk", delta=part)
-        except RuntimeError as exc:
-            if _is_user_visible_llm_error(exc):
-                yield _stream_event(
-                    "error",
-                    detail=str(exc).strip() or "Nachricht konnte nicht gesendet werden.",
-                )
-            else:
-                yield _stream_event("error", detail="Interner Serverfehler.")
-            return
-        except Exception:
-            yield _stream_event("error", detail="Interner Serverfehler.")
+        except Exception as exc:
+            yield _stream_error_event(exc)
             return
 
         try:
@@ -362,17 +351,7 @@ def image_signature() -> dict[str, Any]:
 
 @app.post("/api/image/refresh-active")
 def refresh_active_image() -> dict[str, Any]:
-    updater = ImageUpdater()
-    try:
-        updater.emit_update()
-        updater.schedule(force=True)
-    except RuntimeError as exc:
-        if _is_user_visible_llm_error(exc):
-            raise HTTPException(
-                status_code=400,
-                detail=str(exc).strip() or "Bild konnte nicht aktualisiert werden.",
-            ) from exc
-        raise
+    CharacterImageService().update_from_context(force=True)
     return {}
 
 
@@ -380,6 +359,12 @@ def refresh_active_image() -> dict[str, Any]:
 def revert_active_image() -> dict[str, Any]:
     CharacterImageService().revert()
     return {}
+
+
+@app.delete("/api/image/delete-active")
+def delete_active_image() -> dict[str, Any]:
+    CharacterImageService().delete_current()
+    return _state_payload()
 
 
 def run(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None:

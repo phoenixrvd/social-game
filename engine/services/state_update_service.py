@@ -3,7 +3,6 @@ from __future__ import annotations
 from engine.llm.client import run_prompt_small
 from engine.models import Npc
 from engine.services.etm_retrieval_service import EtmRetrievalService
-from engine.services.memory_format import format_update_memory
 from engine.storage import storage
 from engine.updater.image_updater import ImageUpdater
 
@@ -22,7 +21,7 @@ class StateUpdateService:
         return state
 
     def _build_prompt(self, npc: Npc) -> str:
-        stm_text = format_update_memory(npc.stm)
+        stm_text = npc.stm.as_string_long()
         etm_text = self.etm_retrieval.load_relevant(npc, stm_text)
         return (
             storage.prompts.state_update.get().strip()

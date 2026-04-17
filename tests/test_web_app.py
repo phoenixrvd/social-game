@@ -104,7 +104,7 @@ class FakeNpcStore:
         return [user_message, assistant_message]
 
 class FakeNpcTurnService:
-    def __init__(self) -> None:
+    def __init__ (self) -> None:
         self.npc_store = fake_npc_store
         self.user_message = None
 
@@ -455,57 +455,58 @@ def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
         assert "scene_id='office'" in exc.detail
 
 
-def test_refresh_active_image_triggers_emit_update_before_schedule(tmp_path, monkeypatch):
+def test_refresh_active_image_uses_character_image_service_directly(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     calls: list[str] = []
 
-    class FakeImageUpdater:
-        def emit_update(self) -> None:
-            calls.append("emit_update")
-
-        def schedule(self, force: bool = False) -> None:
+    class FakeCharacterImageService:
+        def update_from_context(self, force: bool = False) -> None:
             assert force is True
-            calls.append("schedule")
+            calls.append("update_from_context")
 
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+    class FailingImageUpdater:
+        def __init__(self) -> None:
+            raise AssertionError("ImageUpdater darf beim manuellen Refresh nicht genutzt werden")
+
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageUpdater", FailingImageUpdater)
 
     response = web_app_module.refresh_active_image()
 
     assert response == {}
-    assert calls == ["emit_update", "schedule"]
+    assert calls == ["update_from_context"]
 
 
 def test_refresh_active_image_returns_400_with_detail_for_user_visible_llm_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeImageUpdater:
-        def emit_update(self) -> None:
-            pass
-
-        def schedule(self, force: bool = False) -> None:
+    class FakeCharacterImageService:
+        def update_from_context(self, force: bool = False) -> None:
+            assert force is True
             raise _make_user_visible_runtime_error("Anfrage durch Moderation blockiert.")
 
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
 
     try:
         web_app_module.refresh_active_image()
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-        assert exc.detail == "Anfrage durch Moderation blockiert."
+        raise AssertionError("Expected RuntimeError")
+    except RuntimeError as exc:
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+
+    assert response.status_code == 400
+    assert response.media_type == "application/problem+json"
+    assert b"Anfrage durch Moderation blockiert." in response.body
 
 
 def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeImageUpdater:
-        def emit_update(self) -> None:
-            pass
-
-        def schedule(self, force: bool = False) -> None:
+    class FakeCharacterImageService:
+        def update_from_context(self, force: bool = False) -> None:
+            assert force is True
             raise RuntimeError("generation_failed")
 
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
 
     try:
         web_app_module.refresh_active_image()
@@ -522,21 +523,50 @@ def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp
 def test_refresh_active_image_returns_400_with_detail_for_user_visible_http_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeImageUpdater:
-        def emit_update(self) -> None:
-            pass
-
-        def schedule(self, force: bool = False) -> None:
+    class FakeCharacterImageService:
+        def update_from_context(self, force: bool = False) -> None:
+            assert force is True
             raise _make_user_visible_http_runtime_error("Anfrage durch Moderation blockiert.")
 
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
 
     try:
         web_app_module.refresh_active_image()
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-        assert exc.detail == "Anfrage durch Moderation blockiert."
+        raise AssertionError("Expected RuntimeError")
+    except RuntimeError as exc:
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+
+    assert response.status_code == 400
+    assert response.media_type == "application/problem+json"
+    assert b"Anfrage durch Moderation blockiert." in response.body
+
+
+def test_refresh_active_image_returns_400_with_detail_for_direct_openai_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakePermissionDenied(openai.OpenAIError):
+        pass
+
+    class FakeCharacterImageService:
+        def update_from_context(self, force: bool = False) -> None:
+            assert force is True
+            raise FakePermissionDenied(
+                "PermissionDeniedError(\"Error code: 403 - {'code': 'The caller does not have permission to execute "
+                "the specified operation', 'error': 'Content violates usage guidelines. Failed check: "
+                "SAFETY_CHECK_TYPE_CSAM'}\")"
+            )
+
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+
+    try:
+        web_app_module.refresh_active_image()
+        raise AssertionError("Expected FakePermissionDenied")
+    except FakePermissionDenied as exc:
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+
+    assert response.status_code == 400
+    assert response.media_type == "application/problem+json"
+    assert b"Content violates usage guidelines." in response.body
 
 
 def test_revert_active_image_calls_character_image_service(tmp_path, monkeypatch):
@@ -574,6 +604,44 @@ def test_revert_active_image_returns_500_on_internal_runtime_error(tmp_path, mon
     assert response.media_type == "application/problem+json"
     assert b"Interner Serverfehler." in response.body
     assert b"revert_failed" not in response.body
+
+
+def test_delete_active_image_calls_character_image_service_and_returns_state(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    calls: list[str] = []
+
+    class FakeCharacterImageService:
+        def delete_current(self) -> None:
+            calls.append("delete_current")
+
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+
+    payload = web_app_module.delete_active_image()
+
+    assert calls == ["delete_current"]
+    assert payload["npc_id"] == "vika"
+    assert payload["scene_id"] == "office"
+
+
+def test_delete_active_image_returns_500_on_internal_runtime_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeCharacterImageService:
+        def delete_current(self) -> None:
+            raise RuntimeError("delete_failed")
+
+    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+
+    try:
+        web_app_module.delete_active_image()
+        raise AssertionError("Expected RuntimeError")
+    except RuntimeError as exc:
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/delete-active", "DELETE"), exc))
+
+    assert response.status_code == 500
+    assert response.media_type == "application/problem+json"
+    assert b"Interner Serverfehler." in response.body
+    assert b"delete_failed" not in response.body
 
 
 def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(tmp_path, monkeypatch):
@@ -673,6 +741,47 @@ def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
     assert fake_npc_store.appended_turns == []
 
 
+def test_chat_stream_emits_error_event_for_direct_openai_error(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeStreamingResponse:
+        def __init__(self, content, media_type: str):
+            self.status_code = 200
+            self.media_type = media_type
+            self.body_iterator = content
+
+    class FakePermissionDenied(openai.OpenAIError):
+        pass
+
+    def fake_stream_prompt(_turn_messages):
+        class FailingIterator:
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise FakePermissionDenied(
+                    "PermissionDeniedError(\"Error code: 403 - {'code': 'The caller does not have permission to "
+                    "execute the specified operation', 'error': 'Content violates usage guidelines. Failed check: "
+                    "SAFETY_CHECK_TYPE_CSAM'}\")"
+                )
+
+        return FailingIterator()
+
+    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+
+    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Fehler bitte"))
+
+    assert response.status_code == 200
+    assert _read_stream_events(response) == [
+        {
+            "type": "error",
+            "detail": "Content violates usage guidelines.",
+        },
+    ]
+    assert fake_npc_store.appended_turns == []
+
+
 def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
@@ -727,40 +836,50 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
     ]
 
 
-def test_web_lifecycle_starts_and_stops_watchers(monkeypatch):
-    events: dict[str, object] = {}
-
-    def fake_start_scheduler(*, scheduler=None, run_immediately=True):
-        events["run_immediately"] = run_immediately
-        events["scheduler_arg"] = scheduler
-        return "SCHED", []
-
-    def fake_stop_scheduler(scheduler):
-        events["stopped"] = scheduler
-
-    monkeypatch.setattr(web_app_module, "start_scheduler", fake_start_scheduler)
-    monkeypatch.setattr(web_app_module, "stop_scheduler", fake_stop_scheduler)
-
-    web_app_module.app.state.watch_scheduler = None
-    web_app_module._start_watchers_for_web()
-    assert events["run_immediately"] is True
-    assert web_app_module.app.state.watch_scheduler == "SCHED"
-
-    web_app_module._stop_watchers_for_web()
-    assert events["stopped"] == "SCHED"
-    assert web_app_module.app.state.watch_scheduler is None
-
-
-def test_web_lifespan_starts_watchers_without_embedding_warmup(monkeypatch):
+def test_web_lifespan_uses_scheduler_directly(monkeypatch):
     events: list[str] = []
 
-    monkeypatch.setattr(web_app_module, "_start_watchers_for_web", lambda: events.append("start"))
-    monkeypatch.setattr(web_app_module, "_stop_watchers_for_web", lambda: events.append("stop"))
+    class FakeScheduler:
+        def __init__(self) -> None:
+            events.append("init")
+
+        def start(self) -> None:
+            events.append("start")
+
+        def stop(self) -> None:
+            events.append("stop")
+
+    monkeypatch.setattr(web_app_module, "Scheduler", FakeScheduler)
 
     async def run_lifespan():
         async with web_app_module._lifespan(web_app_module.app):
             events.append("inside")
 
     _run_async(run_lifespan())
-    assert events == ["start", "inside", "stop"]
+    assert events == ["init", "start", "inside", "stop"]
+
+
+def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
+    events: list[str] = []
+
+    class FakeScheduler:
+        def __init__(self) -> None:
+            events.append("init")
+
+        def start(self) -> None:
+            events.append("start")
+
+        def stop(self) -> None:
+            events.append("stop")
+
+    monkeypatch.setattr(web_app_module, "_scheduler", None)
+    monkeypatch.setattr(web_app_module, "Scheduler", FakeScheduler)
+
+    async def run_lifespan():
+        async with web_app_module._lifespan(web_app_module.app):
+            events.append("inside")
+
+    _run_async(run_lifespan())
+    _run_async(run_lifespan())
+    assert events == ["init", "start", "inside", "stop", "start", "inside", "stop"]
 

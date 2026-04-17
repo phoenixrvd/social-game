@@ -194,6 +194,41 @@ def test_image_updater_revert_deletes_image_and_restores_latest_backup(tmp_path,
     assert new_backup.exists() is False
 
 
+def test_character_image_service_delete_current_removes_only_runtime_image(tmp_path, monkeypatch):
+    _patch_stores(monkeypatch, tmp_path)
+
+    updater = ImageUpdater()
+    image_path = _npc_paths().img_runtime.path
+    image_path.parent.mkdir(parents=True, exist_ok=True)
+    image_path.write_bytes(b"current")
+
+    backup_dir = _npc_paths().backup_dir
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / "img-20260323-130000.png"
+    backup_path.write_bytes(b"backup")
+
+    result = updater.service.delete_current()
+
+    assert result is None
+    assert image_path.exists() is False
+    assert backup_path.read_bytes() == b"backup"
+
+
+def test_character_image_service_delete_current_is_noop_when_runtime_image_is_missing(tmp_path, monkeypatch):
+    _patch_stores(monkeypatch, tmp_path)
+
+    updater = ImageUpdater()
+    backup_dir = _npc_paths().backup_dir
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / "img-20260323-130000.png"
+    backup_path.write_bytes(b"backup")
+
+    result = updater.service.delete_current()
+
+    assert result is None
+    assert backup_path.read_bytes() == b"backup"
+
+
 def test_image_updater_merge_with_scene_persists_merged_image(tmp_path, monkeypatch):
     _patch_stores(monkeypatch, tmp_path)
     _patch_prompt_loader(

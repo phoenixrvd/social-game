@@ -9,7 +9,6 @@ function createInitialState() {
     isAssistantTyping: false,
     isSessionLoading: false,
     isImageRefreshLoading: false,
-    activeAssistantId: null,
     npcs: [],
     scenes: [],
     npcId: null,
