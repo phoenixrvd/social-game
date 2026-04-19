@@ -3,7 +3,7 @@ from __future__ import annotations
 import openai
 import requests
 
-from engine.llm.error_utils import normalize_provider_error_detail, user_visible_provider_error_detail
+from engine.llm.provider_client import normalize_provider_error_detail, user_visible_provider_error_detail
 
 
 def _runtime_error_from_openai(detail: str) -> RuntimeError:

@@ -5,10 +5,11 @@
 Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, Kurzzeitgedächtnis, ETM und LLM-gesteuerter Bildgenerierung.
 
 **Hauptkomponenten:**
-- `engine/web/app.py` – FastAPI-Backend + Background-Scheduler-Start
-- `engine/updater/` – Vier spezialisierte Hintergrund-Updater (etm, scene, state, image), alle erben von `AbstractUpdater`
+- `engine/web/app.py` – FastAPI-Backend + Lifespan-Start des Job-Schedulers
+- `engine/tools/scheduler.py` – `Scheduler` mit vier fachlichen Jobs (`EtmJob`, `StateJob`, `SceneJob`, `ImageJob`)
+- `engine/storage.py` – zentrale Pfadauflösung für Runtime-/Override-/Default-Daten und Prompt-Overrides
 - `engine/stores/npc_store.py` – Einziger Zugriffspunkt für NPC-Kontext; überblendet Initialzustand mit Laufzeitdaten
-- `engine/llm_client.py` – LLM-Funktionen: `hello_llm`, `embed_texts`, `stream_prompt`, `run_prompt`, `refresh_img`, `merge_character_scene_img`
+- `engine/llm/client.py` – LLM-Funktionen: `embed_texts`, `stream_prompt`, `run_prompt_small`, `refresh_img`, `merge_character_scene_img`
 - `engine/cli.py` – Typer-CLI als Einstiegspunkt `sg`
 
 ## Datenpfade
@@ -18,12 +19,18 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 - `scenes/<scene_id>/scene.md` + `npcs/<npc_id>/scenes/<scene_id>/scene.md` (werden beim Laden zusammengeführt)
 - `prompts/*.md` – alle LLM-Prompt-Templates mit `{{PLACEHOLDER}}`-Syntax
 
+**Lokale Overrides (`.overrides/`, nicht versioniert):**
+- `.overrides/npcs/<npc_id>/` und `.overrides/scenes/<scene_id>/` – überschreiben gleichnamige Initialdateien vollständig
+- `.overrides/npcs/<npc_id>/scenes/<scene_id>/` – überschreibt NPC-szenenspezifische Assets (z. B. `scene.md`, `img.png`)
+- `.overrides/prompts/*.md` – überschreibt Prompt-Templates vollständig
+
 **Laufzeitdaten (`.data/`, nicht versioniert):**
 - `.data/session.yaml` – aktiver NPC/Szene-Kontext
 - `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm.chroma, img.png)
-- `.data/npcs/<npc_id>/<scene_id>/orchestrator/` – Flag-Dateien und gespeicherte Prompts für Updater
+- `.data/npcs/<npc_id>/<scene_id>/orchestrator/` – orchestrator-spezifische Laufzeitartefakte (z. B. gespeicherte Bildprompts)
+- `.data/fastembed_cache/` – lokaler Cache für Embeddings beim Grok-Embedding-Pfad
 
-**Priorität beim Laden:** Laufzeitdatei → szenenspezifisches NPC-Asset → statisches Default.
+**Priorität beim Laden:** Laufzeitdatei → `.overrides`-Datei → szenenspezifisches NPC-Asset → statisches Default.
 
 ## Developer-Workflows
 
@@ -36,10 +43,8 @@ pip install -r requirements.txt && pip install -e .
 # Starten
 sg web                                         # http://127.0.0.1:8000
 sg session-set --npc mira --scene cafe         # aktiven Kontext wechseln
-sg update image                                # Updater einmalig manuell auslösen
 sg image-merge-scene                           # Charakter-Szenenbild neu zusammenführen
 sg image-revert                                # letztes Backup wiederherstellen
-sg hallo-llm                                   # LLM-Verbindung prüfen
 
 # Tests
 pytest                                         # alle Tests
@@ -57,19 +62,24 @@ pytest                                         # alle Tests
 
 Bei Konflikten gelten spezifischere Guidelines vor allgemeinen Mustern in dieser Datei.
 
-**Updater-Pattern** – jeder Updater implementiert `schedule()` und `get_update_interval()`:
-- `_should_run_for_npc(npc)` prüft ob neue STM-Nachrichten seit letztem Check vorhanden sind
-- ImageUpdater zusätzlich flag-basiert: `emit_update()` schreibt `.flag`, `schedule()` konsumiert es
-- `force=True` deaktiviert Skip-Logik (Prompt-Ähnlichkeitsprüfung)
+**Agent-/Job-Pattern** – fachliche Updates laufen als Job-Ausführungen über den Scheduler:
+- Jobs erben von `AbstractJob` und definieren `rate_limit_seconds` und `execute()`
+- Nach einer final erfolgreich gestreamten Chat-Nachricht wird `Scheduler.enqueue_all()` aufgerufen
+- Ohne neue final verarbeitete Chat-Nachricht werden keine fachlichen Jobs neu vorgemerkt
+- Der `Scheduler` ruft periodisch `execute_pending_jobs()` auf (alle 10 Sekunden via APScheduler)
+- Der Scheduler hält pending Jobs intern und führt sie synchron sowie rate-limitiert aus; Scheduler-Zyklen allein erzeugen keine neuen Job-Läufe
+- LLM-Antworten und fachliche Updates sind bewusst getrennt; es gibt keine LLM-Tool-/Function-Calls mehr
+- Hintergrund: Tool-/Function-Calling verhindert oft die normale Antwort. Ein Twice-Call-Pattern würde für dasselbe Ergebnis unnötige Kosten und Komplexität erzeugen
+- `force=True` bei Bildupdates deaktiviert die Prompt-Skip-Logik
 
 **Prompt-Templates** – Platzhalter per `.replace("{{KEY}}", value)`, kein Template-Engine:
-```python
-load_text(config.PROJECT_ROOT / "prompts" / "image_build_prompt.md").replace("{{NPC_DESCRIPTION}}", npc.description)
+```text
+Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC_DESCRIPTION}}", "<npc description>")
 ```
 
-**Konfiguration** – alle Werte über `engine/config.py` (pydantic-settings), `.env`-Datei für `OPENAI_API_KEY`. Kein Direktzugriff auf `os.environ`.
+**Konfiguration** – alle Werte über `engine/config.py` (pydantic-settings), `.env` mit Provider-spezifischen Schlüsseln (`OPENAI_*`, `GROK_*`) und Provider-Schaltern pro Fähigkeit (`LLM_BIG`, `LLM_SMALL`, `IMAGE`, `EMBEDDING`). Kein Direktzugriff auf `os.environ`.
 
-**Fehlerbehandlung** – OpenAI-Fehler werden in `RuntimeError` mit lesbarer Meldung gewrappt; nur wenn fachliche Reaktion nötig. Keine stillen Catches.
+**Fehlerbehandlung** – Provider-Fehler (OpenAI/Grok) werden in `RuntimeError` mit lesbarer Meldung gewrappt; user-sichtbare Details werden über `user_visible_provider_error_detail(...)` normalisiert. Keine stillen Catches.
 
 **Web-Frontend** – Vanilla-JS Web Components in `engine/web/static/js/`. Komponentenkommunikation ausschließlich via `CustomEvent`, kein direkter DOM-Zugriff auf Kind-Komponenten.
 
@@ -91,9 +101,12 @@ load_text(config.PROJECT_ROOT / "prompts" / "image_build_prompt.md").replace("{{
 
 ## Externe Abhängigkeiten
 
-- **OpenAI** – Chat (`gpt-*`), Bildgenerierung (`gpt-image-*`) via `client.images.edit`
-- **APScheduler** – Background-Scheduler für Updater-Loop
+- **OpenAI** – Provider für Chat/Bilder/Embeddings über OpenAI-API
+- **xAI SDK (`xai-sdk`)** – Grok-Bildgenerierung via `Client.image.sample(...)`
+- **APScheduler** – Background-Scheduler für den periodischen `execute_pending_jobs()`-Loop (10s Intervall)
 - **FastAPI + uvicorn** – Web-Backend
 - **pydantic-settings** – Konfiguration
-- **rapidfuzz** – Prompt-Ähnlichkeitsprüfung im ImageUpdater
+- **chromadb** – persistenter ETM-Vector-Store (`engine/stores/etm_vector_store.py`)
+- **fastembed** – lokaler Embedding-Pfad für Grok (`engine/llm/grok_provider_client.py`)
+- **rapidfuzz** – Prompt-Ähnlichkeitsprüfung im `ImageService`
 - **Pillow** – Bildkomprimierung vor LLM-Upload (PNG → JPEG)

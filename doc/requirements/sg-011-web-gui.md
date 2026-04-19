@@ -47,6 +47,18 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** Keine
 
+### Mobile-First-Nutzung der Web-GUI
+**Typ:** Nicht-funktional  
+**Beschreibung:** Das System muss die Web-GUI primär für mobile Geräte in Portrait-Orientierung auslegen und die Desktop-Nutzung weiterhin vollständig unterstützen.  
+**Akzeptanzkriterien:**
+- Die Kerninteraktionen Lesen, Eingeben und Absenden von Dialognachrichten sind in mobiler Portrait-Orientierung ohne horizontales Scrollen nutzbar.
+- Die Darstellung priorisiert auf mobilen Geräten den verfügbaren vertikalen Raum für Chat-Inhalte.
+- Die Desktop-Nutzung bleibt funktional vollständig nutzbar.
+
+**Technische Anmerkung:** Die Desktop-Nutzung adressiert insbesondere technisch affine Nutzer (aus der aktuellen Zielgruppe) mit lokaler Installation (z. B. Docker/Python-basiertes Setup).
+
+**Referenzen:** Keine
+
 ### Debug-Auslieferung statischer Assets
 **Typ:** Randbedingung  
 **Beschreibung:** Das System muss bei aktiviertem `WEB_DEBUG` statische Assets ohne Caching ausliefern.  

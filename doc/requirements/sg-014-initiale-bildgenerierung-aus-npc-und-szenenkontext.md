@@ -5,8 +5,8 @@ state: implemented
 # SG-014: Initiale Bildgenerierung aus NPC- und Szenenkontext
 
 ## Kontext
-Das System soll für den aktiven NPC-Szenen-Kontext eine initiale Bilderzeugung aus aktivem NPC und zusammengeführter Szenenbeschreibung bereitstellen. Die NPC-szenenspezifische Ergänzung (Kurzbeschreibung) ist Bestandteil dieser zusammengeführten Szenenbeschreibung.  
-SG-014 beschreibt Auslösung, Eingabebasis und Speicherung des Initialbildes; allgemeine Anforderungen an NPC-Bilder werden referenziert.
+Das System stellt für den aktiven NPC in der aktiven Szene ein erstes Bild auf Basis der Charaktergrundlage und der vollständigen Szenenbeschreibung bereit. Die NPC-szenenspezifische Ergänzung ist Bestandteil dieser Beschreibung.  
+SG-014 beschreibt Auslösung, fachliche Eingaben, Sicherung, Ablage und die Grundlage für die spätere Bildfortschreibung; allgemeine Anforderungen an NPC-Bilder werden referenziert.
 
 ## Annahmen
 - Keine
@@ -18,10 +18,10 @@ SG-014 beschreibt Auslösung, Eingabebasis und Speicherung des Initialbildes; al
 
 ### Manuelle Auslösung der initialen Bilderzeugung
 **Typ:** Funktional  
-**Beschreibung:** Das System muss die initiale Bilderzeugung für den aktiven NPC-Szenen-Kontext manuell auslösbar bereitstellen.  
+**Beschreibung:** Das System muss die erstmalige Bilderzeugung für den aktiven NPC in der aktiven Szene manuell auslösbar bereitstellen.  
 **Akzeptanzkriterien:**
-- Die initiale Bilderzeugung kann für den aktiven NPC-Szenen-Kontext manuell gestartet werden.
-- Das CLI kann diese manuelle Auslösung bereitstellen.
+- Die erstmalige Bilderzeugung kann für den aktiven NPC in der aktiven Szene bewusst gestartet werden.
+- Für diese Auslösung steht ein vorgesehener manueller Bedienweg zur Verfügung.
 
 **Referenzen:** `doc/requirements/sg-005-npc-bilder.md`
 
@@ -44,46 +44,46 @@ SG-014 beschreibt Auslösung, Eingabebasis und Speicherung des Initialbildes; al
 
 ### Einbezug der zusammengeführten Szenenbeschreibung
 **Typ:** Funktional  
-**Beschreibung:** Das System muss für die initiale Bilderzeugung die zusammengeführte Szenenbeschreibung des aktiven NPC-Szenen-Kontexts verwenden. Diese besteht aus der Basisszene der aktiven Szene und der NPC-szenenspezifischen Ergänzung.  
+**Beschreibung:** Das System muss für die erstmalige Bilderzeugung die vollständige Szenenbeschreibung des aktiven NPC in der aktiven Szene verwenden. Diese umfasst die allgemeine Szene und die NPC-spezifische Ergänzung.  
 **Akzeptanzkriterien:**
-- Die für die initiale Bilderzeugung verwendete Szenenbeschreibung entspricht der zusammengeführten Szenenbeschreibung des aktiven NPC-Szenen-Kontexts (`npc.scene.description`).
-- Die verwendete Szenenbeschreibung enthält die Basisszene der aktiven Szene.
-- Die verwendete Szenenbeschreibung enthält die NPC-szenenspezifische Ergänzung des aktiven NPC für die aktive Szene.
+- Die verwendete Szenenbeschreibung entspricht der vollständigen Beschreibung des aktiven NPC in der aktiven Szene.
+- Die verwendete Szenenbeschreibung enthält die allgemeine Beschreibung der aktiven Szene.
+- Die verwendete Szenenbeschreibung enthält die NPC-spezifische Ergänzung für die aktive Szene.
 
 **Referenzen:** `doc/requirements/sg-006-dynamischer-scene-state.md`, `prompts/image_scene.md`
 
 ### Einbezug der NPC-szenenspezifischen Ergänzung
 **Typ:** Funktional  
-**Beschreibung:** Das System muss die NPC-szenenspezifische Ergänzung der aktiven Szene für die initiale Bilderzeugung verwenden. Diese Ergänzung ist Teil von `npc.scene.description` und kein separater Texteingang.  
+**Beschreibung:** Das System muss die NPC-spezifische Ergänzung der aktiven Szene für die erstmalige Bilderzeugung berücksichtigen.  
 **Akzeptanzkriterien:**
-- Die initiale Bilderzeugung verwendet die NPC-szenenspezifische Ergänzung des aktiven NPC für die aktive Szene.
-- Die NPC-szenenspezifische Ergänzung wird über die zusammengeführte Szenenbeschreibung (`npc.scene.description`) eingebracht.
-- Für diesen Bestandteil wird kein separater Texteingang außerhalb von `npc.scene.description` verwendet.
+- Die erstmalige Bilderzeugung berücksichtigt die NPC-spezifische Ergänzung für die aktive Szene.
+- Diese Ergänzung wird als Teil der vollständigen Szenenbeschreibung verwendet.
+- Sie wird nicht als eigenständige, davon getrennte Eingabe behandelt.
 
 **Referenzen:** `doc/requirements/sg-006-dynamischer-scene-state.md`, `prompts/image_scene.md`
 
 ### Backup vor Ersetzung des aktiven Laufzeitbildes
 **Typ:** Funktional  
-**Beschreibung:** Das System muss ein bestehendes aktives Laufzeitbild des betroffenen NPC-Szenen-Kontexts vor seiner Ersetzung sichern.  
+**Beschreibung:** Das System muss ein bereits verwendetes Bild des betroffenen NPC in der aktiven Szene vor seiner Ersetzung sichern.  
 **Akzeptanzkriterien:**
-- Wenn bereits ein aktives Laufzeitbild vorhanden ist, existiert vor dem Speichern des neuen Initialbildes ein Backup dieses Bildes.
+- Wenn bereits ein verwendetes Bild vorhanden ist, existiert vor dem Speichern des neuen ersten Bildes eine Sicherung dieses Bildes.
 
 **Referenzen:** `doc/requirements/sg-005-npc-bilder.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`
 
 ### Speicherung als aktives Laufzeitbild
 **Typ:** Funktional  
-**Beschreibung:** Das System muss das erzeugte Initialbild als aktives Laufzeitbild des betroffenen NPC-Szenen-Kontexts speichern.  
+**Beschreibung:** Das System muss das erzeugte erste Bild als aktuell verwendetes Bild des betroffenen NPC in der aktiven Szene ablegen.  
 **Akzeptanzkriterien:**
-- Nach erfolgreicher initialer Bilderzeugung ist das neue Bild als aktives Laufzeitbild des betroffenen NPC-Szenen-Kontexts gespeichert.
+- Nach erfolgreicher erstmaliger Bilderzeugung ist das neue Bild als aktuell verwendetes Bild des betroffenen NPC in der aktiven Szene verfügbar.
 
 **Referenzen:** `doc/requirements/sg-005-npc-bilder.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`
 
-### Persistierung eines Initialwerts für den Image-Updater
+### Persistierung eines Ausgangswerts für die Bildfortschreibung
 **Typ:** Funktional  
-**Beschreibung:** Das System muss nach erfolgreicher initialer Bildgenerierung für den betroffenen NPC-Szenen-Kontext einen Initialwert für den Image-Updater persistieren.  
+**Beschreibung:** Das System muss nach erfolgreicher erstmaliger Bilderzeugung für den betroffenen NPC in der aktiven Szene einen Ausgangswert für spätere Bildfortschreibungen festhalten.  
 **Akzeptanzkriterien:**
-- Nach erfolgreicher initialer Bildgenerierung steht für den betroffenen NPC-Szenen-Kontext ein persistierter Initialwert für den Image-Updater zur Verfügung.
-- Der persistierte Initialwert entspricht dem für die anschließende Bildfortschreibung maßgeblichen Bildprompt und nicht dem Prompt der initialen Bildgenerierung.
-- Wird der Image-Updater unmittelbar danach für denselben NPC-Szenen-Kontext ohne relevante Kontextänderung ausgeführt, entsteht kein neues Bild allein deshalb, weil ein initialer Promptwert fehlt.
+- Nach erfolgreicher erstmaliger Bilderzeugung ist für den betroffenen NPC in der aktiven Szene ein Ausgangswert für spätere Bildfortschreibungen vorhanden.
+- Dieser Ausgangswert entspricht der fachlich maßgeblichen Bildbeschreibung für die weitere Fortschreibung und nicht nur der Beschreibung, die zur Erzeugung des ersten Bildes verwendet wurde.
+- Wird die Bildfortschreibung unmittelbar danach ohne relevante Änderung des Kontexts erneut ausgelöst, entsteht kein neues Bild allein deshalb, weil ein Ausgangswert fehlt.
 
 **Referenzen:** `doc/requirements/sg-007-dreistufige-bildgenerierung.md`, `doc/requirements/sg-008-llm-based-update-orchesrator-for-scene-ltm-image.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`, `prompts/image_build_prompt.md`

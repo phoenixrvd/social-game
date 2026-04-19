@@ -127,7 +127,7 @@ def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Neue Nachricht")
-    user_message = service.user_message
+    user_message = turn_messages[-1]
 
     assert user_message is not None
     assert user_message["role"] == "user"
@@ -163,16 +163,15 @@ def test_build_turn_messages_includes_retrieved_memories_from_chroma(monkeypatch
         def load(self):
             return npc
 
-    class FakeEtmRetrievalService:
-        def load_relevant(self, loaded_npc, query_text):
-            assert loaded_npc is npc
+    class FakeEtmService:
+        def load_relevant(self, query_text):
             assert "user: Wir waren gestern in der Bar." in query_text
             assert "assistant: Da war es ziemlich ruhig." in query_text
             assert query_text.endswith("user: Wollen wir wieder in eine Bar gehen?")
             return "- Er erinnert sich an eine ruhige Bar mit guten Gläsern."
 
     monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
-    monkeypatch.setattr(npc_turn_service_module, "EtmRetrievalService", FakeEtmRetrievalService)
+    monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     monkeypatch.setattr(npc_turn_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
 
     class FakePrompt:
@@ -242,14 +241,13 @@ def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatc
 
     captured: dict[str, str] = {}
 
-    class FakeEtmRetrievalService:
-        def load_relevant(self, loaded_npc, query_text):
-            assert loaded_npc is npc
+    class FakeEtmService:
+        def load_relevant(self, query_text):
             captured["query"] = query_text
             return ""
 
     monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
-    monkeypatch.setattr(npc_turn_service_module, "EtmRetrievalService", FakeEtmRetrievalService)
+    monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     monkeypatch.setattr(npc_turn_service_module.config, "ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES", 3)
 
     class FakePrompt:
@@ -299,5 +297,20 @@ def test_build_chat_messages_appends_user_message(monkeypatch):
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Neue Nachricht")
 
-    assert service.user_message == {"role": "user", "content": "Neue Nachricht"}
-    assert turn_messages[-1] == service.user_message
+    assert turn_messages[-1] == {"role": "user", "content": "Neue Nachricht"}
+
+
+def test_finalize_turn_persists_trimmed_messages(monkeypatch):
+    calls: list[tuple[str, str]] = []
+
+    class FakeNpcStore:
+        def append_stm_turn(self, user_content: str, assistant_content: str):
+            calls.append((user_content, assistant_content))
+
+    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
+
+    service = NpcTurnService()
+    service.finalize_turn("  Hallo  ", "  Hi zurück  ")
+
+    assert calls == [("Hallo", "Hi zurück")]
+

@@ -11,7 +11,7 @@ from openai.types.chat import (
 from engine.config import config
 from engine.models import Npc
 from engine.storage import storage
-from engine.services.etm_retrieval_service import EMPTY_ETM_TEXT, EtmRetrievalService
+from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 from engine.stores.npc_store import NpcStore
 
 EMPTY_PLACEHOLDER = "(leer)"
@@ -20,8 +20,7 @@ EMPTY_PLACEHOLDER = "(leer)"
 class NpcTurnService:
     def __init__(self) -> None:
         self.npc_store = NpcStore()
-        self.etm_retrieval = EtmRetrievalService()
-        self.user_message: ChatCompletionMessageParam | None = None
+        self.etm_retrieval = EtmService()
 
     def _build_turn_messages_for_context(
         self,
@@ -70,11 +69,15 @@ class NpcTurnService:
     ) -> list[ChatCompletionMessageParam]:
         npc = self.npc_store.load()
         retrieval_query = self._build_retrieval_query(npc, player_input)
-        retrieved_memories = self.etm_retrieval.load_relevant(npc, retrieval_query) or EMPTY_ETM_TEXT
+        retrieved_memories = self.etm_retrieval.load_relevant(retrieval_query) or EMPTY_ETM_TEXT
         user_message = self._to_message_param("user", player_input.strip())
-        self.user_message = user_message
         turn_messages = self._build_turn_messages_for_context(npc, retrieved_memories)
         return [*turn_messages, user_message]
+
+    def finalize_turn(self, player_input: str, assistant_reply: str) -> None:
+        user_content = player_input.strip()
+        assistant_content = assistant_reply.strip()
+        self.npc_store.append_stm_turn(user_content, assistant_content)
 
     @staticmethod
     def _build_retrieval_query(npc: Npc, player_input: str) -> str:

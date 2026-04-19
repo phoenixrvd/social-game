@@ -1,6 +1,6 @@
 import "./sg-chat.js"
 import "./sg-input.js"
-import "./sg-scene-image.js"
+import "./sg-thumbnail.js"
 import { appStore } from "./app-store.js"
 import { appActions } from "./app-actions.js"
 
@@ -9,6 +9,10 @@ class SocialGameApp extends HTMLElement {
     super()
     this.$ = {}
     this._viewportEvents = null
+    this._state = {
+      imageUrl: "",
+      isImageRefreshLoading: false,
+    }
   }
 
   connectedCallback() {
@@ -22,7 +26,10 @@ class SocialGameApp extends HTMLElement {
             <sg-input class="sg-input-component"></sg-input>
           </section>
           <section class="sg-scene-image-slot" aria-label="Szenenbild">
-            <sg-scene-image></sg-scene-image>
+            <div class="sg-image-pane">
+              <div class="sg-image-empty sg-hidden">Kein Bild geladen</div>
+              <sg-thumbnail class="sg-scene-thumbnail"></sg-thumbnail>
+            </div>
           </section>
         </div>
       </div>
@@ -30,9 +37,15 @@ class SocialGameApp extends HTMLElement {
 
     this.$ = {
       input: this.querySelector("sg-input"),
+      imageSlot: this.querySelector(".sg-scene-image-slot"),
+      imageEmpty: this.querySelector(".sg-scene-image-slot .sg-image-empty"),
     }
 
     appStore.subscribe("focusRequestedAt", this.onInputFocusRequested.bind(this))
+    appStore.subscribe("imageUrl", this.onImageUrlChanged.bind(this))
+    appStore.subscribe("isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this))
+    this.syncImageFromStore()
+    this.renderSceneImageState()
     this.registerViewportSync()
     this.syncViewportHeight()
     appActions.loadInitialState()
@@ -66,6 +79,30 @@ class SocialGameApp extends HTMLElement {
 
   focusInput() {
     requestAnimationFrame(() => this.$.input?.focusInput())
+  }
+
+  syncImageFromStore() {
+    const state = appStore.getState()
+    this._state.imageUrl = typeof state.imageUrl === "string" ? state.imageUrl : ""
+    this._state.isImageRefreshLoading = Boolean(state.isImageRefreshLoading)
+  }
+
+  onImageUrlChanged(imageUrl) {
+    this._state.imageUrl = typeof imageUrl === "string" ? imageUrl : ""
+    this.renderSceneImageState()
+  }
+
+  onImageRefreshLoadingChanged(isImageRefreshLoading) {
+    this._state.isImageRefreshLoading = Boolean(isImageRefreshLoading)
+    this.renderSceneImageState()
+  }
+
+  renderSceneImageState() {
+    const hasImage = this._state.imageUrl.trim().length > 0
+    const showSlotLoading = Boolean(hasImage && this._state.isImageRefreshLoading)
+
+    this.$.imageEmpty.classList.toggle("sg-hidden", hasImage)
+    this.$.imageSlot.classList.toggle("is-loading", showSlotLoading)
   }
 
   onInputFocusRequested() {

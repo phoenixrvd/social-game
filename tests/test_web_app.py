@@ -1,22 +1,24 @@
 import asyncio
 import json
 from dataclasses import replace
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 import openai
 from PIL import Image
 import requests
 
 import engine.web.app as web_app_module
 import engine.storage as storage_module
-from engine.models import Npc, Scene, Session, ShortMemoryMessage
+from engine.models import Npc, Scene, Session, ShortMemoryMessage, Stm
 
 
-def _make_test_png(path: Path) -> Path:
-    img = Image.new("RGB", (4, 4), color=(80, 120, 160))
+def _make_test_png(path: Path, width: int = 4, height: int = 4) -> Path:
+    img = Image.new("RGB", (width, height), color=(80, 120, 160))
     img.save(path, format="PNG")
     return path
 
@@ -31,7 +33,7 @@ def _build_npc(npc_id: str, scene_id: str, messages: list[ShortMemoryMessage]) -
         scene=Scene(scene_id=scene_id, description=f"Szene {scene_id}"),
         character={"name": npc_id.title()},
         img_current=Path(__file__),
-        stm=messages,
+        stm=Stm(messages),
     )
 
 
@@ -82,7 +84,7 @@ class FakeNpcStore:
             scene=Scene(scene_id=session.scene_id, description=f"Szene {session.scene_id}"),
             character={"name": session.npc_id.title()},
         )
-        return replace(current, stm=list(current.stm), character=dict(current.character))
+        return replace(current, stm=Stm(current.stm), character=dict(current.character))
 
     def append_stm_turn(self, user_content: str, assistant_content: str) -> list[ShortMemoryMessage]:
         self.appended_turns.append((user_content, assistant_content))
@@ -103,8 +105,9 @@ class FakeNpcStore:
         self._current_npc.stm.extend([user_message, assistant_message])
         return [user_message, assistant_message]
 
+
 class FakeNpcTurnService:
-    def __init__ (self) -> None:
+    def __init__(self) -> None:
         self.npc_store = fake_npc_store
         self.user_message = None
 
@@ -112,6 +115,9 @@ class FakeNpcTurnService:
         user_message = {"role": "user", "content": player_input}
         self.user_message = user_message
         return [{"role": "system", "content": "stub"}, user_message]
+
+    def finalize_turn(self, player_input: str, assistant_reply: str) -> None:
+        self.npc_store.append_stm_turn(player_input.strip(), assistant_reply.strip())
 
 
 fake_npc_store = FakeNpcStore()
@@ -176,8 +182,10 @@ def _setup_web_app(
     monkeypatch.setattr(web_app_module, "SessionStore", FakeSessionStore)
     monkeypatch.setattr(web_app_module, "NpcStore", lambda: fake_npc_store)
     monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
-    monkeypatch.setattr(web_app_module, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
+    monkeypatch.setattr(web_app_module.client, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
     web_app_module.app.state.watch_scheduler = None
+    web_app_module._scheduler = None
+
 
 def _request(path: str, method: str = "GET"):
     return cast(Any, SimpleNamespace(url=SimpleNamespace(path=path), method=method))
@@ -364,13 +372,12 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
     assert "kennt den Spieler" in payload["messages"][2]["html"]
 
 
-
 def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = replace(
         fake_npc_store._current_npc,
         description="[link](javascript:alert('x'))",
-        stm=[],
+        stm=Stm(),
         scene=Scene(scene_id="office", description="Szene [ok](https://example.com)"),
     )
 
@@ -383,8 +390,8 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
     _setup_web_app(tmp_path, monkeypatch)
     fake_npc_store._current_npc = replace(
         fake_npc_store._current_npc,
-        description="Au\u00dfen:\n\n- direkt\n- offen",
-        stm=[],
+        description="Außen:\n\n- direkt\n- offen",
+        stm=Stm(),
     )
 
     payload = web_app_module.get_state()
@@ -410,7 +417,7 @@ def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
         web_app_module.update_session(web_app_module.SessionRequest())
         raise AssertionError("Expected HTTPException")
     except HTTPException as exc:
-        assert exc.status_code == 400
+        assert exc.status_code == 422
         assert exc.detail == "Mindestens npc_id oder scene_id muss gesetzt sein."
 
 
@@ -420,9 +427,18 @@ def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
     scene_data_dir.mkdir(parents=True, exist_ok=True)
     assert scene_data_dir.exists()
 
+    calls: list[str] = []
+
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            calls.append("clear_pending_jobs")
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
     payload = web_app_module.reset_active_npc_runtime_data()
 
     assert not scene_data_dir.exists()
+    assert calls == ["clear_pending_jobs"]
     assert payload["npc_id"] == "vika"
     assert payload["scene_id"] == "office"
 
@@ -447,29 +463,107 @@ def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
 
     try:
         web_app_module.current_image()
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as exc:
-        assert exc.status_code == 404
-        assert "Kein NPC-Bild verfügbar." in exc.detail
-        assert "npc_id='vika'" in exc.detail
-        assert "scene_id='office'" in exc.detail
+        raise AssertionError("Expected FileNotFoundError")
+    except FileNotFoundError as exc:
+        assert exc.filename == str(fake_npc_store._current_npc.img_current)
+
+
+def test_npc_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    _make_test_png(tmp_path / "npcs" / "vika" / "img.png")
+
+    class FakeScheduler:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/npcs/vika/image?v=123")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/webp")
+    assert response.content
+
+
+def test_scene_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    _make_test_png(tmp_path / "scenes" / "office" / "img.png")
+
+    class FakeScheduler:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/scenes/office/image?v=123")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("image/webp")
+    assert response.content
+
+
+def test_npc_option_image_endpoint_scales_width_to_100(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    _make_test_png(tmp_path / "npcs" / "vika" / "img.png", width=400, height=200)
+
+    class FakeScheduler:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/npcs/vika/image?v=123")
+
+    assert response.status_code == 200
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.width == 100
+        assert image.height == 50
+
+
+def test_scene_option_image_endpoint_scales_width_to_100(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    _make_test_png(tmp_path / "scenes" / "office" / "img.png", width=250, height=150)
+
+    class FakeScheduler:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/scenes/office/image?v=123")
+
+    assert response.status_code == 200
+    with Image.open(BytesIO(response.content)) as image:
+        assert image.width == 100
+        assert image.height == 60
 
 
 def test_refresh_active_image_uses_character_image_service_directly(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     calls: list[str] = []
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def update_from_context(self, force: bool = False) -> None:
             assert force is True
             calls.append("update_from_context")
 
-    class FailingImageUpdater:
-        def __init__(self) -> None:
-            raise AssertionError("ImageUpdater darf beim manuellen Refresh nicht genutzt werden")
-
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FailingImageUpdater)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     response = web_app_module.refresh_active_image()
 
@@ -480,12 +574,12 @@ def test_refresh_active_image_uses_character_image_service_directly(tmp_path, mo
 def test_refresh_active_image_returns_400_with_detail_for_user_visible_llm_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def update_from_context(self, force: bool = False) -> None:
             assert force is True
             raise _make_user_visible_runtime_error("Anfrage durch Moderation blockiert.")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     try:
         web_app_module.refresh_active_image()
@@ -501,12 +595,12 @@ def test_refresh_active_image_returns_400_with_detail_for_user_visible_llm_error
 def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def update_from_context(self, force: bool = False) -> None:
             assert force is True
             raise RuntimeError("generation_failed")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     try:
         web_app_module.refresh_active_image()
@@ -523,12 +617,12 @@ def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp
 def test_refresh_active_image_returns_400_with_detail_for_user_visible_http_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def update_from_context(self, force: bool = False) -> None:
             assert force is True
             raise _make_user_visible_http_runtime_error("Anfrage durch Moderation blockiert.")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     try:
         web_app_module.refresh_active_image()
@@ -547,7 +641,7 @@ def test_refresh_active_image_returns_400_with_detail_for_direct_openai_error(tm
     class FakePermissionDenied(openai.OpenAIError):
         pass
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def update_from_context(self, force: bool = False) -> None:
             assert force is True
             raise FakePermissionDenied(
@@ -556,7 +650,7 @@ def test_refresh_active_image_returns_400_with_detail_for_direct_openai_error(tm
                 "SAFETY_CHECK_TYPE_CSAM'}\")"
             )
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     try:
         web_app_module.refresh_active_image()
@@ -573,11 +667,11 @@ def test_revert_active_image_calls_character_image_service(tmp_path, monkeypatch
     _setup_web_app(tmp_path, monkeypatch)
     calls: list[str] = []
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def revert(self) -> None:
             calls.append("revert")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     response = web_app_module.revert_active_image()
 
@@ -588,11 +682,11 @@ def test_revert_active_image_calls_character_image_service(tmp_path, monkeypatch
 def test_revert_active_image_returns_500_on_internal_runtime_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def revert(self) -> None:
             raise RuntimeError("revert_failed")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     try:
         web_app_module.revert_active_image()
@@ -610,11 +704,11 @@ def test_delete_active_image_calls_character_image_service_and_returns_state(tmp
     _setup_web_app(tmp_path, monkeypatch)
     calls: list[str] = []
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def delete_current(self) -> None:
             calls.append("delete_current")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     payload = web_app_module.delete_active_image()
 
@@ -626,11 +720,11 @@ def test_delete_active_image_calls_character_image_service_and_returns_state(tmp
 def test_delete_active_image_returns_500_on_internal_runtime_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    class FakeCharacterImageService:
+    class FakeImageService:
         def delete_current(self) -> None:
             raise RuntimeError("delete_failed")
 
-    monkeypatch.setattr(web_app_module, "CharacterImageService", FakeCharacterImageService)
+    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
 
     try:
         web_app_module.delete_active_image()
@@ -644,8 +738,9 @@ def test_delete_active_image_returns_500_on_internal_runtime_error(tmp_path, mon
     assert b"delete_failed" not in response.body
 
 
-def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(tmp_path, monkeypatch):
+def test_chat_stream_scheduled_tools_nach_finaler_nachricht(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
+    captured: dict[str, object] = {}
     calls: list[str] = []
 
     class FakeStreamingResponse:
@@ -654,12 +749,17 @@ def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(
             self.media_type = media_type
             self.body_iterator = content
 
-    class FakeImageUpdater:
-        def emit_update_if_missing(self) -> None:
-            calls.append("emit_update_if_missing")
+    class FakeScheduler:
+        def enqueue_all(self) -> None:
+            calls.append("enqueue_all")
+
+    def fake_stream_prompt(turn_messages):
+        captured["turn_messages"] = turn_messages
+        return iter(["Antwort", " vom Web"])
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "ImageUpdater", FakeImageUpdater)
+    monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Startbild bitte"))
 
@@ -669,7 +769,11 @@ def test_chat_stream_emits_initial_image_update_when_generated_image_is_missing(
         {"type": "chunk", "delta": " vom Web"},
         {"type": "done"},
     ]
-    assert calls == ["emit_update_if_missing"]
+    assert captured["turn_messages"] == [
+        {"role": "system", "content": "stub"},
+        {"role": "user", "content": "Startbild bitte"},
+    ]
+    assert calls == ["enqueue_all"]
 
 
 def test_chat_endpoint_is_not_available_anymore(tmp_path, monkeypatch):
@@ -680,6 +784,7 @@ def test_chat_endpoint_is_not_available_anymore(tmp_path, monkeypatch):
 def test_chat_stream_endpoint_streams_ndjson_events(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     captured: dict[str, object] = {}
+    calls: list[str] = []
 
     class FakeStreamingResponse:
         def __init__(self, content, media_type: str):
@@ -687,12 +792,17 @@ def test_chat_stream_endpoint_streams_ndjson_events(tmp_path, monkeypatch):
             self.media_type = media_type
             self.body_iterator = content
 
+    class FakeScheduler:
+        def enqueue_all(self) -> None:
+            calls.append("enqueue_all")
+
     def fake_stream_prompt(turn_messages):
         captured["turn_messages"] = turn_messages
         return iter(["Antwort", " vom Web"])
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Stream bitte"))
 
@@ -708,16 +818,22 @@ def test_chat_stream_endpoint_streams_ndjson_events(tmp_path, monkeypatch):
         {"type": "chunk", "delta": " vom Web"},
         {"type": "done"},
     ]
+    assert calls == ["enqueue_all"]
 
 
 def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
+    calls: list[str] = []
 
     class FakeStreamingResponse:
         def __init__(self, content, media_type: str):
             self.status_code = 200
             self.media_type = media_type
             self.body_iterator = content
+
+    class FakeScheduler:
+        def schedule_all(self) -> None:
+            calls.append("schedule_all")
 
     def fake_stream_prompt(_turn_messages):
         class FailingIterator:
@@ -730,7 +846,8 @@ def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
         return FailingIterator()
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Fehler bitte"))
 
@@ -739,6 +856,7 @@ def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
         {"type": "error", "detail": "Kontingent erschöpft – Plan und Abrechnung prüfen."},
     ]
     assert fake_npc_store.appended_turns == []
+    assert calls == []
 
 
 def test_chat_stream_emits_error_event_for_direct_openai_error(tmp_path, monkeypatch):
@@ -768,7 +886,7 @@ def test_chat_stream_emits_error_event_for_direct_openai_error(tmp_path, monkeyp
         return FailingIterator()
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Fehler bitte"))
 
@@ -799,7 +917,7 @@ def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path,
         return _iterator()
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "stream_prompt", fake_stream_prompt)
+    monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Teilantwort bitte"))
 
@@ -813,6 +931,7 @@ def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path,
 
 def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
+    calls: list[str] = []
 
     class FakeStreamingResponse:
         def __init__(self, content, media_type: str):
@@ -820,11 +939,16 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
             self.media_type = media_type
             self.body_iterator = content
 
+    class FakeScheduler:
+        def schedule_all(self) -> None:
+            calls.append("schedule_all")
+
     def fake_append_stm_turn(_user_content: str, _assistant_content: str):
         raise RuntimeError("internal_store_issue")
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
     monkeypatch.setattr(fake_npc_store, "append_stm_turn", fake_append_stm_turn)
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Speichern bitte"))
 
@@ -834,6 +958,7 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
         {"type": "chunk", "delta": " vom Web"},
         {"type": "error", "detail": "Interner Serverfehler."},
     ]
+    assert calls == []
 
 
 def test_web_lifespan_uses_scheduler_directly(monkeypatch):
@@ -882,4 +1007,5 @@ def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
     _run_async(run_lifespan())
     _run_async(run_lifespan())
     assert events == ["init", "start", "inside", "stop", "start", "inside", "stop"]
+
 

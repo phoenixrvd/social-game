@@ -35,7 +35,7 @@ defined
 - offen: Die Entscheidung wird neu bewertet, sobald der Chat-Loop stabiler und die Systemgrenzen klarer sind.
 
 ## Annahmen
-- Services, Stores, CLI, Web-App und Updater werden weiterhin automatisiert getestet.
+- Services, Stores, CLI, Web-App und Tools werden weiterhin automatisiert getestet.
 - Die manuelle Prüfung umfasst mindestens Chat-Start, STM-Prüfung, Beobachtung von State- und ETM-Updates und Kontrolle der Persistenz in `.data/`.
 
 ## Offene Fragen

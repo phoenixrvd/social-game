@@ -51,3 +51,22 @@ def test_storage_base_paths_exposed(tmp_path, monkeypatch):
     assert storage_module.storage.etm_fastembed_cache == tmp_path / ".data" / "fastembed_cache"
     assert storage_module.storage.overrides_root == tmp_path / ".overrides"
 
+
+def test_prompt_image_refresh_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage_module.config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "image_refresh.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "image_refresh.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override", encoding="utf-8")
+
+    item = storage_module.storage.prompts.image_refresh
+    assert item.path == override_prompt
+    assert item.get() == "override"
+
+
+

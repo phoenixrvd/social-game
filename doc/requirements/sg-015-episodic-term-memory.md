@@ -5,10 +5,9 @@ state: implemented
 # SG-015: Episodic Term Memory (ETM)
 
 ## Kontext
-Das System soll sich an relevante frühere Gesprächsinhalte erinnern, auch wenn sie nicht mehr im unmittelbaren Short-Term-Memory liegen.
-Episodic Term Memory (ETM) speichert deshalb ältere Gesprächsabschnitte als kompakte Episoden in einer Vector-Datenbank und stellt sie vor NPC-Antworten per semantischem Retrieval bereit.
-Statische Beziehungsgrundlagen werden separat über `relationship.md` in den initialen State eingebracht.
-ETM-Episoden werden aus Sicht des aktiven NPC gespeichert, nicht als bloße Chat-Beschreibung.
+Das System soll sich an relevante frühere Gesprächsinhalte erinnern, auch wenn sie nicht mehr Teil des unmittelbaren Gesprächskontexts sind.
+Dazu werden ältere Gesprächsabschnitte als kompakte Episoden festgehalten und bei passenden NPC-Antworten wieder berücksichtigt.
+Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht des aktiven NPC festgehalten.
 
 ## Annahmen
 - Die lokal eingebettete Vector-Datenbank für ETM-Retrieval ist Chroma.
@@ -59,50 +58,48 @@ ETM-Episoden werden aus Sicht des aktiven NPC gespeichert, nicht als bloße Chat
 
 ### ETM-Ladekontexte
 **Typ:** Randbedingung
-**Beschreibung:** Das System muss ETM nur in fachlich passenden Kontexten laden.
+**Beschreibung:** Das System muss frühere Episoden nur in fachlich passenden Situationen berücksichtigen.
 **Akzeptanzkriterien:**
-- ETM wird im Dialogkontext vor einer NPC-Antwort geladen.
-- ETM wird für State-Updates geladen, wenn der State-Updater aufgrund neuer STM-Nachrichten läuft.
-- ETM wird für Scene-Updates geladen, wenn der Scene-Updater aufgrund neuer STM-Nachrichten läuft.
-- ETM wird nicht direkt für Bildgenerierung geladen.
-- Bildgenerierung nutzt den aktuellen NPC-, State- und Scene-Kontext; relevante ETM-Inhalte wirken nur indirekt über State oder Scene ein.
-- ETM wird nicht für die Anzeige des Initialkontexts in der Web-GUI geladen.
-- Die Web-GUI verwendet für sichtbaren Initialkontext Charakterbeschreibung und Szene, nicht ETM.
+- Vor einer NPC-Antwort werden passende frühere Episoden berücksichtigt.
+- Bei der Fortschreibung des aktuellen Charakterzustands werden passende frühere Episoden berücksichtigt, wenn neue Gesprächsinhalte dafür relevant sind.
+- Bei der Fortschreibung der aktuellen Szene werden passende frühere Episoden berücksichtigt, wenn neue Gesprächsinhalte dafür relevant sind.
+- Für die unmittelbare Bilderzeugung werden frühere Episoden nicht direkt herangezogen.
+- Für die sichtbare Ausgangslage werden Charakterbeschreibung und Szene verwendet, nicht frühere Episoden.
 
 **Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
 
 ### Begrenzung von Embedding-Requests
 **Typ:** Nicht-funktional
-**Beschreibung:** Das System muss Embedding-Requests für ETM-Retrieval begrenzen.
+**Beschreibung:** Das System muss die Berücksichtigung früherer Episoden sparsam und anlassbezogen halten.
 **Akzeptanzkriterien:**
-- Ein ETM-Retrieval darf pro relevanter User-Nachricht höchstens eine Embedding-Query auslösen.
-- State- und Scene-Updates dürfen ETM-Retrieval nur auslösen, wenn der jeweilige Updater tatsächlich läuft.
-- Ohne vorhandenen ETM-Speicher wird kein Embedding-Request für ETM-Retrieval ausgelöst.
-- Für Kontexte ohne ETM-Nutzung, insbesondere direkte Bildgenerierung, wird kein ETM-Retrieval-Embedding erzeugt.
-- Leere oder rein technische Eingaben lösen kein ETM-Retrieval aus.
+- Pro relevanter User-Nachricht wird die Berücksichtigung früherer Episoden höchstens einmal angestoßen.
+- Bei der Fortschreibung des aktuellen Charakterzustands oder der aktuellen Szene werden frühere Episoden nur einbezogen, wenn dies fachlich erforderlich ist.
+- Ohne vorhandene Episoden wird keine Berücksichtigung früherer Episoden ausgelöst.
+- Für die unmittelbare Bilderzeugung werden keine früheren Episoden einbezogen.
+- Leere oder rein technische Eingaben lösen keine Berücksichtigung früherer Episoden aus.
 
 **Referenzen:** `doc/adr/004-modellstrategie.md`, `doc/adr/008-chroma-als-vector-datenbank.md`
 
 ### Trennung von Initialkontext und ETM
 **Typ:** Randbedingung
-**Beschreibung:** Das System muss ETM fachlich von statischem Initialkontext trennen.
+**Beschreibung:** Das System muss frühere Gesprächsepisoden fachlich von statischem Ausgangskontext trennen.
 **Akzeptanzkriterien:**
-- Episoden sind abrufbare frühere Gesprächsabschnitte, keine kanonische Charakterbiografie.
-- `relationship.md` ist statischer Initialkontext und keine abrufbare Episode.
-- ETM-Treffer ergänzen den aktuellen Prompt, ersetzen den aktuellen State aber nicht.
-- Die STM-Auslagerung schreibt ETM-Episoden, nicht `relationship.md`.
-- State oder Scene werden nicht automatisch als eigenständige Memory-Artefakte fortgeschrieben.
+- Episoden sind frühere Gesprächserfahrungen und keine feste Charaktergrundlage.
+- Statischer Ausgangskontext ist keine Episode.
+- Berücksichtigte Episoden ergänzen den aktuellen Kontext, ersetzen aber nicht den aktuellen Charakterzustand.
+- Beim Auslagern älterer Gesprächsinhalte entstehen Episoden, keine Änderungen am statischen Ausgangskontext.
+- Der aktuelle Charakterzustand und die aktuelle Szene werden nicht allein durch ihre Fortschreibung zu eigenständigen Erinnerungen.
 
 **Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
 
 ### Nutzung von State und Scene als Kontext
 **Typ:** Randbedingung
-**Beschreibung:** Das System darf State und Scene für ETM-Episodenbildung und Antwortgenerierung als Kontext nutzen, muss sie aber als abgeleitete Zustandsdaten behandeln.
+**Beschreibung:** Das System darf den aktuellen Charakterzustand und die aktuelle Szene zur Einordnung von Episoden und Antworten nutzen, muss sie aber als abgeleitete Momentaufnahme behandeln.
 **Akzeptanzkriterien:**
-- State kann beim Schreiben einer Episode helfen, emotionale Einordnung vorsichtig zu formulieren.
-- Scene kann beim Schreiben einer Episode helfen, situative Ereignisse einzuordnen.
-- State- oder Scene-Inhalte werden nicht ohne Rückbindung an Gesprächsereignisse als dauerhafte Fakten gespeichert.
-- Relevante Episoden dürfen spätere State- und Scene-Updates beeinflussen.
+- Der aktuelle Charakterzustand darf helfen, die emotionale Einordnung einer Episode vorsichtig zu formulieren.
+- Die aktuelle Szene darf helfen, Ereignisse einer Situation einzuordnen.
+- Inhalte aus aktuellem Charakterzustand oder aktueller Szene werden nicht ohne Bezug zu Gesprächsereignissen als dauerhafte Erinnerung festgehalten.
+- Relevante Episoden dürfen spätere Fortschreibungen von Charakterzustand und Szene beeinflussen.
 
 **Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
 

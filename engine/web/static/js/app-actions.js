@@ -173,11 +173,11 @@ async function refreshImage() {
 async function revertImage() {
   const state = appStore.getState()
   if (state.isSending || state.isSessionLoading || state.isImageRefreshLoading) {
-    return
+    return false
   }
 
   if (!window.confirm("Soll das aktive Bild wirklich auf das letzte Backup zurückgesetzt werden?")) {
-    return
+    return false
   }
 
   appStore.setState({ isImageRefreshLoading: true })
@@ -188,13 +188,15 @@ async function revertImage() {
     const payload = await readJsonResponse(response)
     if (!response.ok) {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Bild konnte nicht zurückgesetzt werden.") })
-      return
+      return false
     }
 
     appStore.setState({ imageUrl: appendCacheBuster("/api/image/current"), errorMessage: "" })
     await pollImageSignature(true)
+    return true
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht zurückgesetzt werden." })
+    return false
   } finally {
     appStore.setState({ isImageRefreshLoading: false })
   }
@@ -203,11 +205,11 @@ async function revertImage() {
 async function deleteImage() {
   const state = appStore.getState()
   if (state.isSending || state.isSessionLoading || state.isImageRefreshLoading) {
-    return
+    return false
   }
 
   if (!window.confirm("Soll das aktuelle Bild wirklich gelöscht werden?")) {
-    return
+    return false
   }
 
   appStore.setState({ isImageRefreshLoading: true })
@@ -218,11 +220,13 @@ async function deleteImage() {
     const payload = await readJsonResponse(response)
     if (!response.ok) {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Bild konnte nicht gelöscht werden.") })
-      return
+      return false
     }
     appStore.setState({ ...mapStatePayload(payload), errorMessage: "", isImageExpanded: false })
+    return true
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Bild konnte nicht gelöscht werden." })
+    return false
   } finally {
     appStore.setState({ isImageRefreshLoading: false })
   }
@@ -231,11 +235,11 @@ async function deleteImage() {
 async function resetNpc() {
   const state = appStore.getState()
   if (state.isSending || state.isSessionLoading) {
-    return
+    return false
   }
 
   if (!window.confirm("Soll der Verlauf des aktiven NPC wirklich gelöscht werden?")) {
-    return
+    return false
   }
 
   appStore.setState({ isSessionLoading: true })
@@ -244,11 +248,13 @@ async function resetNpc() {
     const payload = await readJsonResponse(response)
     if (!response.ok) {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf konnte nicht gelöscht werden.") })
-      return
+      return false
     }
     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+    return true
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf konnte nicht gelöscht werden." })
+    return false
   } finally {
     appStore.setState({ isSessionLoading: false })
   }

@@ -43,3 +43,12 @@ Der fachliche Fokus liegt auf dem Austausch zwischen Nutzer und Spielwelt.
 
 **Referenzen:** Keine
 
+### Dialoggetriggerte Hintergrundverarbeitung
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss fachliche Hintergrundverarbeitung nur als Folge einer neuen Dialognachricht anstoßen.  
+**Akzeptanzkriterien:**
+- Ohne neue Dialognachricht wird keine fachliche Hintergrundfortschreibung gestartet.
+- Die fachliche Hintergrundverarbeitung wird nicht allein durch periodische Scheduler-Zyklen ausgelöst.
+
+**Referenzen:** `doc/requirements/sg-008-update-orchesrator-for-state-scene-etm-image.md`
+

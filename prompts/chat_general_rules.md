@@ -9,7 +9,6 @@ Natürlich, knapp, menschlich.
 Keine Erklärungen.
 Keine Meta-Kommentare.
 Keine Assistenten-Sprache.
-
 Zeigen statt erklären.
 
 # OUTPUT STYLE

@@ -5,7 +5,7 @@ import shutil
 from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, cast
 
 import markdown
 from fastapi import FastAPI, HTTPException, Request
@@ -17,20 +17,19 @@ from pydantic import BaseModel
 import uvicorn
 
 from engine.config import config
-from engine.llm.client import stream_prompt
-from engine.llm.error_utils import user_visible_provider_error_detail
+from engine.llm.client import client
+from engine.llm.provider_client import user_visible_provider_error_detail
 from engine.models import Npc, ShortMemoryMessage
-from engine.services.character_image_service import CharacterImageService
+from engine.services.image_service import ImageService
 from engine.services.npc_turn_service import NpcTurnService
 from engine.storage import SceneStorageView, storage
 from engine.stores.npc_store import NpcStore
 from engine.stores.session_store import SessionStore
-from engine.updater.image_updater import ImageUpdater
-from engine.updater.scheduer import Scheduler
+from engine.tools.scheduler import Scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-_webp_cache: dict[str, Any] = {"signature": "", "data": b""}
+_webp_cache: dict[str, dict[str, Any]] = {}
 _scheduler: Scheduler | None = None
 
 
@@ -38,7 +37,8 @@ def _get_scheduler() -> Scheduler:
     global _scheduler
     if _scheduler is None:
         _scheduler = Scheduler()
-    return _scheduler
+
+    return cast(Scheduler, _scheduler)
 
 
 def _problem_response(status_code: int, detail: Any) -> Response:
@@ -60,16 +60,40 @@ def _stream_error_event(exc: Exception) -> str:
     return _stream_event("error", detail=detail)
 
 
-def _get_cached_webp(img_path: Path) -> bytes:
+def _get_cached_webp(img_path: Path, max_width: int | None = None) -> bytes:
     stat = img_path.stat()
     sig = f"{stat.st_mtime_ns}|{stat.st_size}"
-    if _webp_cache["signature"] == sig:
-        return _webp_cache["data"]
+    width_key = "orig" if max_width is None else str(max_width)
+    cache_key = f"{img_path}|{width_key}"
+    cached = _webp_cache.get(cache_key)
+    if cached and cached["signature"] == sig:
+        return cached["data"]
+
     buf = BytesIO()
-    Image.open(img_path).save(buf, format="WEBP", quality=82, method=4)
-    _webp_cache["signature"] = sig
-    _webp_cache["data"] = buf.getvalue()
-    return _webp_cache["data"]
+    with Image.open(img_path) as image:
+        if max_width is not None and image.width > max_width:
+            ratio = max_width / image.width
+            target_height = max(1, int(image.height * ratio))
+            image = image.resize((max_width, target_height), Image.Resampling.LANCZOS)
+        image.save(buf, format="WEBP", quality=82, method=4)
+
+    _webp_cache[cache_key] = {"signature": sig, "data": buf.getvalue()}
+    return _webp_cache[cache_key]["data"]
+
+
+def _file_signature(path: Path) -> str:
+    if not path.exists():
+        return ""
+    stat = path.stat()
+    return f"{stat.st_mtime_ns}|{stat.st_size}"
+
+
+def _url_version(path: Path) -> str:
+    return _file_signature(path).replace("|", "-")
+
+
+def _image_response(img_path: Path, max_width: int | None = None) -> Response:
+    return Response(content=_get_cached_webp(img_path, max_width=max_width), media_type="image/webp")
 
 
 @asynccontextmanager
@@ -225,19 +249,45 @@ def _read_scene_label(scene_view: SceneStorageView) -> str:
     return scene_id.replace("_", " ").title()
 
 
+def _npc_option_image_path(npc_id: str) -> Path:
+    scene_id = SessionStore().load().scene_id
+    return storage.npc_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
+
+
+def _scene_option_image_path(scene_id: str) -> Path:
+    npc_id = SessionStore().load().npc_id
+    return storage.scene_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
+
+
+def _npc_option_image_url(npc_id: str) -> str:
+    version = _url_version(_npc_option_image_path(npc_id=npc_id))
+    return f"/api/npcs/{npc_id}/image?v={version}"
+
+
+def _scene_option_image_url(scene_id: str) -> str:
+    version = _url_version(_scene_option_image_path(scene_id=scene_id))
+    return f"/api/scenes/{scene_id}/image?v={version}"
+
+
 def _list_npcs() -> list[dict[str, str]]:
     return [
         {
             "id": npc_view.npc_id,
             "label": str(npc_view.character_original.get().get("name", npc_view.npc_id)).strip() or npc_view.npc_id,
+            "image_url": _npc_option_image_url(npc_id=npc_view.npc_id),
         }
         for npc_view in storage.list_npcs()
     ]
 
 
 def _list_scenes() -> list[dict[str, str]]:
+
     return [
-        {"id": scene_view.scene_id, "label": _read_scene_label(scene_view)}
+        {
+            "id": scene_view.scene_id,
+            "label": _read_scene_label(scene_view),
+            "image_url": _scene_option_image_url(scene_id=scene_view.scene_id),
+        }
         for scene_view in storage.list_scenes()
     ]
 
@@ -247,10 +297,7 @@ def _image_url(npc: Npc) -> str | None:
 
 
 def _image_signature(npc: Npc) -> str:
-    if not npc.img_current.exists():
-        return ""
-    stat = npc.img_current.stat()
-    return f"{stat.st_mtime_ns}|{stat.st_size}"
+    return _file_signature(npc.img_current)
 
 
 def _state_payload() -> dict[str, Any]:
@@ -280,13 +327,14 @@ def get_state() -> dict[str, Any]:
 @app.put("/api/session")
 def update_session(request: SessionRequest) -> dict[str, Any]:
     if request.npc_id is None and request.scene_id is None:
-        raise HTTPException(status_code=400, detail="Mindestens npc_id oder scene_id muss gesetzt sein.")
+        raise HTTPException(status_code=422, detail="Mindestens npc_id oder scene_id muss gesetzt sein.")
     SessionStore().save(npc=request.npc_id, scene=request.scene_id)
     return _state_payload()
 
 
 @app.delete("/api/npc/reset-active")
 def reset_active_npc_runtime_data() -> dict[str, Any]:
+    _get_scheduler().clear_pending_jobs()
     session = SessionStore().load()
     scene_data_dir = storage.npc_view(npc_id=session.npc_id, scene_id=session.scene_id).base_runtime
     if scene_data_dir.exists():
@@ -302,8 +350,7 @@ def chat_stream(request: ChatRequest) -> Any:
 
     npc_turn = NpcTurnService()
     turn_messages = npc_turn.build_chat_messages(message_text)
-    user_message = npc_turn.user_message
-    prompt_stream = stream_prompt(turn_messages)
+    prompt_stream = client.stream_prompt(turn_messages)
 
     def event_stream():
         parts: list[str] = []
@@ -317,8 +364,8 @@ def chat_stream(request: ChatRequest) -> Any:
 
         try:
             reply = "".join(parts).strip()
-            npc_turn.npc_store.append_stm_turn(str(user_message["content"]), reply)
-            ImageUpdater().emit_update_if_missing()
+            npc_turn.finalize_turn(message_text, reply)
+            _get_scheduler().enqueue_all()
             yield _stream_event("done")
         except Exception:
             yield _stream_event("error", detail="Interner Serverfehler.")
@@ -329,15 +376,17 @@ def chat_stream(request: ChatRequest) -> Any:
 @app.get("/api/image/current")
 def current_image() -> Any:
     npc = NpcStore().load()
-    if not npc.img_current.is_file():
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "Kein NPC-Bild verfügbar. "
-                f"npc_id='{npc.npc_id}', scene_id='{npc.scene.scene_id}', path='{npc.img_current}'"
-            ),
-        )
-    return Response(content=_get_cached_webp(npc.img_current), media_type="image/webp")
+    return _image_response(npc.img_current)
+
+
+@app.get("/api/npcs/{npc_id}/image")
+def npc_option_image(npc_id: str) -> Any:
+    return _image_response(_npc_option_image_path(npc_id=npc_id), max_width=100)
+
+
+@app.get("/api/scenes/{scene_id}/image")
+def scene_option_image(scene_id: str) -> Any:
+    return _image_response(_scene_option_image_path(scene_id=scene_id), max_width=100)
 
 
 @app.get("/api/image/signature")
@@ -351,19 +400,19 @@ def image_signature() -> dict[str, Any]:
 
 @app.post("/api/image/refresh-active")
 def refresh_active_image() -> dict[str, Any]:
-    CharacterImageService().update_from_context(force=True)
+    ImageService().update_from_context(force=True)
     return {}
 
 
 @app.post("/api/image/revert-active")
 def revert_active_image() -> dict[str, Any]:
-    CharacterImageService().revert()
+    ImageService().revert()
     return {}
 
 
 @app.delete("/api/image/delete-active")
 def delete_active_image() -> dict[str, Any]:
-    CharacterImageService().delete_current()
+    ImageService().delete_current()
     return _state_payload()
 
 

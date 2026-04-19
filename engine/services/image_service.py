@@ -6,13 +6,13 @@ from pathlib import Path
 from rapidfuzz import fuzz
 
 from engine.config import config
-from engine.llm.client import merge_character_scene_img, refresh_img, run_prompt_small
+from engine.llm.client import client
 from engine.models import Npc
 from engine.storage import ImageItem, NpcStorageView, storage
 from engine.stores.npc_store import NpcStore
 
 
-class CharacterImageService:
+class ImageService:
     def __init__(self) -> None:
         self.npc_store = NpcStore()
 
@@ -57,7 +57,7 @@ class CharacterImageService:
         image_path = npc_paths.img_runtime
         prompt = self._scene_merge_prompt(current_npc.scene.description)
 
-        merged_img = merge_character_scene_img(
+        merged_img = client.merge_character_scene_img(
             prompt,
             current_npc.img_current.read_bytes(),
             current_npc.scene.img.read_bytes(),
@@ -92,7 +92,7 @@ class CharacterImageService:
         image_path.unlink()
 
     def _refresh_from_prompt(self, npc: Npc, npc_paths: NpcStorageView, image_path: ImageItem, new_prompt: str) -> None:
-        new_img = refresh_img(
+        new_img = client.refresh_img(
             self._render_refresh_prompt(new_prompt),
             npc.img_current.read_bytes(),
             npc.img.read_bytes(),
@@ -142,7 +142,7 @@ class CharacterImageService:
 
     def _generate_update_prompt(self, npc: Npc, old_prompt: str) -> str:
         optimization_prompt = self.get_preview(old_prompt, npc)
-        return run_prompt_small(optimization_prompt).strip()
+        return client.run_prompt_small(optimization_prompt).strip()
 
     @staticmethod
     def _token_overlap(a: str, b: str) -> float:

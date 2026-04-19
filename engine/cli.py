@@ -4,19 +4,17 @@ import typer
 from PIL import Image
 
 from engine.config import config
-from engine.llm.client import hello_llm
-from engine.services.character_image_service import CharacterImageService
+from engine.services.image_service import ImageService
 from engine.stores.session_store import SessionStore
-from engine.updater.scheduer import Scheduler
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Werkzeuge fuer Web-GUI, Session, Updater und LLM-Pruefung im Social Game.",
+    help="Werkzeuge fuer Web-GUI, Session und Tools im Social Game.",
 )
 
 
-def _character_image_service() -> CharacterImageService:
-    return CharacterImageService()
+def _character_image_service() -> ImageService:
+    return ImageService()
 
 
 @app.callback()
@@ -53,12 +51,6 @@ def hello():
     """Prueft, ob die CLI grundsaetzlich laeuft."""
     typer.echo("Hello from Social Game CLI")
 
-
-@app.command("hallo-llm")
-def hallo_llm():
-    """Prueft die Verbindung zum Sprachmodell."""
-    answer = hello_llm()
-    typer.echo(answer)
 
 
 @app.command("web")
@@ -124,16 +116,6 @@ def icons(
 
     typer.echo("Icons erfolgreich generiert.")
 
-
-@app.command("update")
-def update(
-    updater: str = typer.Argument(
-        ...,
-        help=f"Name des Updaters. Verfuegbar: {Scheduler.available_updaters()}.",
-    ),
-):
-    """Fuehrt den gewaehlten Updater einmal ueber `schedule()` aus."""
-    Scheduler.create_updater(updater).schedule()
 
 
 if __name__ == "__main__":

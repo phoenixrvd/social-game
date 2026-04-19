@@ -61,10 +61,12 @@ Nach jeder Nachricht passiert intern:
 
 * Speicherung im Short-Term-Memory
 * Aufbau des aktuellen Kontexts über State, Szene und relevante ETM-Erinnerungen
-* Bewertung durch spezialisierte Updater
+* Ausgabe der NPC-Antwort ohne LLM-Tool-/Function-Calling
+* Nach der final gestreamten Antwort werden die fachlichen Updates (`etm`, `state`, `scene`, `image`) im Scheduler aktiviert
+* Der Scheduler führt pending Updates anschließend zeitgesteuert und rate-limitiert aus
 * Aktualisierung von State, Szene oder Bild bei relevanten Änderungen
 
-Das System entwickelt sich kontinuierlich im Hintergrund weiter, ohne dass der Spieler explizite Befehle geben muss.
+Der Hintergrund dafür: LLM-Tool-Calling unterdrückt typischerweise die normale Antworterzeugung. Ein Twice-Call-Pattern würde zwar Antwort und Updates kombinieren, aber für dasselbe Ergebnis unnötige Kosten und zusätzliche Komplexität erzeugen.
 
 ## Projektziele
 
