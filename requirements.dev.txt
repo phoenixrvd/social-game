@@ -1,0 +1,6 @@
+-r requirements.txt
+
+typer
+pyyaml
+pytest
+coverage

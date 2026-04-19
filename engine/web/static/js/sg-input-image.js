@@ -53,11 +53,11 @@ class SocialGameInputImage extends HTMLElement {
       <section class="sg-settings-section">
         <h3 class="sg-settings-heading">Bild</h3>
         <div class="sg-settings-actions">
-          <button type="button" data-action="refresh-image" class="sg-settings-action" aria-label="Bild neu generieren">
-            ${renderActionContent(REFRESH_ICON, "Bild neu generieren", "Erzeugt eine neue Variante aus dem aktuellen Kontext")}
+          <button type="button" data-action="refresh-image" class="sg-settings-action" aria-label="Neues Bild generieren">
+            ${renderActionContent(REFRESH_ICON, "Neues Bild generieren", "Erzeugt eine neues Bild aus dem aktuellen Chat-Kontext")}
           </button>
-          <button type="button" data-action="revert-image" class="sg-settings-action" aria-label="Auf letzte Version zurücksetzen">
-            ${renderActionContent(REVERT_ICON, "Auf letzte Version zurücksetzen", "Stellt vorheriges Bild wieder her")}
+          <button type="button" data-action="revert-image" class="sg-settings-action" aria-label="Vorheriges Bild laden">
+            ${renderActionContent(REVERT_ICON, "Vorheriges Bild laden", "Stellt vorheriges Bild wieder her und löscht aktuelles")}
           </button>
           <button type="button" data-action="delete-image" class="sg-settings-action sg-settings-action-danger" aria-label="Bild zurücksetzen">
             ${renderActionContent(DELETE_ICON, "Bild zurücksetzen", "Setzt das Bild auf initial Zustand")}

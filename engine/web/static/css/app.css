@@ -143,8 +143,6 @@ sg-input,
 sg-thumbnail,
 sg-message,
 sg-context-message,
-sg-npc-gallery,
-sg-scene-gallery,
 sg-context-gallery {
   display: block;
 }
@@ -514,9 +512,7 @@ sg-message.sg-message-enter {
   padding: 0.6rem 0.72rem;
 }
 
-/* Context Gallery (generic), NPC Gallery, Scene Gallery */
-sg-npc-gallery,
-sg-scene-gallery,
+/* Context Gallery */
 sg-context-gallery {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -1205,25 +1201,6 @@ sg-thumbnail .sg-image-overlay-main {
   }
 }
 
-@media (min-width: 681px) {
-  .sg-npc-gallery-scroll {
-    gap: 0.7rem;
-    min-height: 125px;
-  }
-
-  .sg-npc-gallery-item {
-    width: 80px;
-    padding: 0.45rem;
-  }
-
-  .sg-npc-gallery-image {
-    width: 64px;
-  }
-
-  .sg-npc-gallery-label {
-    font-size: 0.68rem;
-  }
-}
 
 @media (max-width: 1023px) and (orientation: landscape) {
   .app-viewport {

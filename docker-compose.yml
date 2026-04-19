@@ -1,11 +1,14 @@
 services:
   app:
+    image: ghcr.io/phoenixrvd/social-game:latest
     build: .
     ports:
       - "8000:8000"
     env_file:
       - .env
+    user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - ./.data:/app/.data
-      - ./engines:/app/engines
+      - ./.overrides:/app/.overrides
+      - ./engine:/app/engine
       - ./npcs:/app/npcs

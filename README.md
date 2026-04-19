@@ -152,7 +152,7 @@ Modelle, API-Keys und Base-URLs werden dann automatisch aus den jeweiligen `OPEN
 Wenn du keine passende Python-Version installieren möchtest oder einfach direkt loslegen willst:
 
 ```bash
-docker compose up --build
+docker compose up
 ```
 
 Danach erreichbar unter:
@@ -168,7 +168,7 @@ git config core.hooksPath .githooks
 
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.dev.txt
 python -m pip install -e .
 ```
 

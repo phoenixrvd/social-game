@@ -155,13 +155,13 @@ def test_sg_input_keeps_focus_stable_while_sending():
 
 def test_sg_input_split_components_handle_actions_directly_without_parent_events():
     source = _read("engine/web/static/js/sg-input.js")
-    context_source = _read("engine/web/static/js/sg-input-context.js")
     image_source = _read("engine/web/static/js/sg-input-image.js")
     general_source = _read("engine/web/static/js/sg-input-general.js")
     composer_source = _read("engine/web/static/js/sg-input-composer.js")
+    gallery_source = _read("engine/web/static/js/sg-context-gallery.js")
 
     assert "addEventListener(\"sg-" not in source
-    assert "appActions.updateSession(" in context_source
+    assert "appActions.updateSession(" in gallery_source
     assert "appActions.refreshImage()" in image_source
     assert "appActions.revertImage()" in image_source
     assert "appActions.deleteImage()" in image_source
@@ -280,12 +280,17 @@ def test_sg_input_split_components_manage_own_store_subscriptions():
     image_source = _read("engine/web/static/js/sg-input-image.js")
     general_source = _read("engine/web/static/js/sg-input-general.js")
     composer_source = _read("engine/web/static/js/sg-input-composer.js")
+    gallery_source = _read("engine/web/static/js/sg-context-gallery.js")
 
-    assert 'import { appStore } from "./app-store.js"' in context_source
-    assert '["npcs", this.onNpcsChanged.bind(this)]' in context_source
-    assert '["scenes", this.onScenesChanged.bind(this)]' in context_source
-    assert '["npcId", this.onNpcIdChanged.bind(this)]' in context_source
-    assert '["sceneId", this.onSceneIdChanged.bind(this)]' in context_source
+    assert 'import "./sg-context-gallery.js"' in context_source
+    assert '<sg-context-gallery data-context-type="npc"></sg-context-gallery>' in context_source
+    assert '<sg-context-gallery data-context-type="scene"></sg-context-gallery>' in context_source
+    assert 'import { appStore } from "./app-store.js"' not in context_source
+
+    assert 'this._stateKey = contextType === "scene" ? "sceneId" : "npcId"' in gallery_source
+    assert 'this._itemsKey = contextType === "scene" ? "scenes" : "npcs"' in gallery_source
+    assert '[this._itemsKey, this.onItemsChanged.bind(this)]' in gallery_source
+    assert '[this._stateKey, this.onSelectedIdChanged.bind(this)]' in gallery_source
 
     assert 'import { appStore } from "./app-store.js"' in image_source
     assert '["isImageRefreshLoading", this.onDisabledTriggerChanged.bind(this)]' in image_source
@@ -315,7 +320,7 @@ def test_sg_input_renders_typing_dots_in_composer_meta():
 def test_sg_app_renders_scene_thumbnail_markup_directly_and_subscribes_image_url():
     source = _read("engine/web/static/js/sg-app.js")
 
-    assert "sg-scene-image" not in source
+    assert "<sg-scene-image" not in source
     assert '<section class="sg-scene-image-slot" aria-label="Szenenbild">' in source
     assert '<div class="sg-image-empty sg-hidden">Kein Bild geladen</div>' in source
     assert '<sg-thumbnail class="sg-scene-thumbnail"></sg-thumbnail>' in source
@@ -372,8 +377,8 @@ def test_mobile_css_uses_fixed_app_shell_with_app_vh_and_local_composer_anchor()
     assert "transition: height 180ms ease-out, min-height 180ms ease-out;" in source
     assert ".sg-input-component {" in source
     assert "position: absolute;" in source
-    assert "calc(var(--app-vh) * 0.25)" in source
-    assert "transition: height 180ms ease-out;" in source
+    assert "bottom: 0;" in source
+    assert "z-index: 45;" in source
 
 
 def test_app_actions_dispatches_loading_flags_for_session_and_image_refresh():
