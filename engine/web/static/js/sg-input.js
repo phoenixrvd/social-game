@@ -7,7 +7,7 @@ import "./sg-input-composer.js"
 function renderTab(optionId, title, isSelected = false) {
   const selected = isSelected ? "true" : "false"
   const tabIndex = isSelected ? "0" : "-1"
-  return `
+  return /*html*/ `
     <button
       type="button"
       class="sg-options-tab"
@@ -24,7 +24,7 @@ function renderTab(optionId, title, isSelected = false) {
 }
 
 function renderTabPanel(optionId, contentMarkup) {
-  return `
+  return /*html*/ `
     <div
       id="sg-options-tab-panel-${optionId}"
       class="sg-options-tab-panel"
@@ -46,7 +46,7 @@ function renderOptionsTabs() {
   const tabsMarkup = tabs.map((tab) => renderTab(tab.optionId, tab.title, Boolean(tab.isSelected))).join("")
   const panelsMarkup = tabs.map((tab) => renderTabPanel(tab.optionId, tab.contentMarkup)).join("")
 
-  return `
+  return /*html*/ `
     <div class="sg-options-tab-panels">
       ${panelsMarkup}
     </div>
@@ -73,7 +73,7 @@ class SocialGameInput extends HTMLElement {
   connectedCallback() {
     const optionsTabs = renderOptionsTabs()
 
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <form class="sg-chat-form" aria-busy="false">
         <div id="sg-options-panel" class="sg-options-panel sg-hidden">
           ${optionsTabs}

@@ -28,7 +28,7 @@ class SocialGameThumbnail extends HTMLElement {
   }
 
   buildMarkup() {
-    return `
+    return /*html*/ `
       <div class="sg-image-frame">
         <div class="sg-image-content">
           <img class="sg-image-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" fetchpriority="low" />

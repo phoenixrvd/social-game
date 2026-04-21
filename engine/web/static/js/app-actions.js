@@ -6,6 +6,32 @@ function createNowTimestamp() {
   return new Date().toISOString()
 }
 
+function isInstalledApp() {
+  const standalone = window.matchMedia("(display-mode: standalone)").matches
+  const fullscreen = window.matchMedia("(display-mode: fullscreen)").matches
+  const minimalUi = window.matchMedia("(display-mode: minimal-ui)").matches
+
+  return standalone || fullscreen || minimalUi || window.navigator.standalone === true
+}
+
+function getThemeColor(theme, installedApp) {
+  if (!installedApp) {
+    return theme === "light" ? "#f4f4f5" : "#18181b"
+  }
+
+  return theme === "light" ? "#f3f4f640" : "#09090b40"
+}
+
+function syncThemeChrome(theme) {
+  const installedApp = isInstalledApp()
+  const themeColorMeta = document.querySelector("#theme-color-meta") || document.querySelector('meta[name="theme-color"]')
+
+  document.documentElement.setAttribute("data-installed-app", installedApp ? "true" : "false")
+  if (themeColorMeta) {
+    themeColorMeta.setAttribute("content", getThemeColor(theme, installedApp))
+  }
+}
+
 function appendCacheBuster(url) {
   if (!url) {
     return null
@@ -374,6 +400,7 @@ function toggleTheme() {
   const nextTheme = appStore.getState().theme === "dark" ? "light" : "dark"
   localStorage.setItem("theme", nextTheme)
   document.documentElement.setAttribute("data-theme", nextTheme)
+  syncThemeChrome(nextTheme)
   appStore.setState({ theme: nextTheme })
 }
 

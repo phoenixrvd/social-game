@@ -21,7 +21,7 @@ class SocialGameContextGallery extends HTMLElement {
 
     const contextType = data.contextType
 
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <div class="sg-context-gallery-label-wrap">
         <span class="sg-selector-legend">${this._getLegendLabel(contextType)}</span>
       </div>
@@ -173,7 +173,7 @@ class SocialGameContextGallery extends HTMLElement {
     const selectedClass = isSelected ? " sg-context-gallery-item--selected" : ""
     const ariaPressed = isSelected ? "true" : "false"
 
-    return `
+    return /*html*/ `
       <button
         type="button"
         class="sg-context-gallery-item${selectedClass}"

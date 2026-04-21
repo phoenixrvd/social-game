@@ -2,7 +2,7 @@ import "./sg-context-gallery.js"
 
 class SocialGameInputContext extends HTMLElement {
   connectedCallback() {
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <section class="sg-settings-section">
         <div class="sg-session-row">
           <sg-context-gallery data-context-type="npc"></sg-context-gallery>

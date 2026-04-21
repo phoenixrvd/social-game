@@ -1,7 +1,7 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
 
-const THEME_DARK_ICON = `
+const THEME_DARK_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <circle cx="12" cy="12" r="4"></circle>
     <path d="M12 2v2"></path>
@@ -15,13 +15,13 @@ const THEME_DARK_ICON = `
   </svg>
 `
 
-const THEME_LIGHT_ICON = `
+const THEME_LIGHT_ICON = /*html*/`
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
   </svg>
 `
 
-const DELETE_ICON = `
+const DELETE_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <polyline points="3 6 5 6 21 6"></polyline>
     <path d="M19 6l-1 14H6L5 6"></path>
@@ -37,7 +37,7 @@ function getThemeToggleIcon(theme) {
 
 function renderActionContent(icon, title, description = "") {
   const descriptionMarkup = description ? `<span class="sg-settings-action-text">${description}</span>` : ""
-  return `
+  return /*html*/ `
     <span class="sg-settings-action-icon" aria-hidden="true">${icon}</span>
     <span class="sg-settings-action-copy">
       <span class="sg-settings-action-title">${title}</span>
@@ -58,7 +58,7 @@ class SocialGameInputGeneral extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <section class="sg-settings-section">
         <h3 class="sg-settings-heading">Allgemein</h3>
         <div class="sg-settings-actions">
@@ -137,8 +137,3 @@ class SocialGameInputGeneral extends HTMLElement {
 }
 
 customElements.get("sg-input-general") || customElements.define("sg-input-general", SocialGameInputGeneral)
-
-
-
-
-

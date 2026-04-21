@@ -22,7 +22,7 @@ class SocialGameMessage extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <div class="msg-bubble msg-bubble-standard sg-hidden">
         <div class="msg-content">
           <div class="msg-body msg-content-prewrap"></div>

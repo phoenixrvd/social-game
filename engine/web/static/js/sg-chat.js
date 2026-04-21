@@ -20,7 +20,7 @@ class SocialGameChat extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <div
         class="sg-chat-messages chat-scrollbar sg-chat-messages-panel"
         role="log"

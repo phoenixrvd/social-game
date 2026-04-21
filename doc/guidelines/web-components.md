@@ -20,6 +20,7 @@
 - [BLOCKER] Pflicht-Elemente der eigenen Komposition nicht defensiv prüfen
 - [BLOCKER] Fehlende Pflicht-Elemente sind Implementierungsfehler und dürfen nicht durch Guards oder frühe Returns verborgen werden
 - [BLOCKER] UI-Zustände nicht über native Strukturattribute (z. B. `open`) modellieren; stattdessen `data-*`-State plus passende ARIA-Attribute nutzen
+- [WARNING] HTML-Markup in Template-Strings immer mit `/*html*/` markieren; CSS-Template-Strings immer mit `/*css*/` markieren, damit Editor-Syntax-Highlighting aktiv ist
 
 ## Initialisierung
 

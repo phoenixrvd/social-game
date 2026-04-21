@@ -6,7 +6,7 @@ export class SocialGameContextMessage extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <div class="context-rich msg-context msg-bubble msg-bubble-context">
         <div class="sg-initial-context-html"></div>
       </div>

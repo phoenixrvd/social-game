@@ -18,7 +18,7 @@ class SocialGameApp extends HTMLElement {
   connectedCallback() {
     document.documentElement.setAttribute("data-theme", appStore.getState().theme)
 
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <div class="app-viewport">
         <div class="sg-layout-root">
           <section class="sg-chat-pane" aria-label="Dialogbereich">

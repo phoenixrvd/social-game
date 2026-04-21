@@ -106,7 +106,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         scheduler.stop()
 
 
-app = FastAPI(title="Social Game Web GUI", lifespan=_lifespan)
+app = FastAPI(title="Social Game", lifespan=_lifespan)
 
 
 _CSP = (

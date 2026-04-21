@@ -1,7 +1,7 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
 
-const REFRESH_ICON = `
+const REFRESH_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M3 3h18v18H3z"></path>
     <path d="M3 15l5-5 4 4 3-3 6 6"></path>
@@ -10,14 +10,14 @@ const REFRESH_ICON = `
   </svg>
 `
 
-const REVERT_ICON = `
+const REVERT_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M21 12a9 9 0 1 1-3.1-6.8"></path>
     <path d="M21 3v6h-6"></path>
   </svg>
 `
 
-const DELETE_ICON = `
+const DELETE_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <polyline points="3 6 5 6 21 6"></polyline>
     <path d="M19 6l-1 14H6L5 6"></path>
@@ -29,7 +29,7 @@ const DELETE_ICON = `
 
 function renderActionContent(icon, title, description = "") {
   const descriptionMarkup = description ? `<span class="sg-settings-action-text">${description}</span>` : ""
-  return `
+  return /*html*/ `
     <span class="sg-settings-action-icon" aria-hidden="true">${icon}</span>
     <span class="sg-settings-action-copy">
       <span class="sg-settings-action-title">${title}</span>
@@ -49,7 +49,7 @@ class SocialGameInputImage extends HTMLElement {
   }
 
   connectedCallback() {
-    this.innerHTML = `
+    this.innerHTML = /*html*/ `
       <section class="sg-settings-section">
         <h3 class="sg-settings-heading">Bild</h3>
         <div class="sg-settings-actions">

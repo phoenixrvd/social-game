@@ -3,6 +3,7 @@
 .venv
 .env
 .overrides
+.vscode
 dump*
 debug*
 __pycache__

@@ -1,11 +1,11 @@
 {
-  "name": "Social Game GUI",
+  "name": "Social Game",
   "short_name": "Social Game",
   "lang": "de",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#18181b",
-  "theme_color": "#18181b",
+  "theme_color": "#00000000",
   "icons": [
     {
       "src": "/icons/icon-192.png",
