@@ -19,7 +19,7 @@ function getThemeColor(theme, installedApp) {
     return theme === "light" ? "#f4f4f5" : "#18181b"
   }
 
-  return theme === "light" ? "#f3f4f640" : "#09090b40"
+  return theme === "light" ? "#f3f4f6" : "#09090b"
 }
 
 function syncThemeChrome(theme) {

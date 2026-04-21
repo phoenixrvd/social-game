@@ -2,9 +2,6 @@
   --app-vh: 100dvh;
   --portrait-shell-width: 100vw;
   --chat-form-offset: 120px;
-  --app-top-chrome-scrim: rgba(243, 244, 246, 0.6);
-  --app-top-chrome-scrim-soft: rgba(243, 244, 246, 0.22);
-  --app-top-chrome-height: calc(env(safe-area-inset-top, 0px) + 2.1rem);
   --bg-app: #f3f4f6;
   --bg-panel: #ffffff;
   --bg-panel-soft: #f8fafc;
@@ -30,8 +27,6 @@
 }
 
 [data-theme="dark"] {
-  --app-top-chrome-scrim: rgba(9, 9, 11, 0.62);
-  --app-top-chrome-scrim-soft: rgba(9, 9, 11, 0.24);
   --bg-app: #09090b;
   --bg-panel: #18181b;
   --bg-panel-soft: #27272a;
@@ -194,26 +189,6 @@ sg-context-gallery {
   overflow: hidden;
   overscroll-behavior: none;
   transition: height 180ms ease-out, min-height 180ms ease-out;
-}
-
-[data-installed-app="true"] .app-viewport::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: var(--app-top-chrome-height);
-  pointer-events: none;
-  z-index: 25;
-  background: linear-gradient(
-    to bottom,
-    var(--app-top-chrome-scrim) 0%,
-    var(--app-top-chrome-scrim-soft) 48%,
-    transparent 100%
-  );
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-  backdrop-filter: blur(10px) saturate(120%);
-  transition: background 260ms ease, -webkit-backdrop-filter 260ms ease, backdrop-filter 260ms ease;
 }
 
 .sg-layout-root {

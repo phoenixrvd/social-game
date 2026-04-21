@@ -72,13 +72,30 @@ git push origin main
 
 ## Commit Message for Release
 
-* Should summarize the full release
-* Can reuse release notes
+* Must summarize the full release
+* Must follow the release hook format on `main`
+* Must be written in English
+* Must include a structured body for non-trivial releases
 
 Example:
 
 ```
-v1.2: simplified UI, reduced codebase, improved state handling
+v1.11: theming improvements, image rendering fixes, and gallery architecture cleanup
+
+Theming and metadata
+- Enhanced theme handling with dynamic color adaptation.
+- Refined app capability metadata and naming references.
+
+Image rendering
+- Fixed positioning and scaling behavior in the scene image slot for consistent visual output.
+
+Component architecture
+- Removed unused NPC/scene gallery components to reduce frontend complexity.
+- Improved maintainability with clearer HTML/CSS template markers for editor highlighting.
+- Added line clamping in context gallery text blocks for cleaner truncation behavior.
+
+Project hygiene
+- Updated .gitignore for local editor artifacts.
 ```
 
 ### Rules
@@ -86,6 +103,15 @@ v1.2: simplified UI, reduced codebase, improved state handling
 * Entire release = one commit in `main`
 * No merge commits
 * No detailed history kept in `main`
+* Subject line format on `main`: `vX.Y: <summary>`
+* Do not use generic headings like `Release notes`
+* Use domain-based section headings in the body
+* Do not use trailing colons in section headings
+
+## Release Tags
+
+* Tags are optional and can be omitted
+* If a release tag is used, keep subject and body aligned with the release commit message
 
 ## Principles
 
