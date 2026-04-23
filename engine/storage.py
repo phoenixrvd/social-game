@@ -296,8 +296,8 @@ class NpcStorageView(_StorageViewBase):
         return JsonlItem(self.base_runtime / "stm.jsonl")
 
     @property
-    def etm_chroma(self) -> Path:
-        return self.base_runtime / "etm.chroma"
+    def etm_sqlite(self) -> Path:
+        return self.base_runtime / "etm.sqlite"
 
     @property
     def img_runtime(self) -> ImageItem:

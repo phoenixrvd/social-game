@@ -2,6 +2,8 @@ import { appStore } from "./app-store.js"
 
 let imagePollTimer = null
 
+const FIRST_OPEN_SELECTOR_STORAGE_KEY = "sg-first-open-selector-seen"
+
 function createNowTimestamp() {
   return new Date().toISOString()
 }
@@ -77,6 +79,25 @@ function mapStatePayload(payload = {}) {
   }
 }
 
+function hasSeenFirstOpenSelector() {
+  return window.localStorage.getItem(FIRST_OPEN_SELECTOR_STORAGE_KEY) === "true"
+}
+
+function shouldOpenSelectorOnFirstLoad(payload = {}) {
+  if (hasSeenFirstOpenSelector()) {
+    return false
+  }
+
+  const hasNpcs = Array.isArray(payload.npcs) && payload.npcs.length > 0
+  const hasScenes = Array.isArray(payload.scenes) && payload.scenes.length > 0
+  if (!hasNpcs || !hasScenes) {
+    return false
+  }
+
+  window.localStorage.setItem(FIRST_OPEN_SELECTOR_STORAGE_KEY, "true")
+  return true
+}
+
 function appendAssistantChunk(messages, assistantId, assistantTimestamp, delta) {
   const assistantMessage = messages.find((message) => message.id === assistantId)
   if (!assistantMessage) {
@@ -136,7 +157,13 @@ async function loadInitialState() {
       appStore.setState({ errorMessage: getErrorMessage(payload, "State konnte nicht geladen werden.") })
       return
     }
-    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+
+    const nextState = mapStatePayload(payload)
+    appStore.setState({
+      ...nextState,
+      errorMessage: "",
+      isSelectorPanelOpen: shouldOpenSelectorOnFirstLoad(payload),
+    })
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Backend nicht erreichbar." })
   } finally {

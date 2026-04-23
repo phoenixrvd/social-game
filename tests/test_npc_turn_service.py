@@ -141,7 +141,7 @@ def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is
     assert "mood: neutral" in str(turn_messages[0]["content"])
 
 
-def test_build_turn_messages_includes_retrieved_memories_from_chroma(monkeypatch, tmp_path):
+def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypatch, tmp_path):
     npc = _build_npc(
         stm=[
             ShortMemoryMessage(

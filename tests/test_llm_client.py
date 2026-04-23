@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 from io import BytesIO
-import sys
 from types import SimpleNamespace
 from typing import Iterator, cast
 
 import engine.llm.client as llm_client_module
 import engine.llm.openai_provider_client as openai_client_module
-import engine.storage as storage_module
 import openai
 import requests
 from engine.llm.grok_provider_client import GrokProviderClient
@@ -154,6 +152,41 @@ def test_grok_image_response_bytes_downloads_from_url(monkeypatch):
             @staticmethod
             def sample(**_payload):
                 return SimpleNamespace(url="https://cdn.x.ai/generated.png")
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    client = GrokProviderClient()
+    monkeypatch.setattr(client, "_sdk_client", lambda: FakeSdkClient())
+
+    result = client.request_image("prompt", [("current.jpg", image_bytes.getvalue())])
+    assert result == b"downloaded"
+    assert captured == {"url": "https://cdn.x.ai/generated.png", "timeout": 120.0}
+
+
+def test_grok_image_response_bytes_falls_back_to_url_when_image_property_is_invalid(monkeypatch):
+    import httpx
+
+    captured: dict[str, object] = {}
+
+    image_bytes = BytesIO()
+    Image.new("RGB", (8, 8), color="green").save(image_bytes, format="PNG")
+
+    def fake_get(url, timeout):
+        captured["url"] = url
+        captured["timeout"] = timeout
+        return SimpleNamespace(content=b"downloaded")
+
+    class FakeImageResponse:
+        url = "https://cdn.x.ai/generated.png"
+
+        @property
+        def image(self):
+            raise ValueError("not enough values to unpack (expected 2, got 1)")
+
+    class FakeSdkClient:
+        class image:
+            @staticmethod
+            def sample(**_payload):
+                return FakeImageResponse()
 
     monkeypatch.setattr(httpx, "get", fake_get)
     client = GrokProviderClient()
@@ -356,73 +389,6 @@ def test_grok_small_request_sends_no_tools(monkeypatch):
 
     assert client.request_small([]) == "ok"
     assert "tools" not in captured
-
-
-def test_grok_embeddings_use_local_fn(monkeypatch):
-    def fake_embedding_fn(_texts):
-        return [[0.1, 0.2, 0.3]]
-
-    client = GrokProviderClient()
-    client._local_embedding_fn = fake_embedding_fn
-
-    first = client.request_embeddings(["Hallo Welt"])[0]
-    second = client.request_embeddings(["Hallo Welt"])[0]
-    assert first == [0.1, 0.2, 0.3]
-    assert first == second
-
-
-def test_grok_embeddings_use_data_cache_dir(monkeypatch, tmp_path):
-    captured: dict[str, str] = {}
-
-    class FakeTextEmbedding:
-        def __init__(self, *, model_name, cache_dir):
-            captured["model_name"] = model_name
-            captured["cache_dir"] = cache_dir
-
-        @staticmethod
-        def embed(_texts):
-            return [[0.4, 0.5]]
-
-    class FakeStorage:
-        @property
-        def etm_fastembed_cache(self):
-            return tmp_path / "fastembed_cache"
-
-    monkeypatch.setitem(sys.modules, "fastembed", SimpleNamespace(TextEmbedding=FakeTextEmbedding))
-    monkeypatch.setattr(storage_module, "storage", FakeStorage())
-
-    client = GrokProviderClient()
-    assert client.request_embeddings(["Hallo"]) == [[0.4, 0.5]]
-    assert captured["model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
-    assert captured["cache_dir"] == str(tmp_path / "fastembed_cache")
-
-
-def test_grok_embeddings_retry_once_for_missing_model_file(monkeypatch):
-    client = GrokProviderClient()
-    calls = {"count": 0}
-
-    def fake_local_embedding_function():
-        calls["count"] += 1
-        if calls["count"] == 1:
-            def broken(_texts):
-                raise RuntimeError("NO_SUCHFILE: model.onnx missing")
-
-            return broken
-
-        def recovered(_texts):
-            return [[0.1, 0.2, 0.3]]
-
-        return recovered
-
-    monkeypatch.setattr(client, "_local_embedding_function", fake_local_embedding_function)
-
-    # First call raises error, no retry - test expects error propagation
-    try:
-        client.request_embeddings(["Hallo Welt"])
-        assert False, "Should have raised RuntimeError"
-    except RuntimeError as e:
-        assert "NO_SUCHFILE" in str(e)
-        assert calls["count"] == 1
 
 
 

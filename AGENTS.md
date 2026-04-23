@@ -26,7 +26,7 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 
 **Laufzeitdaten (`.data/`, nicht versioniert):**
 - `.data/session.yaml` – aktiver NPC/Szene-Kontext
-- `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm.chroma, img.png)
+- `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm.sqlite, img.png)
 - `.data/npcs/<npc_id>/<scene_id>/orchestrator/` – orchestrator-spezifische Laufzeitartefakte (z. B. gespeicherte Bildprompts)
 - `.data/fastembed_cache/` – lokaler Cache für Embeddings beim Grok-Embedding-Pfad
 
@@ -106,7 +106,6 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 - **APScheduler** – Background-Scheduler für den periodischen `execute_pending_jobs()`-Loop (10s Intervall)
 - **FastAPI + uvicorn** – Web-Backend
 - **pydantic-settings** – Konfiguration
-- **chromadb** – persistenter ETM-Vector-Store (`engine/stores/etm_vector_store.py`)
 - **fastembed** – lokaler Embedding-Pfad für Grok (`engine/llm/grok_provider_client.py`)
 - **rapidfuzz** – Prompt-Ähnlichkeitsprüfung im `ImageService`
 - **Pillow** – Bildkomprimierung vor LLM-Upload (PNG → JPEG)

@@ -37,18 +37,11 @@ class Client:
         self._big_client = self._get_provider(config.LLM_BIG)
         self._small_client = self._get_provider(config.LLM_SMALL)
         self._image_client = self._get_provider(config.IMAGE)
-        self._embedding_client = self._get_provider(config.EMBEDDING)
 
     def _get_provider(self, provider: Provider) -> ProviderClient:
         if provider == "grok":
             return self._grok_provider
         return self._openai_provider
-
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        cleaned = [t for t in texts if t.strip()]
-        if not cleaned:
-            return []
-        return self._embedding_client.request_embeddings(cleaned)
 
     def stream_prompt(self, messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
         yield from self._big_client.request_big(messages)

@@ -10,7 +10,7 @@ Dazu werden ältere Gesprächsabschnitte als kompakte Episoden festgehalten und 
 Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht des aktiven NPC festgehalten.
 
 ## Annahmen
-- Die lokal eingebettete Vector-Datenbank für ETM-Retrieval ist Chroma.
+- ETM-Episoden werden pro Spielinstanz in einer lokalen SQLite-Datei gespeichert.
 - Episoden werden pro `npc_id` und `scene_id` isoliert gespeichert.
 - State und Scene dürfen als Kontext für Episodenbildung und Antwortgenerierung dienen, sind aber keine primären Memory-Quellen.
 - ETM ist kein direkter Bildgenerierungs-Kontext.
@@ -33,16 +33,21 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 
 **Referenzen:** `doc/requirements/sg-003-short-term-memory.md`
 
-### Speicherung in Chroma
+### Speicherung in SQLite
 **Typ:** Funktional
-**Beschreibung:** Das System muss ETM-Episoden vektorisieren und pro aktiver Spielinstanz in Chroma speichern.
+**Beschreibung:** Das System muss ETM-Episoden vektorisieren und pro aktiver Spielinstanz in SQLite speichern.
 **Akzeptanzkriterien:**
 - Jede gespeicherte Episode wird mit einem Embedding abgelegt.
+- Embeddings werden im `EtmService` erzeugt.
+- Für Embeddings wird kein externer Embedding-Provider verwendet.
+- Das Embedding-Service verwendet lokal das Modell `sentence-transformers/all-MiniLM-L6-v2`.
 - Die Speicherung erfolgt isoliert pro `npc_id` und `scene_id`.
+- Das Retrieval berechnet Cosine-Distanzen nativ in Python auf den gespeicherten Embeddings.
 - Episoden anderer NPCs oder Szenen werden nicht im selben Retrieval-Kontext verwendet.
 - Ein Reset der aktiven Spielinstanz entfernt auch die zugehörigen Episoden.
+- Für ETM ist keine externe Vector-DB-Abhängigkeit erforderlich.
 
-**Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`, `doc/adr/008-chroma-als-vector-datenbank.md`
+**Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`, `doc/adr/008-sqlite-als-etm-store.md`
 
 ### ETM-Retrieval vor NPC-Antworten
 **Typ:** Funktional
@@ -78,7 +83,7 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 - Für die unmittelbare Bilderzeugung werden keine früheren Episoden einbezogen.
 - Leere oder rein technische Eingaben lösen keine Berücksichtigung früherer Episoden aus.
 
-**Referenzen:** `doc/adr/004-modellstrategie.md`, `doc/adr/008-chroma-als-vector-datenbank.md`
+**Referenzen:** `doc/adr/004-modellstrategie.md`, `doc/adr/008-sqlite-als-etm-store.md`
 
 ### Trennung von Initialkontext und ETM
 **Typ:** Randbedingung

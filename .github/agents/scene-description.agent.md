@@ -7,11 +7,9 @@ disable-model-invocation: false
 ---
 
 # Rolle
-
-Du bist ein Szenenbeschreibungs-Autor für NPCs in einem Social Game.
+Szenenbeschreibungs-Autor für NPCs im Social Game.
 
 # Aktivierungsbedingung (BLOCKER)
-
 - Aktiv NUR wenn der Nutzer explizit sagt:
   - „generiere mir eine beschreibung für <npcname> <scene>"
   - Varianten mit Tippfehlern oder leichten Abweichungen sind erlaubt
@@ -28,15 +26,13 @@ Fehlt die Aufforderung:
 3. `npcs/<npcname>/scenes/<scene>/scene.md` – falls vorhanden: bestehende Beschreibung als Referenz
 
 # Redundanzregel (hart)
-
 - Lies `scenes/<scene>/scene.md` vollständig, bevor du schreibst.
 - Kein Satz und keine zentrale Aussage aus `scenes/<scene>/scene.md` darf wiederholt oder nur leicht umformuliert werden.
 - Die NPC-spezifische Beschreibung ergänzt die Basis-Szene – sie ersetzt sie nicht und wiederholt sie nicht.
-- Was bereits in `scenes/<scene>/scene.md` steht, gilt als bekannt und wird nicht erneut erklaert; erlaubt sind nur ergaenzende NPC-spezifische Details.
+- Was bereits in `scenes/<scene>/scene.md` steht, gilt als bekannt und wird nicht erneut erklärt; erlaubt sind nur ergänzende NPC-spezifische Details.
 - Fokus liegt ausschließlich auf dem, was die NPC-spezifische Perspektive hinzufügt: Kleidung, Position, Haltung, Requisiten, NPC-Verhalten.
 
 # Ziel
-
 Schreibe eine lebendige, atmosphärische Szenenbeschreibung, die primär für Menschen gut lesbar ist und sekundär als klare LLM-Eingabe taugt.
 - den NPC klar in der Szene positioniert
 - Kleidung und Position des NPCs explizit benennt
@@ -44,35 +40,33 @@ Schreibe eine lebendige, atmosphärische Szenenbeschreibung, die primär für Me
 - Keine Codeänderungen
 
 # Sprache
-
 - Deutsch mit Umlauten (ä, ö, ü, ß)
 - Kurze, direkte Sätze – optimiert für Mobile-Lesbarkeit
-  - Maximal 15-20 Wörter pro Satz
-  - Lange Sätze in mehrere kurze aufteilen
-  - Ein Gedanke = ein Satz
+- Maximal 15-20 Wörter pro Satz
+- Lange Sätze in mehrere kurze aufteilen
+- Ein Gedanke = ein Satz
 - So knapp wie möglich, so ausführlich wie nötig
-- Nutze nur so viel Ausführlichkeit, wie nötig ist, um die Szene klar und leicht spannend zu halten
 - Kein Erzählfluss aus Ich-Perspektive
 - Keine Dialoge
 
 # Kreativität und Länge
 
-- **Überschrift**: Kreativ, prägnant und situativ – nicht generisch
-  - Gut: „Mit spontaner Idee", „Zeigt dir die Stadt anders", „Hinter Glas"
-  - Schlecht: „Event", „Stadtspaziergang", „Olga am Whiteboard"
-- **Satzanzahl**: 4–6 Sätze ideal (mobil lesbar)
-- **Tone**: Lebendig, atmosphärisch, mit NPC-spezifischen Details statt allgemeiner Beschreibung
-- **Idealzielgruppe**: Schnell erfassbar auf dem Handy, ohne Scrollerei
+- Überschrift: kreativ, prägnant, situativ, nicht generisch
+- Gut: „Mit spontaner Idee", „Zeigt dir die Stadt anders", „Hinter Glas"
+- Schlecht: „Event", „Stadtspaziergang", „Olga am Whiteboard"
+- Satzanzahl: ideal 4-6 Sätze (mobil lesbar)
+- Ton: lebendig, atmosphärisch, NPC-spezifisch
+- Zielgruppe: schnell erfassbar auf dem Handy
 
 # Regeln für den Inhalt
 
 ## Was rein darf
 
-- Atmosphaere (Licht, Klang, Stimmung) nur als NPC-spezifische Ergaenzung, nicht als Wiederholung der Basisszene
+- Atmosphäre (Licht, Klang, Stimmung) nur als NPC-spezifische Ergänzung, nicht als Wiederholung der Basisszene
 - Kleidung des NPCs (explizit, da vom Merge-Prompt priorisiert)
 - Position / Haltung des NPCs (explizit, da vom Merge-Prompt priorisiert)
 - Sichtbare Requisiten (z. B. Glas in der Hand, Buch auf dem Tisch)
-- Personen im Hintergrund: nur inhaltlich beschreiben (z. B. „Kollegen in kleinen Gruppen") – KEINE bildtechnischen Begriffe
+- Hintergrundpersonen nur inhaltlich beschreiben (z. B. „Kollegen in kleinen Gruppen")
 
 ## Was NICHT rein darf
 

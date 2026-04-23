@@ -67,12 +67,6 @@ class OpenAiProviderClient(ProviderClient):
             raise RuntimeError("OpenAI-Bildantwort enthaelt kein Bildpayload.")
         return base64.b64decode(encoded_image)
 
-    def request_embeddings(self, texts: list[str]) -> list[list[float]]:
-        response = self._request(
-            lambda openai_client: openai_client.embeddings.create(model=config.OPENAI_MODEL_EMBEDDING, input=texts)
-        )
-        return [item.embedding for item in response.data]
-
     @staticmethod
     def _text_client() -> OpenAI:
         return OpenAI(api_key=config.OPENAI_API_KEY, base_url=config.OPENAI_BASE_URL) if config.OPENAI_BASE_URL else OpenAI(api_key=config.OPENAI_API_KEY)

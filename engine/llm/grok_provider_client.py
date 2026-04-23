@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import base64
-from typing import Any, Callable, Iterator
+from typing import Any, Iterator
 
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
@@ -11,9 +11,6 @@ from engine.llm.provider_client import NamedImage, ProviderClient
 
 
 class GrokProviderClient(ProviderClient):
-    def __init__(self) -> None:
-        self._local_embedding_fn: Callable[..., list] | None = None
-
     @property
     def _provider_name(self) -> str:
         return "Grok"
@@ -50,7 +47,10 @@ class GrokProviderClient(ProviderClient):
             return f"data:image/{image_format};base64,{encoded}"
 
         def grok_image_response_bytes(response: object) -> bytes:
-            image_bytes = getattr(response, "image", None)
+            try:
+                image_bytes = getattr(response, "image", None)
+            except ValueError:
+                image_bytes = None
             if isinstance(image_bytes, bytes):
                 return image_bytes
             if isinstance(image_bytes, str):
@@ -102,39 +102,6 @@ class GrokProviderClient(ProviderClient):
             raise RuntimeError(grok_http_error_message(exc)) from exc
         except requests.RequestException as exc:
             raise RuntimeError("Grok nicht erreichbar - Verbindung pruefen.") from exc
-
-    def request_embeddings(self, texts: list[str]) -> list[list[float]]:
-        if not texts:
-            return []
-        return self._embed_texts(texts)
-
-
-    def _embed_texts(self, texts: list[str]) -> list[list[float]]:
-        embedding_fn = self._local_embedding_function()
-        embeddings = embedding_fn(texts)
-        return [list(vector) for vector in embeddings]
-
-    def _local_embedding_function(self) -> Callable[..., list]:
-        if self._local_embedding_fn is not None:
-            return self._local_embedding_fn
-
-        from fastembed import TextEmbedding
-        from engine.storage import storage
-
-        cache_dir = storage.etm_fastembed_cache
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        model = TextEmbedding(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            cache_dir=str(cache_dir),
-        )
-
-        def fn(texts: list[str]) -> list[list[float]]:
-            return [[float(value) for value in vector] for vector in model.embed(texts)]
-
-        self._local_embedding_fn = fn
-        return fn
-
 
     @staticmethod
     def _text_client() -> OpenAI:

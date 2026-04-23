@@ -9,5 +9,4 @@ markdown
 rapidfuzz
 Pillow
 pydantic-settings
-chromadb
 fastembed

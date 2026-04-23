@@ -47,6 +47,17 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** Keine
 
+### Automatisch geoeffnete Session-Auswahl beim ersten App-Start
+**Typ:** Funktional  
+**Beschreibung:** Das System muss beim ersten erfolgreichen Oeffnen der Web-GUI im Browser die Session-Auswahl automatisch anzeigen, damit Nutzer NPC und Szene direkt auswaehlen koennen.  
+**Akzeptanzkriterien:**
+- Beim ersten erfolgreichen Laden der Web-GUI in einem Browser wird die Session-Auswahl automatisch geoeffnet.
+- Die automatisch geoeffnete Session-Auswahl zeigt die Auswahlmoeglichkeiten fuer NPC und Szene an.
+- Nach der ersten automatischen Oeffnung wird die Session-Auswahl bei weiteren Starts im selben Browser nicht erneut automatisch geoeffnet.
+- Unabhaengig vom Erststart bleibt die Session-Auswahl weiterhin manuell aufrufbar.
+
+**Referenzen:** Keine
+
 ### Mobile-First-Nutzung der Web-GUI
 **Typ:** Nicht-funktional  
 **Beschreibung:** Das System muss die Web-GUI primär für mobile Geräte in Portrait-Orientierung auslegen und die Desktop-Nutzung weiterhin vollständig unterstützen.  

@@ -137,10 +137,6 @@ class ProviderClient(ABC):
     def request_image(self, prompt: str, images: list[NamedImage]) -> bytes:
         raise NotImplementedError
 
-    @abstractmethod
-    def request_embeddings(self, texts: list[str]) -> list[list[float]]:
-        raise NotImplementedError
-
     @property
     @abstractmethod
     def _provider_name(self) -> str:

@@ -390,6 +390,16 @@ def test_app_actions_dispatches_loading_flags_for_session_and_image_refresh():
     assert "appStore.setState({ isImageRefreshLoading: false })" in source
 
 
+def test_app_actions_opens_selector_only_on_first_successful_load():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert 'const FIRST_OPEN_SELECTOR_STORAGE_KEY = "sg-first-open-selector-seen"' in source
+    assert "function shouldOpenSelectorOnFirstLoad(payload = {})" in source
+    assert 'window.localStorage.getItem(FIRST_OPEN_SELECTOR_STORAGE_KEY) === "true"' in source
+    assert 'window.localStorage.setItem(FIRST_OPEN_SELECTOR_STORAGE_KEY, "true")' in source
+    assert 'isSelectorPanelOpen: shouldOpenSelectorOnFirstLoad(payload)' in source
+
+
 def test_app_actions_toggles_assistant_typing_between_send_start_and_end():
     source = _read("engine/web/static/js/app-actions.js")
 
