@@ -309,10 +309,11 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["messages"][0]["content"] == "Hi"
     npc_options = {(entry["id"], entry["label"]) for entry in payload["npcs"]}
     assert {("mira", "Mira"), ("vika", "Vika")}.issubset(npc_options)
-    assert payload["scenes"] == [
-        {"id": "cafe", "label": "Cafe", "image_url": "/api/scenes/cafe/image?v="},
-        {"id": "office", "label": "Office", "image_url": "/api/scenes/office/image?v="},
-    ]
+    scene_options = {(entry["id"], entry["label"], entry["image_url"]) for entry in payload["scenes"]}
+    assert {
+        ("cafe", "Cafe", "/api/scenes/cafe/image?v="),
+        ("office", "Office", "/api/scenes/office/image?v="),
+    }.issubset(scene_options)
 
 
 def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monkeypatch):

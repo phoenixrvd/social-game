@@ -69,4 +69,35 @@ def test_prompt_image_refresh_prefers_override_over_default(tmp_path, monkeypatc
     assert item.get() == "override"
 
 
+def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch):
+    class FallbackSessionStore:
+        def load(self) -> Session:
+            return Session(npc_id="new_npc", scene_id="new_scene")
+
+    monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(storage_module.config, "DEFAULT_NPC_ID", "vika")
+    monkeypatch.setattr(storage_module.config, "DEFAULT_SCENE_ID", "office")
+    monkeypatch.setattr(session_store_module, "SessionStore", FallbackSessionStore)
+
+    storage_module.storage._npc_view = None
+    storage_module.storage._scene_view = None
+
+    (tmp_path / "npcs" / "new_npc").mkdir(parents=True)
+    (tmp_path / "npcs" / "vika").mkdir(parents=True)
+    (tmp_path / "npcs" / "vika" / "state.md").write_text("default-npc-state", encoding="utf-8")
+
+    (tmp_path / "scenes" / "new_scene").mkdir(parents=True)
+    (tmp_path / "scenes" / "office").mkdir(parents=True)
+    (tmp_path / "scenes" / "office" / "scene.md").write_text("default-scene", encoding="utf-8")
+
+    assert storage_module.storage.npc.state.path == tmp_path / "npcs" / "vika" / "state.md"
+    assert storage_module.storage.npc.state.get() == "default-npc-state"
+    assert storage_module.storage.scene.scene.path == tmp_path / "scenes" / "office" / "scene.md"
+    assert storage_module.storage.scene.scene.get() == "default-scene"
+
+
 

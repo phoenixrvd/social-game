@@ -807,7 +807,19 @@ sg-context-gallery {
   z-index: 40;
 }
 
-.sg-send-button:hover,
+.sg-send-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  border-color: transparent;
+}
+
+.sg-send-button:focus,
+.sg-send-button:focus-visible {
+  outline: none;
+  border-color: transparent;
+  box-shadow: none;
+}
+
 .sg-settings-action:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);

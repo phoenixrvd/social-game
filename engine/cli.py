@@ -5,16 +5,14 @@ from PIL import Image
 
 from engine.config import config
 from engine.services.image_service import ImageService
+from engine.services.npc_service import NpcService
+from engine.services.scene_service import SceneService
 from engine.stores.session_store import SessionStore
 
 app = typer.Typer(
     no_args_is_help=True,
     help="Werkzeuge fuer Web-GUI, Session und Tools im Social Game.",
 )
-
-
-def _character_image_service() -> ImageService:
-    return ImageService()
 
 
 @app.callback()
@@ -46,6 +44,44 @@ def set_session_context(
     typer.echo(f"scene={saved.scene_id}")
 
 
+@app.command("npc-create")
+def create_npc(
+    npc_name: str = typer.Argument(..., help="Name des neuen NPCs; daraus wird eine snake_case-ID erzeugt."),
+) -> None:
+    """Legt einen neuen NPC unter .overrides/npcs/<npc_id>/ an."""
+    if not npc_name.strip():
+        typer.echo("NPC-Name darf nicht leer sein.")
+        raise typer.Exit(code=1)
+
+    try:
+        target_dir = NpcService().create_override(npc_name)
+    except ValueError as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1)
+
+    typer.echo(f"NPC angelegt: {target_dir}")
+    typer.echo(f"id={target_dir.name}")
+
+
+@app.command("scene-create")
+def create_scene(
+    scene_name: str = typer.Argument(..., help="Name der neuen Scene; daraus wird eine snake_case-ID erzeugt."),
+) -> None:
+    """Legt eine Scene unter .overrides/scenes/<scene_id>/ an."""
+    if not scene_name.strip():
+        typer.echo("Scene-Name darf nicht leer sein.")
+        raise typer.Exit(code=1)
+
+    try:
+        target_dir = SceneService().create_override(scene_name)
+    except ValueError as error:
+        typer.echo(str(error))
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Scene angelegt: {target_dir}")
+    typer.echo(f"id={target_dir.name}")
+
+
 @app.command()
 def hello():
     """Prueft, ob die CLI grundsaetzlich laeuft."""
@@ -68,13 +104,13 @@ def web(
 @app.command("image-revert")
 def image_revert():
     """Setzt das Charakterbild auf das letzte Backup zurueck."""
-    _character_image_service().revert()
+    ImageService().revert()
 
 
 @app.command("image-merge-scene")
 def image_merge_scene() -> None:
     """Fuegt aktives Charakterbild und Szenenbild zu einem neuen Laufzeitbild zusammen."""
-    _character_image_service().merge_with_scene()
+    ImageService().merge_with_scene()
 
 
 @app.command("icons")

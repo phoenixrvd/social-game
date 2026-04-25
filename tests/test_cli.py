@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from typer.testing import CliRunner
+import yaml
 
 import engine.cli as cli_module
 from engine.cli import app
@@ -10,7 +11,15 @@ runner = CliRunner()
 
 
 def override_character_image_service(monkeypatch, fake_service_class):
-    monkeypatch.setattr(cli_module, "_character_image_service", lambda: fake_service_class())
+    monkeypatch.setattr(cli_module, "ImageService", fake_service_class)
+
+
+def override_npc_service(monkeypatch, fake_service_class):
+    monkeypatch.setattr(cli_module, "NpcService", fake_service_class)
+
+
+def override_scene_service(monkeypatch, fake_service_class):
+    monkeypatch.setattr(cli_module, "SceneService", fake_service_class)
 
 
 def test_hello():
@@ -309,6 +318,126 @@ def test_session_set_requires_value():
     result = runner.invoke(app, ["session-set"])
     assert result.exit_code == 1
     assert "Mindestens --npc oder --scene muss angegeben werden." in result.output
+
+
+def test_npc_create_calls_npc_service(monkeypatch, tmp_path):
+    calls: list[str] = []
+
+    class FakeNpcService:
+        def create_override(self, npc_id: str):
+            calls.append(npc_id)
+            return tmp_path / ".overrides" / "npcs" / npc_id
+
+    override_npc_service(monkeypatch, FakeNpcService)
+
+    result = runner.invoke(app, ["npc-create", " alex "])
+
+    assert result.exit_code == 0
+    assert calls == [" alex "]
+    assert "NPC angelegt" in result.output
+
+
+def test_npc_create_allows_existing_target_without_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    target = tmp_path / ".overrides" / "npcs" / "alex"
+    target.mkdir(parents=True)
+    (target / "character.yaml").write_text("name: Bestehend\n", encoding="utf-8")
+
+    result = runner.invoke(app, ["npc-create", "alex"])
+
+    assert result.exit_code == 0
+    assert (target / "character.yaml").read_text(encoding="utf-8") == "name: Bestehend\n"
+
+
+def test_npc_create_creates_override_dataset_with_character_yaml(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+
+    result = runner.invoke(app, ["npc-create", "alex"])
+
+    assert result.exit_code == 0
+    target = tmp_path / ".overrides" / "npcs" / "alex"
+    assert (target / "character.yaml").is_file()
+    assert yaml.safe_load((target / "character.yaml").read_text(encoding="utf-8")) == {"name": "alex"}
+    assert not (target / "description.md").exists()
+    assert "id=alex" in result.output
+
+
+def test_npc_create_normalizes_name_to_snake_case(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+
+    result = runner.invoke(app, ["npc-create", "Anna Maria!!!"])
+
+    assert result.exit_code == 0
+    target = tmp_path / ".overrides" / "npcs" / "anna_maria"
+    assert (target / "character.yaml").is_file()
+    assert "id=anna_maria" in result.output
+
+
+def test_npc_create_rejects_invalid_normalized_name():
+    result = runner.invoke(app, ["npc-create", "!!!"])
+
+    assert result.exit_code == 1
+    assert "NPC-Name ergibt keine gueltige ID." in result.output
+
+
+def test_scene_create_calls_scene_service(monkeypatch, tmp_path):
+    calls: list[str] = []
+
+    class FakeSceneService:
+        def create_override(self, scene_id: str):
+            calls.append(scene_id)
+            return tmp_path / ".overrides" / "scenes" / scene_id
+
+    override_scene_service(monkeypatch, FakeSceneService)
+
+    result = runner.invoke(app, ["scene-create", " park "])
+
+    assert result.exit_code == 0
+    assert calls == [" park "]
+    assert "Scene angelegt" in result.output
+
+
+def test_scene_create_creates_only_directory(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+
+    result = runner.invoke(app, ["scene-create", "park"])
+
+    assert result.exit_code == 0
+    target = tmp_path / ".overrides" / "scenes" / "park"
+    assert target.is_dir()
+    assert not (target / "scene.md").exists()
+    assert not (target / "img.png").exists()
+    assert "id=park" in result.output
+
+
+def test_scene_create_normalizes_name_to_snake_case(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+
+    result = runner.invoke(app, ["scene-create", "City Walk 2026"])
+
+    assert result.exit_code == 0
+    target = tmp_path / ".overrides" / "scenes" / "city_walk_2026"
+    assert target.is_dir()
+    assert "id=city_walk_2026" in result.output
+
+
+def test_scene_create_allows_existing_target_without_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    target = tmp_path / ".overrides" / "scenes" / "park"
+    target.mkdir(parents=True)
+
+    result = runner.invoke(app, ["scene-create", "park"])
+
+    assert result.exit_code == 0
+    assert target.is_dir()
+    assert "id=park" in result.output
+
+
+def test_scene_create_rejects_invalid_normalized_name():
+    result = runner.invoke(app, ["scene-create", "@@@"])
+
+    assert result.exit_code == 1
+    assert "Scene-Name ergibt keine gueltige ID." in result.output
 
 
 def test_icons_command_runs_pipeline(monkeypatch, tmp_path):

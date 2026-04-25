@@ -23,6 +23,9 @@ class Config(BaseSettings):
     OVERRIDES_SCENE_DIR: Path = OVERRIDES_DIR / _SCENE_SUBDIR
     OVERRIDES_PROMPTS_DIR: Path = OVERRIDES_DIR / "prompts"
 
+    DEFAULT_NPC_ID: str = "vika"
+    DEFAULT_SCENE_ID: str = "office"
+
     # Episodic Term Memory (ETM) configuration
     # Anzahl der neuesten Short-Term-Memory-Nachrichten, die im STM bleiben sollen
     UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP: int = 20

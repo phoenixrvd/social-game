@@ -19,3 +19,15 @@ def test_session_store_accepts_npc_and_scene_from_overrides(tmp_path, monkeypatc
     assert session.npc_id == "mira"
     assert session.scene_id == "cafe"
 
+
+def test_session_store_load_uses_configurable_default_ids(tmp_path, monkeypatch):
+    monkeypatch.setattr(session_store_module.config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(session_store_module.config, "DEFAULT_NPC_ID", "nora")
+    monkeypatch.setattr(session_store_module.config, "DEFAULT_SCENE_ID", "city_walk")
+
+    session = session_store_module.SessionStore().load()
+
+    assert session.npc_id == "nora"
+    assert session.scene_id == "city_walk"
+
+

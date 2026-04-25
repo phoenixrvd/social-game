@@ -17,18 +17,36 @@ def runtime_npc_scene_dir(npc_id: str, scene_id: str) -> Path:
     return config.DATA_NPC_DIR / npc_id / scene_id
 
 
-def _original_candidates(default_path: Path, override_path: Path) -> tuple[Path, ...]:
-    return override_path, default_path
+def _ordered_unique_paths(*paths: Path) -> tuple[Path, ...]:
+    ordered: list[Path] = []
+    for path in paths:
+        if path in ordered:
+            continue
+        ordered.append(path)
+    return tuple(ordered)
 
 
-def _resolved_candidates(runtime_path: Path, override_path: Path, default_path: Path) -> tuple[Path, ...]:
-    return runtime_path, override_path, default_path
+def _candidate_paths(
+    *,
+    override_path: Path,
+    default_path: Path,
+    runtime_path: Path | None = None,
+    fallback_path: Path | None = None,
+) -> tuple[Path, ...]:
+    paths: list[Path] = []
+    if runtime_path is not None:
+        paths.append(runtime_path)
+    paths.extend([override_path, default_path])
+    if fallback_path is not None:
+        paths.append(fallback_path)
+    return _ordered_unique_paths(*paths)
 
 
 def scene_file_candidates(scene_id: str, filename: str) -> tuple[Path, ...]:
-    return _original_candidates(
-        default_path=config.SCENE_DIR / scene_id / filename,
+    return _candidate_paths(
         override_path=config.OVERRIDES_SCENE_DIR / scene_id / filename,
+        default_path=config.SCENE_DIR / scene_id / filename,
+        fallback_path=config.SCENE_DIR / config.DEFAULT_SCENE_ID / filename,
     )
 
 
@@ -187,8 +205,15 @@ class _StorageViewBase:
         *,
         override_path: Path,
         default_path: Path,
+        fallback_path: Path | None = None,
     ) -> Path:
-        return preferred_file(_original_candidates(default_path=default_path, override_path=override_path))
+        return preferred_file(
+            _candidate_paths(
+                override_path=override_path,
+                default_path=default_path,
+                fallback_path=fallback_path,
+            )
+        )
 
     @staticmethod
     def _resolve_resolved(
@@ -196,12 +221,14 @@ class _StorageViewBase:
         runtime_path: Path,
         override_path: Path,
         default_path: Path,
+        fallback_path: Path | None = None,
     ) -> Path:
         return preferred_file(
-            _resolved_candidates(
+            _candidate_paths(
                 runtime_path=runtime_path,
                 override_path=override_path,
                 default_path=default_path,
+                fallback_path=fallback_path,
             )
         )
 
@@ -221,10 +248,19 @@ class NpcStorageView(_StorageViewBase):
     def base_runtime(self) -> Path:
         return self.runtime_dir
 
+    @property
+    def default_base(self) -> Path:
+        return config.NPC_DIR / config.DEFAULT_NPC_ID
+
+    @property
+    def default_scene_base(self) -> Path:
+        return self.default_base / "scenes" / self.scene_id
+
     def _resolve_npc_original(self, filename: str) -> Path:
         return self._resolve_original(
             override_path=self.base_override / filename,
             default_path=self.base / filename,
+            fallback_path=self.default_base / filename,
         )
 
     def _resolve_npc(self, filename: str) -> Path:
@@ -232,19 +268,32 @@ class NpcStorageView(_StorageViewBase):
             runtime_path=self.base_runtime / filename,
             override_path=self.base_override / filename,
             default_path=self.base / filename,
+            fallback_path=self.default_base / filename,
         )
 
     def _resolve_npc_scene_original(self, filename: str) -> Path:
-        return self._resolve_original(
-            override_path=self.base_override / "scenes" / self.scene_id / filename,
-            default_path=self.base / "scenes" / self.scene_id / filename,
+        return preferred_file(
+            _ordered_unique_paths(
+                self.base_override / filename,
+                self.base_override / "scenes" / self.scene_id / filename,
+                self.base / "scenes" / self.scene_id / filename,
+                self.base / filename,
+                self.default_scene_base / filename,
+                self.default_base / filename,
+            )
         )
 
     def _resolve_npc_scene(self, filename: str) -> Path:
-        return self._resolve_resolved(
-            runtime_path=self.base_runtime / filename,
-            override_path=self.base_override / "scenes" / self.scene_id / filename,
-            default_path=self.base / "scenes" / self.scene_id / filename,
+        return preferred_file(
+            _ordered_unique_paths(
+                self.base_runtime / filename,
+                self.base_override / filename,
+                self.base_override / "scenes" / self.scene_id / filename,
+                self.base / "scenes" / self.scene_id / filename,
+                self.base / filename,
+                self.default_scene_base / filename,
+                self.default_base / filename,
+            )
         )
 
     @property
@@ -356,10 +405,15 @@ class SceneStorageView(_StorageViewBase):
     def base_runtime(self) -> Path:
         return self.runtime_dir
 
+    @property
+    def default_base(self) -> Path:
+        return config.SCENE_DIR / config.DEFAULT_SCENE_ID
+
     def _resolve_scene_original(self, filename: str) -> Path:
         return self._resolve_original(
             override_path=self.base_override / filename,
             default_path=self.base / filename,
+            fallback_path=self.default_base / filename,
         )
 
     def _resolve_scene(self, filename: str) -> Path:
@@ -367,6 +421,7 @@ class SceneStorageView(_StorageViewBase):
             runtime_path=self.base_runtime / filename,
             override_path=self.base_override / filename,
             default_path=self.base / filename,
+            fallback_path=self.default_base / filename,
         )
 
     @property

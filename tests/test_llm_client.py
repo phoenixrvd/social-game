@@ -286,6 +286,38 @@ def test_grok_streaming_wraps_iteration_error_with_main_message(monkeypatch):
         assert isinstance(exc.__cause__, FakePermissionDenied)
 
 
+def test_grok_big_request_maps_grpc_quota_error(monkeypatch):
+    client = GrokProviderClient()
+
+    class FakeGrpcQuotaError(openai.OpenAIError):
+        pass
+
+    class FakeTextClient:
+        class chat:
+            class completions:
+                @staticmethod
+                def create(**_kwargs):
+                    raise FakeGrpcQuotaError(
+                        'UNKNOWN:Error received from peer ipv6:%5B2606:4700::6812:1350%5D:443 '
+                        '{grpc_message:"Your team 0adb8a1f-be5b-4491-845e-f4df321edb57 has either used all '
+                        'available credits or reached its monthly spending limit. To continue making API '
+                        'requests, please purchase more credits or raise your spending limit.", grpc_status:8}'
+                    )
+
+    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
+
+    try:
+        stream = _require_iterator(client.request_big([]))
+        _next_chunk(stream)
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as exc:
+        assert (
+            str(exc)
+            == "Your team 0adb8a1f-be5b-4491-845e-f4df321edb57 has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit."
+        )
+        assert isinstance(exc.__cause__, FakeGrpcQuotaError)
+
+
 def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
     client = OpenAiProviderClient()
 

@@ -126,8 +126,8 @@ function canPollImage(state) {
 }
 
 async function pollImageSignature(force = false) {
-  const state = appStore.getState()
-  if (!force && !canPollImage(state)) {
+  const initialState = appStore.getState()
+  if (!force && !canPollImage(initialState)) {
     return
   }
 
@@ -138,13 +138,18 @@ async function pollImageSignature(force = false) {
 
   const payload = await response.json().catch(() => ({}))
   const signature = typeof payload.signature === "string" ? payload.signature : null
-  if (!signature || signature === state.imageSignature) {
+  const latestState = appStore.getState()
+  if (!force && !canPollImage(latestState)) {
+    return
+  }
+
+  if (!signature || signature === latestState.imageSignature) {
     return
   }
 
   appStore.setState({
     imageSignature: signature,
-    imageUrl: appendCacheBuster(typeof payload.image_url === "string" ? payload.image_url : state.imageUrl),
+    imageUrl: appendCacheBuster(typeof payload.image_url === "string" ? payload.image_url : latestState.imageUrl),
   })
 }
 

@@ -7,6 +7,8 @@ import engine.config as config_module
 
 def test_config_uses_int_env_overrides(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.setenv("DEFAULT_NPC_ID", "mira")
+    monkeypatch.setenv("DEFAULT_SCENE_ID", "cafe")
     monkeypatch.setenv("UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP", "25")
     monkeypatch.setenv("UPDATER_ETM_BATCH_SIZE_THRESHOLD", "9")
     monkeypatch.setenv("ETM_RETRIEVAL_TOP_K", "6")
@@ -19,6 +21,8 @@ def test_config_uses_int_env_overrides(monkeypatch):
 
     cfg = importlib.reload(config_module)
 
+    assert cfg.config.DEFAULT_NPC_ID == "mira"
+    assert cfg.config.DEFAULT_SCENE_ID == "cafe"
     assert cfg.config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP == 25
     assert cfg.config.UPDATER_ETM_BATCH_SIZE_THRESHOLD == 9
     assert cfg.config.ETM_RETRIEVAL_TOP_K == 6
@@ -32,6 +36,8 @@ def test_config_uses_int_env_overrides(monkeypatch):
 
 def test_config_uses_defaults_when_env_missing(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
+    monkeypatch.delenv("DEFAULT_NPC_ID", raising=False)
+    monkeypatch.delenv("DEFAULT_SCENE_ID", raising=False)
     monkeypatch.delenv("UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP", raising=False)
     monkeypatch.delenv("UPDATER_ETM_BATCH_SIZE_THRESHOLD", raising=False)
     monkeypatch.delenv("ETM_RETRIEVAL_TOP_K", raising=False)
@@ -44,6 +50,8 @@ def test_config_uses_defaults_when_env_missing(monkeypatch):
 
     cfg = importlib.reload(config_module)
 
+    assert cfg.config.DEFAULT_NPC_ID == "vika"
+    assert cfg.config.DEFAULT_SCENE_ID == "office"
     assert cfg.config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP == 20
     assert cfg.config.UPDATER_ETM_BATCH_SIZE_THRESHOLD == 7
     assert cfg.config.ETM_RETRIEVAL_TOP_K == 4

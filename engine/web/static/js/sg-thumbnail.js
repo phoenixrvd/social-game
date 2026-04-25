@@ -10,12 +10,15 @@ class SocialGameThumbnail extends HTMLElement {
     super()
     this._state = {
       imageUrl: "",
+      imageSignature: "",
       isLoading: false,
       isExpanded: false,
     }
 
     this.$ = {}
     this._lastFocusedElement = null
+    this._lastAnimatedSignature = ""
+    this._updatedClassTimer = null
   }
 
   connectedCallback() {
@@ -67,6 +70,7 @@ class SocialGameThumbnail extends HTMLElement {
   registerSubscriptions() {
     const subscriptions = [
       ["imageUrl", this.onImageUrlChanged.bind(this)],
+      ["imageSignature", this.onImageSignatureChanged.bind(this)],
       ["isImageExpanded", this.onImageExpandedChanged.bind(this)],
       ["isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this)],
     ]
@@ -79,12 +83,18 @@ class SocialGameThumbnail extends HTMLElement {
   syncFromStore() {
     const state = appStore.getState()
     this._state.imageUrl = typeof state.imageUrl === "string" ? state.imageUrl : ""
+    this._state.imageSignature = typeof state.imageSignature === "string" ? state.imageSignature : ""
     this._state.isExpanded = Boolean(state.isImageExpanded)
     this._state.isLoading = Boolean(state.isImageRefreshLoading)
   }
 
   onImageUrlChanged(imageUrl) {
     this._state.imageUrl = typeof imageUrl === "string" ? imageUrl : ""
+    this.render()
+  }
+
+  onImageSignatureChanged(imageSignature) {
+    this._state.imageSignature = typeof imageSignature === "string" ? imageSignature : ""
     this.render()
   }
 
@@ -103,6 +113,31 @@ class SocialGameThumbnail extends HTMLElement {
     this.$.main.classList.remove("is-updated")
     this.$.overlayMain.classList.remove("is-updated")
     appActions.setImageError()
+  }
+
+  shouldAnimateImageUpdate() {
+    const signature = this._state.imageSignature
+    if (!signature || signature === this._lastAnimatedSignature) {
+      return false
+    }
+
+    this._lastAnimatedSignature = signature
+    return true
+  }
+
+  playImageUpdateAnimation() {
+    this.$.main.classList.add("is-updated")
+    this.$.overlayMain.classList.add("is-updated")
+
+    if (this._updatedClassTimer !== null) {
+      window.clearTimeout(this._updatedClassTimer)
+    }
+
+    this._updatedClassTimer = window.setTimeout(() => {
+      this.$.main.classList.remove("is-updated")
+      this.$.overlayMain.classList.remove("is-updated")
+      this._updatedClassTimer = null
+    }, 520)
   }
 
   handleMainClick(event) {
@@ -183,17 +218,15 @@ class SocialGameThumbnail extends HTMLElement {
       return
     }
 
-    this.$.main.classList.add("is-updated")
-    this.$.overlayMain.classList.add("is-updated")
-
-    window.setTimeout(() => {
-      this.$.main.classList.remove("is-updated")
-      this.$.overlayMain.classList.remove("is-updated")
-    }, 520)
+    const shouldAnimate = this.shouldAnimateImageUpdate()
 
     ;[this.$.bg, this.$.main, this.$.overlayBg, this.$.overlayMain].forEach((img) => {
       img.src = this._state.imageUrl
     })
+
+    if (shouldAnimate) {
+      this.playImageUpdateAnimation()
+    }
   }
 }
 
