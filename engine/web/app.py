@@ -19,12 +19,9 @@ import uvicorn
 from engine.config import config
 from engine.llm.client import client
 from engine.llm.provider_client import user_visible_provider_error_detail
-from engine.models import Npc, ShortMemoryMessage
 from engine.services.image_service import ImageService
 from engine.services.npc_turn_service import NpcTurnService
-from engine.storage import SceneStorageView, storage
-from engine.stores.npc_store import NpcStore
-from engine.stores.session_store import SessionStore
+from engine.storage import Message, NpcStorageView, SceneStorageView, storage
 from engine.tools.scheduler import Scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -179,7 +176,7 @@ class SessionRequest(BaseModel):
     scene_id: str | None = None
 
 
-def _message_to_payload(message: ShortMemoryMessage) -> dict[str, str]:
+def _message_to_payload(message: Message) -> dict[str, str]:
     return {
         "id": message.id,
         "role": message.role,
@@ -192,13 +189,13 @@ def _render_markdown_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["extra", "sane_lists"])
 
 
-def _visible_messages(npc: Npc) -> list[dict[str, Any]]:
-    visible = [_message_to_payload(m) for m in npc.stm if m.role in {"user", "assistant"}]
+def _visible_messages(npc: NpcStorageView, scene: SceneStorageView) -> list[dict[str, Any]]:
+    visible = [_message_to_payload(m) for m in npc.stm.get() if m.role in {"user", "assistant"}]
     if visible:
         return visible
-    character_description = npc.description
-    relationship_description = npc.relationship.strip()
-    scene_description = (npc.scene.description or "").strip() or "Keine Szenenbeschreibung verfügbar."
+    character_description = npc.description.get()
+    relationship_description = npc.relationship.get().strip()
+    scene_description = scene.description.strip() or "Keine Szenenbeschreibung verfügbar."
     context_messages = [
         {
             "id": "context-character",
@@ -230,11 +227,11 @@ def _visible_messages(npc: Npc) -> list[dict[str, Any]]:
     return context_messages
 
 
-def _visible_stm_messages(npc: Npc) -> list[ShortMemoryMessage]:
-    return [m for m in npc.stm if m.role in {"user", "assistant"}]
+def _visible_stm_messages(npc: NpcStorageView) -> list[Message]:
+    return [m for m in npc.stm.get() if m.role in {"user", "assistant"}]
 
 
-def _messages_signature(npc: Npc) -> str:
+def _messages_signature(npc: NpcStorageView) -> str:
     visible = _visible_stm_messages(npc)
     last_id = visible[-1].id if visible else ""
     return f"{len(visible)}|{last_id}"
@@ -250,12 +247,12 @@ def _read_scene_label(scene_view: SceneStorageView) -> str:
 
 
 def _npc_option_image_path(npc_id: str) -> Path:
-    scene_id = SessionStore().load().scene_id
+    scene_id = storage.session.get().scene_id
     return storage.npc_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
 
 
 def _scene_option_image_path(scene_id: str) -> Path:
-    npc_id = SessionStore().load().npc_id
+    npc_id = storage.session.get().npc_id
     return storage.scene_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
 
 
@@ -292,25 +289,27 @@ def _list_scenes() -> list[dict[str, str]]:
     ]
 
 
-def _image_url(npc: Npc) -> str | None:
+def _image_url(npc: NpcStorageView) -> str | None:
     return "/api/image/current" if npc.img_current.is_file() else None
 
 
-def _image_signature(npc: Npc) -> str:
-    return _file_signature(npc.img_current)
+def _image_signature(npc: NpcStorageView) -> str:
+    return _file_signature(npc.img_current.get())
 
 
 def _state_payload() -> dict[str, Any]:
-    npc = NpcStore().load()
+    npc = storage.npc
+    scene = storage.scene
+    character = npc.character_original.get()
     return {
         "npc_id": npc.npc_id,
-        "npc_name": str(npc.character.get("name", npc.npc_id)).strip() or npc.npc_id,
-        "character_description": npc.description,
-        "relationship": npc.relationship,
-        "scene_id": npc.scene.scene_id,
-        "scene_description": npc.scene.description,
-        "character_data": npc.character,
-        "messages": _visible_messages(npc),
+        "npc_name": str(character.get("name", npc.npc_id)).strip() or npc.npc_id,
+        "character_description": npc.description.get(),
+        "relationship": npc.relationship.get(),
+        "scene_id": scene.scene_id,
+        "scene_description": scene.description,
+        "character_data": character,
+        "messages": _visible_messages(npc, scene),
         "messages_signature": _messages_signature(npc),
         "image_url": _image_url(npc),
         "image_signature": _image_signature(npc),
@@ -328,15 +327,18 @@ def get_state() -> dict[str, Any]:
 def update_session(request: SessionRequest) -> dict[str, Any]:
     if request.npc_id is None and request.scene_id is None:
         raise HTTPException(status_code=422, detail="Mindestens npc_id oder scene_id muss gesetzt sein.")
-    SessionStore().save(npc=request.npc_id, scene=request.scene_id)
+    storage.session.save(npc=request.npc_id, scene=request.scene_id)
     return _state_payload()
 
 
 @app.delete("/api/npc/reset-active")
 def reset_active_npc_runtime_data() -> dict[str, Any]:
     _get_scheduler().clear_pending_jobs()
-    session = SessionStore().load()
-    scene_data_dir = storage.npc_view(npc_id=session.npc_id, scene_id=session.scene_id).base_runtime
+    session = storage.session.get()
+    scene_data_dir = storage.npc_view(
+        npc_id=session.npc_id,
+        scene_id=session.scene_id,
+    ).base_runtime
     if scene_data_dir.exists():
         shutil.rmtree(scene_data_dir)
     return _state_payload()
@@ -375,8 +377,7 @@ def chat_stream(request: ChatRequest) -> Any:
 
 @app.get("/api/image/current")
 def current_image() -> Any:
-    npc = NpcStore().load()
-    return _image_response(npc.img_current)
+    return _image_response(storage.npc.img_current.get())
 
 
 @app.get("/api/npcs/{npc_id}/image")
@@ -391,7 +392,7 @@ def scene_option_image(scene_id: str) -> Any:
 
 @app.get("/api/image/signature")
 def image_signature() -> dict[str, Any]:
-    npc = NpcStore().load()
+    npc = storage.npc
     return {
         "signature": _image_signature(npc),
         "image_url": _image_url(npc),

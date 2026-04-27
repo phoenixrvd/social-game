@@ -1,33 +1,36 @@
 from __future__ import annotations
 
-import engine.stores.session_store as session_store_module
+import yaml
+
+import engine.storage as storage_module
 
 
-def test_session_store_accepts_npc_and_scene_from_overrides(tmp_path, monkeypatch):
-    monkeypatch.setattr(session_store_module.config, "SESSION_PATH", tmp_path / "session.yaml")
-    monkeypatch.setattr(session_store_module.config, "NPC_DIR", tmp_path / "npcs")
-    monkeypatch.setattr(session_store_module.config, "SCENE_DIR", tmp_path / "scenes")
-    monkeypatch.setattr(session_store_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
-    monkeypatch.setattr(session_store_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+def test_session_storage_saves_and_exposes_direct_session_ids(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage_module.config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
 
     (tmp_path / ".overrides" / "npcs" / "mira").mkdir(parents=True)
     (tmp_path / ".overrides" / "scenes" / "cafe").mkdir(parents=True)
 
-    store = session_store_module.SessionStore()
-    session = store.save(npc="mira", scene="cafe")
+    saved = storage_module.storage.session.save(npc_id="mira", scene_id="cafe").get()
 
-    assert session.npc_id == "mira"
-    assert session.scene_id == "cafe"
-
-
-def test_session_store_load_uses_configurable_default_ids(tmp_path, monkeypatch):
-    monkeypatch.setattr(session_store_module.config, "SESSION_PATH", tmp_path / "session.yaml")
-    monkeypatch.setattr(session_store_module.config, "DEFAULT_NPC_ID", "nora")
-    monkeypatch.setattr(session_store_module.config, "DEFAULT_SCENE_ID", "city_walk")
-
-    session = session_store_module.SessionStore().load()
-
-    assert session.npc_id == "nora"
-    assert session.scene_id == "city_walk"
+    assert saved.npc_id == "mira"
+    assert saved.scene_id == "cafe"
+    assert storage_module.storage.session.get().npc_id == "mira"
+    assert storage_module.storage.session.get().scene_id == "cafe"
+    assert yaml.safe_load((tmp_path / "session.yaml").read_text(encoding="utf-8")) == {
+        "npc_id": "mira",
+        "scene_id": "cafe",
+    }
 
 
+def test_session_storage_uses_configurable_default_ids_as_properties(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage_module.config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(storage_module.config, "DEFAULT_NPC_ID", "nora")
+    monkeypatch.setattr(storage_module.config, "DEFAULT_SCENE_ID", "city_walk")
+
+    assert storage_module.storage.session.get().npc_id == "nora"
+    assert storage_module.storage.session.get().scene_id == "city_walk"

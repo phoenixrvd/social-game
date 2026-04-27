@@ -7,8 +7,7 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 **Hauptkomponenten:**
 - `engine/web/app.py` – FastAPI-Backend + Lifespan-Start des Job-Schedulers
 - `engine/tools/scheduler.py` – `Scheduler` mit vier fachlichen Jobs (`EtmJob`, `StateJob`, `SceneJob`, `ImageJob`)
-- `engine/storage.py` – zentrale Pfadauflösung für Runtime-/Override-/Default-Daten und Prompt-Overrides
-- `engine/stores/npc_store.py` – Einziger Zugriffspunkt für NPC-Kontext; überblendet Initialzustand mit Laufzeitdaten
+- `engine/storage.py` – zentraler Zugriffspunkt für Session-/NPC-/Scene-/Prompt-Pfade und Laufzeitdaten
 - `engine/llm/client.py` – LLM-Funktionen: `embed_texts`, `stream_prompt`, `run_prompt_small`, `refresh_img`, `merge_character_scene_img`
 - `engine/cli.py` – Typer-CLI als Einstiegspunkt `sg`
 
@@ -25,7 +24,7 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 - `.overrides/prompts/*.md` – überschreibt Prompt-Templates vollständig
 
 **Laufzeitdaten (`.data/`, nicht versioniert):**
-- `.data/session.yaml` – aktiver NPC/Szene-Kontext
+- `.data/session.yaml` – aktiver NPC/Szene-Kontext mit Keys `npc_id` und `scene_id`
 - `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm.sqlite, img.png)
 - `.data/npcs/<npc_id>/<scene_id>/orchestrator/` – orchestrator-spezifische Laufzeitartefakte (z. B. gespeicherte Bildprompts)
 - `.data/fastembed_cache/` – lokaler Cache für Embeddings beim Grok-Embedding-Pfad
@@ -42,9 +41,6 @@ pip install -r requirements.txt && pip install -e .
 
 # Starten
 sg web                                         # http://127.0.0.1:8000
-sg session-set --npc mira --scene cafe         # aktiven Kontext wechseln
-sg image-merge-scene                           # Charakter-Szenenbild neu zusammenführen
-sg image-revert                                # letztes Backup wiederherstellen
 
 # Tests
 pytest                                         # alle Tests

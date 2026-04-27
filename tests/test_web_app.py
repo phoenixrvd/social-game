@@ -1,6 +1,5 @@
 import asyncio
 import json
-from dataclasses import replace
 from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +13,7 @@ import requests
 
 import engine.web.app as web_app_module
 import engine.storage as storage_module
-from engine.models import Npc, Scene, Session, ShortMemoryMessage, Stm
+from engine.storage import Message
 
 
 def _make_test_png(path: Path, width: int = 4, height: int = 4) -> Path:
@@ -23,92 +22,23 @@ def _make_test_png(path: Path, width: int = 4, height: int = 4) -> Path:
     return path
 
 
-def _build_npc(npc_id: str, scene_id: str, messages: list[ShortMemoryMessage]) -> Npc:
-    return Npc(
-        npc_id=npc_id,
-        description=f"Charakterbeschreibung {npc_id}",
-        system_prompt="Bleib in Character",
-        state="mood: neutral",
-        relationship="kennt den Spieler",
-        scene=Scene(scene_id=scene_id, description=f"Szene {scene_id}"),
-        character={"name": npc_id.title()},
-        img_current=Path(__file__),
-        stm=Stm(messages),
-    )
-
-
-class FakeSessionStore:
+class FakeSessionView:
     saved_calls: list[tuple[str | None, str | None]] = []
-    current = Session(npc_id="vika", scene_id="office")
+    npc_id = "vika"
+    scene_id = "office"
 
-    def load(self) -> Session:
-        return type(self).current
-
-    def save(self, *, npc: str | None = None, scene: str | None = None) -> Session:
-        type(self).saved_calls.append((npc, scene))
-        type(self).current = Session(
-            npc_id=npc or type(self).current.npc_id,
-            scene_id=scene or type(self).current.scene_id,
-        )
-        return type(self).current
-
-
-class FakeNpcStore:
-    def __init__(self) -> None:
-        self.appended_turns: list[tuple[str, str]] = []
-        self._message_counter = 2
-        self._current_npc = _build_npc(
-            npc_id=FakeSessionStore.current.npc_id,
-            scene_id=FakeSessionStore.current.scene_id,
-            messages=[
-                ShortMemoryMessage(
-                    id="m1",
-                    timestamp_utc="2026-03-22T10:00:00+00:00",
-                    role="user",
-                    content="Hi",
-                ),
-                ShortMemoryMessage(
-                    id="m2",
-                    timestamp_utc="2026-03-22T10:01:00+00:00",
-                    role="assistant",
-                    content="Hallo.",
-                ),
-            ],
-        )
-
-    def load(self) -> Npc:
-        session = FakeSessionStore.current
-        current = replace(
-            self._current_npc,
-            npc_id=session.npc_id,
-            scene=Scene(scene_id=session.scene_id, description=f"Szene {session.scene_id}"),
-            character={"name": session.npc_id.title()},
-        )
-        return replace(current, stm=Stm(current.stm), character=dict(current.character))
-
-    def append_stm_turn(self, user_content: str, assistant_content: str) -> list[ShortMemoryMessage]:
-        self.appended_turns.append((user_content, assistant_content))
-        self._message_counter += 1
-        user_message = ShortMemoryMessage(
-            id=f"m{self._message_counter}",
-            timestamp_utc="2026-03-22T10:02:00+00:00",
-            role="user",
-            content=user_content,
-        )
-        self._message_counter += 1
-        assistant_message = ShortMemoryMessage(
-            id=f"m{self._message_counter}",
-            timestamp_utc="2026-03-22T10:03:00+00:00",
-            role="assistant",
-            content=assistant_content,
-        )
-        self._current_npc.stm.extend([user_message, assistant_message])
-        return [user_message, assistant_message]
+    @classmethod
+    def save(cls, npc_id: str | None = None, scene_id: str | None = None):
+        cls.saved_calls.append((npc_id, scene_id))
+        if npc_id is not None:
+            cls.npc_id = npc_id
+        if scene_id is not None:
+            cls.scene_id = scene_id
+        return SimpleNamespace(npc_id=cls.npc_id, scene_id=cls.scene_id)
 
 
 class FakeNpcTurnService:
     def __init__(self) -> None:
-        self.npc_store = fake_npc_store
         self.user_message = None
 
     def build_chat_messages(self, player_input: str):
@@ -117,10 +47,20 @@ class FakeNpcTurnService:
         return [{"role": "system", "content": "stub"}, user_message]
 
     def finalize_turn(self, player_input: str, assistant_reply: str) -> None:
-        self.npc_store.append_stm_turn(player_input.strip(), assistant_reply.strip())
-
-
-fake_npc_store = FakeNpcStore()
+        user_msg = Message(
+            id="m-user",
+            timestamp_utc="2026-03-22T10:02:00+00:00",
+            role="user",
+            content=player_input.strip(),
+        )
+        assistant_msg = Message(
+            id="m-assistant",
+            timestamp_utc="2026-03-22T10:03:00+00:00",
+            role="assistant",
+            content=assistant_reply.strip(),
+        )
+        web_app_module.storage.npc.stm.append(user_msg)
+        web_app_module.storage.npc.stm.append(assistant_msg)
 
 
 def _setup_web_app(
@@ -132,59 +72,69 @@ def _setup_web_app(
     npcs_dir = tmp_path / "npcs"
     scenes_dir = tmp_path / "scenes"
     data_npcs_dir = tmp_path / ".data" / "npcs"
+    overrides_npcs_dir = tmp_path / ".overrides" / "npcs"
+    overrides_scenes_dir = tmp_path / ".overrides" / "scenes"
+    overrides_npcs_dir.mkdir(parents=True, exist_ok=True)
+    overrides_scenes_dir.mkdir(parents=True, exist_ok=True)
+
     for npc_id, label in (("vika", "Vika"), ("mira", "Mira")):
         npc_dir = npcs_dir / npc_id
         npc_dir.mkdir(parents=True)
         (npc_dir / "character.yaml").write_text(f"name: {label}\n", encoding="utf-8")
+        (npc_dir / "description.md").write_text(f"Charakterbeschreibung {npc_id}", encoding="utf-8")
+        (npc_dir / "system_prompt.md").write_text("Bleib in Character", encoding="utf-8")
+        (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
+        (npc_dir / "relationship.md").write_text("kennt den Spieler", encoding="utf-8")
+        _make_test_png(npc_dir / "img.png")
+
     for scene_id, heading in (("office", "# Office"), ("cafe", "# Cafe")):
         scene_dir = scenes_dir / scene_id
         scene_dir.mkdir(parents=True)
         (scene_dir / "scene.md").write_text(heading, encoding="utf-8")
 
-    (data_npcs_dir / "vika").mkdir(parents=True)
-    (data_npcs_dir / "vika" / "stm.jsonl").write_text('{"role":"user","content":"x"}\n', encoding="utf-8")
+    active_runtime = data_npcs_dir / "vika" / "office"
+    active_runtime.mkdir(parents=True, exist_ok=True)
+    _make_test_png(active_runtime / "img.png")
 
-    test_img_path = _make_test_png(tmp_path / "test_img.png")
-
-    FakeSessionStore.saved_calls = []
-    FakeSessionStore.current = Session(npc_id="vika", scene_id="office")
-    fake_npc_store.appended_turns = []
-    fake_npc_store._message_counter = 2
-    fake_npc_store._current_npc = _build_npc(
-        npc_id="vika",
-        scene_id="office",
-        messages=[
-            ShortMemoryMessage(
-                id="m1",
-                timestamp_utc="2026-03-22T10:00:00+00:00",
-                role="user",
-                content="Hi",
-            ),
-            ShortMemoryMessage(
-                id="m2",
-                timestamp_utc="2026-03-22T10:01:00+00:00",
-                role="assistant",
-                content="Hallo.",
-            ),
-        ],
-    )
-    fake_npc_store._current_npc = replace(fake_npc_store._current_npc, img_current=test_img_path)
+    FakeSessionView.saved_calls = []
+    FakeSessionView.npc_id = "vika"
+    FakeSessionView.scene_id = "office"
 
     monkeypatch.setattr(web_app_module.config, "NPC_DIR", npcs_dir)
     monkeypatch.setattr(web_app_module.config, "SCENE_DIR", scenes_dir)
     monkeypatch.setattr(web_app_module.config, "DATA_NPC_DIR", data_npcs_dir)
+    monkeypatch.setattr(web_app_module.config, "OVERRIDES_NPC_DIR", overrides_npcs_dir)
+    monkeypatch.setattr(web_app_module.config, "OVERRIDES_SCENE_DIR", overrides_scenes_dir)
     monkeypatch.setattr(web_app_module.config, "WEB_DEBUG", web_debug)
     monkeypatch.setattr(storage_module.config, "NPC_DIR", npcs_dir)
     monkeypatch.setattr(storage_module.config, "SCENE_DIR", scenes_dir)
     monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", data_npcs_dir)
-    storage_module.storage._npc_view = None
-    storage_module.storage._scene_view = None
-    monkeypatch.setattr(web_app_module, "SessionStore", FakeSessionStore)
-    monkeypatch.setattr(web_app_module, "NpcStore", lambda: fake_npc_store)
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", overrides_npcs_dir)
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", overrides_scenes_dir)
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "get",
+        lambda _self: SimpleNamespace(npc_id=FakeSessionView.npc_id, scene_id=FakeSessionView.scene_id),
+    )
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "save",
+        lambda _self, **kwargs: FakeSessionView.save(
+            npc_id=kwargs.get("npc_id", kwargs.get("npc")),
+            scene_id=kwargs.get("scene_id", kwargs.get("scene")),
+        ),
+    )
     monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
     web_app_module.app.state.watch_scheduler = None
     web_app_module._scheduler = None
+
+    storage_module.storage.npc.stm.save(
+        [
+            Message(id="m1", timestamp_utc="2026-03-22T10:00:00+00:00", role="user", content="Hi"),
+            Message(id="m2", timestamp_utc="2026-03-22T10:01:00+00:00", role="assistant", content="Hallo."),
+        ]
+    )
 
 
 def _request(path: str, method: str = "GET"):
@@ -318,11 +268,7 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
 
 def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = _build_npc(
-        npc_id="vika",
-        scene_id="office",
-        messages=[],
-    )
+    storage_module.storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
     assert len(payload["messages"]) == 3
@@ -339,7 +285,7 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
     assert scene_message["content"] == ""
     assert relationship_message["content"] == ""
     assert "Charakterbeschreibung vika" in character_message["html"]
-    assert "Szene office" in scene_message["html"]
+    assert "Office" in scene_message["html"]
     assert "kennt den Spieler" in relationship_message["html"]
 
 
@@ -353,17 +299,15 @@ def test_get_state_prefers_real_messages_over_context_fallback(tmp_path, monkeyp
 
 def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = _build_npc(
-        npc_id="vika",
-        scene_id="office",
-        messages=[
-            ShortMemoryMessage(
+    storage_module.storage.npc.stm.save(
+        [
+            Message(
                 id="m-system",
                 timestamp_utc="2026-03-22T09:59:00+00:00",
                 role="system",
                 content="Interner Zustand",
             )
-        ],
+        ]
     )
 
     payload = web_app_module.get_state()
@@ -372,18 +316,15 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
     assert payload["messages"][1]["id"] == "context-scene"
     assert payload["messages"][2]["id"] == "context-relationship"
     assert "Charakterbeschreibung vika" in payload["messages"][0]["html"]
-    assert "Szene office" in payload["messages"][1]["html"]
+    assert "Office" in payload["messages"][1]["html"]
     assert "kennt den Spieler" in payload["messages"][2]["html"]
 
 
 def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = replace(
-        fake_npc_store._current_npc,
-        description="[link](javascript:alert('x'))",
-        stm=Stm(),
-        scene=Scene(scene_id="office", description="Szene [ok](https://example.com)"),
-    )
+    storage_module.storage.npc.description.save("[link](javascript:alert('x'))")
+    storage_module.storage.scene.scene_runtime.save("Szene [ok](https://example.com)")
+    storage_module.storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
     character_html = payload["messages"][0]["html"]
@@ -392,11 +333,8 @@ def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeyp
 
 def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = replace(
-        fake_npc_store._current_npc,
-        description="Außen:\n\n- direkt\n- offen",
-        stm=Stm(),
-    )
+    storage_module.storage.npc.description.save("Außen:\n\n- direkt\n- offen")
+    storage_module.storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
     character_html = payload["messages"][0]["html"]
@@ -408,7 +346,7 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
 def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     payload = web_app_module.update_session(web_app_module.SessionRequest(npc_id="mira", scene_id="cafe"))
-    assert FakeSessionStore.saved_calls == [("mira", "cafe")]
+    assert FakeSessionView.saved_calls == [("mira", "cafe")]
     assert payload["npc_id"] == "mira"
     assert payload["npc_name"] == "Mira"
     assert payload["scene_id"] == "cafe"
@@ -458,18 +396,18 @@ def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
 
 def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    fake_npc_store._current_npc = _build_npc(
-        npc_id="vika",
-        scene_id="office",
-        messages=[],
-    )
-    fake_npc_store._current_npc.img_current = tmp_path / "missing.png"
+    runtime_image = storage_module.storage.npc.img_runtime.path
+    root_image = storage_module.storage.npc.img_original.path
+    if runtime_image.exists():
+        runtime_image.unlink()
+    if root_image.exists():
+        root_image.unlink()
 
     try:
         web_app_module.current_image()
         raise AssertionError("Expected FileNotFoundError")
     except FileNotFoundError as exc:
-        assert exc.filename == str(fake_npc_store._current_npc.img_current)
+        assert exc.filename == str(storage_module.storage.npc.img_current.get())
 
 
 def test_npc_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):
@@ -859,7 +797,6 @@ def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
     assert _read_stream_events(response) == [
         {"type": "error", "detail": "Kontingent erschöpft – Plan und Abrechnung prüfen."},
     ]
-    assert fake_npc_store.appended_turns == []
     assert calls == []
 
 
@@ -901,7 +838,6 @@ def test_chat_stream_emits_error_event_for_direct_openai_error(tmp_path, monkeyp
             "detail": "Content violates usage guidelines.",
         },
     ]
-    assert fake_npc_store.appended_turns == []
 
 
 def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path, monkeypatch):
@@ -930,7 +866,6 @@ def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path,
         {"type": "chunk", "delta": "Teilantwort"},
         {"type": "error", "detail": "Interner Serverfehler."},
     ]
-    assert fake_npc_store.appended_turns == []
 
 
 def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_path, monkeypatch):
@@ -947,11 +882,18 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
         def schedule_all(self) -> None:
             calls.append("schedule_all")
 
-    def fake_append_stm_turn(_user_content: str, _assistant_content: str):
-        raise RuntimeError("internal_store_issue")
+    class FailingStm:
+        def append(self, _row):
+            raise RuntimeError("internal_store_issue")
+
+    class FailingNpcPaths:
+        stm = FailingStm()
+
+    class FailingStorage:
+        npc = FailingNpcPaths()
 
     monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(fake_npc_store, "append_stm_turn", fake_append_stm_turn)
+    monkeypatch.setattr(web_app_module, "storage", FailingStorage())
     monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Speichern bitte"))
@@ -1011,5 +953,4 @@ def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
     _run_async(run_lifespan())
     _run_async(run_lifespan())
     assert events == ["init", "start", "inside", "stop", "start", "inside", "stop"]
-
 

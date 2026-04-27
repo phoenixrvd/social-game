@@ -1,13 +1,8 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import engine.storage as storage_module
-import engine.stores.session_store as session_store_module
-from engine.models import Session
-
-
-class FakeSessionStore:
-    def load(self) -> Session:
-        return Session(npc_id="vika", scene_id="office")
 
 
 def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
@@ -18,7 +13,11 @@ def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
     monkeypatch.setattr(storage_module.config, "OVERRIDES_DIR", tmp_path / ".overrides")
     monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
     monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
-    monkeypatch.setattr(session_store_module, "SessionStore", FakeSessionStore)
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "get",
+        lambda _self: SimpleNamespace(npc_id="vika", scene_id="office"),
+    )
 
     (tmp_path / "npcs" / "vika").mkdir(parents=True)
     (tmp_path / "npcs" / "vika" / "state.md").write_text("default", encoding="utf-8")
@@ -33,10 +32,9 @@ def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
     (tmp_path / ".overrides" / "scenes" / "office" / "scene.md").write_text("override-scene", encoding="utf-8")
     (tmp_path / ".data" / "npcs" / "vika" / "office" / "scene.md").write_text("runtime-scene", encoding="utf-8")
 
-    assert storage_module.storage.npc.state.name == "state.md"
-    assert storage_module.storage.npc.state.path == tmp_path / ".data" / "npcs" / "vika" / "office" / "state.md"
+    assert storage_module.storage.npc.state_runtime.path == tmp_path / ".data" / "npcs" / "vika" / "office" / "state.md"
     assert storage_module.storage.npc.state_original.path == tmp_path / ".overrides" / "npcs" / "vika" / "state.md"
-    assert storage_module.storage.npc.state.get() == "runtime"
+    assert storage_module.storage.npc.state == "runtime"
 
     assert storage_module.storage.scene.scene.path == tmp_path / ".data" / "npcs" / "vika" / "office" / "scene.md"
     assert storage_module.storage.scene.scene_original.path == tmp_path / ".overrides" / "scenes" / "office" / "scene.md"
@@ -70,10 +68,6 @@ def test_prompt_image_refresh_prefers_override_over_default(tmp_path, monkeypatc
 
 
 def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch):
-    class FallbackSessionStore:
-        def load(self) -> Session:
-            return Session(npc_id="new_npc", scene_id="new_scene")
-
     monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
     monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
@@ -81,10 +75,11 @@ def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch
     monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
     monkeypatch.setattr(storage_module.config, "DEFAULT_NPC_ID", "vika")
     monkeypatch.setattr(storage_module.config, "DEFAULT_SCENE_ID", "office")
-    monkeypatch.setattr(session_store_module, "SessionStore", FallbackSessionStore)
-
-    storage_module.storage._npc_view = None
-    storage_module.storage._scene_view = None
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "get",
+        lambda _self: SimpleNamespace(npc_id="new_npc", scene_id="new_scene"),
+    )
 
     (tmp_path / "npcs" / "new_npc").mkdir(parents=True)
     (tmp_path / "npcs" / "vika").mkdir(parents=True)
@@ -94,10 +89,30 @@ def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch
     (tmp_path / "scenes" / "office").mkdir(parents=True)
     (tmp_path / "scenes" / "office" / "scene.md").write_text("default-scene", encoding="utf-8")
 
-    assert storage_module.storage.npc.state.path == tmp_path / "npcs" / "vika" / "state.md"
-    assert storage_module.storage.npc.state.get() == "default-npc-state"
+    assert storage_module.storage.npc.state_original.path == tmp_path / "npcs" / "vika" / "state.md"
+    assert storage_module.storage.npc.state == "default-npc-state"
     assert storage_module.storage.scene.scene.path == tmp_path / "scenes" / "office" / "scene.md"
     assert storage_module.storage.scene.scene.get() == "default-scene"
 
 
+def test_storage_description_uses_default_path_when_runtime_file_is_missing(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "get",
+        lambda _self: SimpleNamespace(npc_id="vika", scene_id="office"),
+    )
+
+    npc_dir = tmp_path / "npcs" / "vika"
+    npc_dir.mkdir(parents=True)
+    (npc_dir / "description.md").write_text("default-description", encoding="utf-8")
+
+    runtime_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
+    runtime_dir.mkdir(parents=True)
+    assert storage_module.storage.npc.description.path == npc_dir / "description.md"
+    assert storage_module.storage.npc.description.get() == "default-description"
 

@@ -10,7 +10,7 @@ ETM speichert ältere STM-Nachrichten als abrufbare Episoden aus Sicht des NPC.
 - `engine/tools/scheduler.py`: stößt periodisch `execute_pending_jobs()` an
 - `engine/tools/etm_job.py`: führt ETM-Update fachlich aus
 - `engine/services/etm_service.py`: erzeugt ETM-Episoden, speichert und liest Embeddings in SQLite, räumt verarbeitete STM-Nachrichten auf
-- `engine/stores/npc_store.py`: lädt NPC-, Szenen-, STM- und LTM-Kontext
+- `engine/storage.py`: liefert NPC-, Szenen- und STM-Kontext über `storage.npc`/`storage.scene`
 - `engine/llm/client.py`: ruft Textmodell auf
 
 ## Überblick

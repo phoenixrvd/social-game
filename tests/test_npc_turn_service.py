@@ -1,50 +1,75 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import engine.services.npc_turn_service as npc_turn_service_module
-from engine.models import Npc, Scene, ShortMemoryMessage, Stm
 from engine.services.npc_turn_service import NpcTurnService
+from engine.storage import Message
 
 
-def _build_npc(**overrides) -> Npc:
-    base = Npc(
+class FakeStmView:
+    def __init__(self, messages: list[Message] | None = None) -> None:
+        self._messages = list(messages or [])
+
+    def get(self) -> list[Message]:
+        return list(self._messages)
+
+    def as_string_short(self, last_n: int | None = None) -> str:
+        selected = self._messages[-last_n:] if last_n is not None else list(self._messages)
+        if not selected:
+            return "(keine Nachrichten)"
+        return "\n".join(f"{m.role}: {m.content.strip()}" for m in selected)
+
+
+def _build_npc(**overrides) -> SimpleNamespace:
+    base = SimpleNamespace(
         npc_id="vika",
         description="Beschreibung",
         system_prompt="Bleib in Character",
         state="mood: neutral",
         relationship="Kennt den Spieler",
-        scene=Scene(scene_id="office", description="Im Buero"),
+        scene=SimpleNamespace(scene_id="office", description="Im Buero", img=Path(__file__)),
         img_current=Path(__file__),
+        stm=FakeStmView(),
         character={"name": "Vika", "hobby": "Kaffee"},
     )
     for key, value in overrides.items():
-        if key == "stm" and not isinstance(value, Stm):
-            value = Stm(value)
+        if key == "stm" and not hasattr(value, "get"):
+            value = FakeStmView(list(value))
         setattr(base, key, value)
     return base
+
+
+def _patch_storage(monkeypatch, npc_data: SimpleNamespace, template: str) -> None:
+    class FakeText:
+        def __init__(self, value):
+            self._value = value
+
+        def get(self):
+            return self._value
+
+    class FakePrompts:
+        chat_general_rules = FakeText(template)
+
+    class FakeNpcPaths:
+        stm = npc_data.stm
+        character_original = FakeText(npc_data.character)
+        system_prompt_original = FakeText(npc_data.system_prompt)
+        description = FakeText(npc_data.description)
+        state = npc_data.state
+
+    class FakeStorage:
+        prompts = FakePrompts()
+        npc = FakeNpcPaths()
+        scene = SimpleNamespace(description=npc_data.scene.description)
+
+    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
 
 
 def test_build_chat_messages_uses_prompt_template_with_placeholders(monkeypatch):
     template = """# Role\n{{ROLE}}\n\n# Data\n{{CHARACTER_DATA}}\n\n# Description\n{{CHARACTER_DESCRIPTION}}\n\n# State\n{{CURRENT_STATE}}\n\n# Retrieved\n{{CURRENT_ETM}}\n\n# Rules\nRegel A\n"""
 
     npc = _build_npc()
-
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
-
-    class FakePrompt:
-        def get(self):
-            return template
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, template)
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Hallo")
@@ -63,24 +88,7 @@ def test_build_chat_messages_uses_prompt_template_with_placeholders(monkeypatch)
 
 def test_build_chat_messages_uses_leer_for_empty_values(monkeypatch):
     npc = _build_npc(system_prompt="   ", description="", state=" ", relationship=" ", character={})
-
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
-
-    class FakePrompt:
-        def get(self):
-            return "{{ROLE}} | {{CHARACTER_DATA}} | {{CHARACTER_DESCRIPTION}} | {{CURRENT_STATE}} | {{CURRENT_ETM}}"
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, "{{ROLE}} | {{CHARACTER_DATA}} | {{CHARACTER_DESCRIPTION}} | {{CURRENT_STATE}} | {{CURRENT_ETM}}")
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Hallo")
@@ -92,13 +100,13 @@ def test_build_chat_messages_uses_leer_for_empty_values(monkeypatch):
 def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is_separate(monkeypatch):
     npc = _build_npc(
         stm=[
-            ShortMemoryMessage(
+            Message(
                 id="m1",
                 timestamp_utc="2026-03-28T10:00:00+00:00",
                 role="user",
                 content="Hallo",
             ),
-            ShortMemoryMessage(
+            Message(
                 id="m2",
                 timestamp_utc="2026-03-28T10:00:01+00:00",
                 role="assistant",
@@ -106,24 +114,7 @@ def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is
             ),
         ]
     )
-
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
-
-    class FakePrompt:
-        def get(self):
-            return "{{ROLE}} | {{CURRENT_SCENE}} | {{CURRENT_STATE}} | {{CURRENT_ETM}}"
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, "{{ROLE}} | {{CURRENT_SCENE}} | {{CURRENT_STATE}} | {{CURRENT_ETM}}")
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Neue Nachricht")
@@ -133,9 +124,9 @@ def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is
     assert user_message["role"] == "user"
     assert user_message["content"] == "Neue Nachricht"
     assert [message["role"] for message in turn_messages[:-1]] == [
-        "system",     # system prompt (inkl. scene + state)
-        "user",       # stm[0]
-        "assistant",  # stm[1]
+        "system",
+        "user",
+        "assistant",
     ]
     assert "Im Buero" in str(turn_messages[0]["content"])
     assert "mood: neutral" in str(turn_messages[0]["content"])
@@ -144,13 +135,13 @@ def test_build_turn_messages_places_system_prompt_before_stm_and_user_message_is
 def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypatch, tmp_path):
     npc = _build_npc(
         stm=[
-            ShortMemoryMessage(
+            Message(
                 id="m1",
                 timestamp_utc="2026-03-28T10:00:00+00:00",
                 role="user",
                 content="Wir waren gestern in der Bar.",
             ),
-            ShortMemoryMessage(
+            Message(
                 id="m2",
                 timestamp_utc="2026-03-28T10:00:01+00:00",
                 role="assistant",
@@ -159,10 +150,6 @@ def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypa
         ]
     )
 
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
     class FakeEtmService:
         def load_relevant(self, query_text):
             assert "user: Wir waren gestern in der Bar." in query_text
@@ -170,21 +157,9 @@ def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypa
             assert query_text.endswith("user: Wollen wir wieder in eine Bar gehen?")
             return "- Er erinnert sich an eine ruhige Bar mit guten Gläsern."
 
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
     monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     monkeypatch.setattr(npc_turn_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
-
-    class FakePrompt:
-        def get(self):
-            return "{{CURRENT_STATE}}\n---\n{{CURRENT_ETM}}"
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, "{{CURRENT_STATE}}\n---\n{{CURRENT_ETM}}")
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Wollen wir wieder in eine Bar gehen?")
@@ -197,25 +172,8 @@ def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypa
 
 def test_build_turn_messages_skips_retrieval_without_store(monkeypatch, tmp_path):
     npc = _build_npc()
-
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
     monkeypatch.setattr(npc_turn_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
-
-    class FakePrompt:
-        def get(self):
-            return "{{CURRENT_ETM}}"
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, "{{CURRENT_ETM}}")
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Hi")
@@ -225,7 +183,7 @@ def test_build_turn_messages_skips_retrieval_without_store(monkeypatch, tmp_path
 
 def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatch):
     stm_messages = [
-        ShortMemoryMessage(
+        Message(
             id=f"m{index}",
             timestamp_utc=f"2026-03-28T10:00:0{index}+00:00",
             role="user" if index % 2 == 0 else "assistant",
@@ -235,10 +193,6 @@ def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatc
     ]
     npc = _build_npc(stm=stm_messages)
 
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
     captured: dict[str, str] = {}
 
     class FakeEtmService:
@@ -246,21 +200,9 @@ def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatc
             captured["query"] = query_text
             return ""
 
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
     monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     monkeypatch.setattr(npc_turn_service_module.config, "ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES", 3)
-
-    class FakePrompt:
-        def get(self):
-            return "{{CURRENT_ETM}}"
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, "{{CURRENT_ETM}}")
 
     service = NpcTurnService()
     service.build_chat_messages("Neue Eingabe")
@@ -275,24 +217,7 @@ def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatc
 
 def test_build_chat_messages_appends_user_message(monkeypatch):
     npc = _build_npc()
-
-    class FakeNpcStore:
-        def load(self):
-            return npc
-
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
-
-    class FakePrompt:
-        def get(self):
-            return "{{ROLE}}"
-
-    class FakePrompts:
-        chat_general_rules = FakePrompt()
-
-    class FakeStorage:
-        prompts = FakePrompts()
-
-    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
+    _patch_storage(monkeypatch, npc, "{{ROLE}}")
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Neue Nachricht")
@@ -301,16 +226,35 @@ def test_build_chat_messages_appends_user_message(monkeypatch):
 
 
 def test_finalize_turn_persists_trimmed_messages(monkeypatch):
-    calls: list[tuple[str, str]] = []
+    make_calls: list[tuple[str, str]] = []
+    appended_messages: list[Message] = []
 
-    class FakeNpcStore:
-        def append_stm_turn(self, user_content: str, assistant_content: str):
-            calls.append((user_content, assistant_content))
+    def fake_make_message(self, role: str, content: str):
+        make_calls.append((role, content))
+        return Message(id=f"{role}-id", timestamp_utc="2026-03-22T10:00:00+00:00", role=role, content=content)
 
-    monkeypatch.setattr(npc_turn_service_module, "NpcStore", FakeNpcStore)
+    class FakeStm:
+        def append(self, msg: Message):
+            appended_messages.append(msg)
+
+    class FakeNpcPaths:
+        stm = FakeStm()
+
+    class FakeStorage:
+        npc = FakeNpcPaths()
+
+    monkeypatch.setattr(npc_turn_service_module.NpcTurnService, "_make_message", fake_make_message)
+    monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())
 
     service = NpcTurnService()
     service.finalize_turn("  Hallo  ", "  Hi zurück  ")
 
-    assert calls == [("Hallo", "Hi zurück")]
+    assert make_calls == [("user", "Hallo"), ("assistant", "Hi zurück")]
+    assert len(appended_messages) == 2
+    assert appended_messages[0].id == "user-id"
+    assert appended_messages[0].role == "user"
+    assert appended_messages[0].content == "Hallo"
+    assert appended_messages[1].id == "assistant-id"
+    assert appended_messages[1].role == "assistant"
+    assert appended_messages[1].content == "Hi zurück"
 

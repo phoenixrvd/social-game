@@ -4,44 +4,18 @@ import typer
 from PIL import Image
 
 from engine.config import config
-from engine.services.image_service import ImageService
 from engine.services.npc_service import NpcService
 from engine.services.scene_service import SceneService
-from engine.stores.session_store import SessionStore
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Werkzeuge fuer Web-GUI, Session und Tools im Social Game.",
+    help="Tools für Social Game.",
 )
 
 
 @app.callback()
 def main() -> None:
     """Hilft beim Starten und Pruefen der wichtigsten Social-Game-Funktionen."""
-
-
-@app.command("session-set")
-def set_session_context(
-    npc: str | None = typer.Option(
-        None,
-        "--npc",
-        help="ID des NPCs fuer den globalen Session-Kontext.",
-    ),
-    scene: str | None = typer.Option(
-        None,
-        "--scene",
-        help="ID der Szene fuer den globalen Session-Kontext.",
-    ),
-):
-    """Setzt den globalen Session-Kontext und speichert ihn in .data/session.yaml."""
-    if npc is None and scene is None:
-        typer.echo("Mindestens --npc oder --scene muss angegeben werden.")
-        raise typer.Exit(code=1)
-
-    saved = SessionStore().save(npc=npc, scene=scene)
-    typer.echo("Session-Kontext gespeichert.")
-    typer.echo(f"npc={saved.npc_id}")
-    typer.echo(f"scene={saved.scene_id}")
 
 
 @app.command("npc-create")
@@ -88,7 +62,6 @@ def hello():
     typer.echo("Hello from Social Game CLI")
 
 
-
 @app.command("web")
 def web(
     host: str = typer.Option("127.0.0.1", "--host", help="Host fuer die Web-GUI."),
@@ -99,18 +72,6 @@ def web(
     from engine.web.app import run as run_web
 
     run_web(host=host, port=port, reload=reload)
-
-
-@app.command("image-revert")
-def image_revert():
-    """Setzt das Charakterbild auf das letzte Backup zurueck."""
-    ImageService().revert()
-
-
-@app.command("image-merge-scene")
-def image_merge_scene() -> None:
-    """Fuegt aktives Charakterbild und Szenenbild zu einem neuen Laufzeitbild zusammen."""
-    ImageService().merge_with_scene()
 
 
 @app.command("icons")
@@ -151,7 +112,6 @@ def icons(
     base.save(output_dir / "favicon.ico", format="ICO", sizes=[(64, 64), (48, 48), (32, 32), (16, 16)])
 
     typer.echo("Icons erfolgreich generiert.")
-
 
 
 if __name__ == "__main__":

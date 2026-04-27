@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import cast
+from datetime import UTC, datetime
+from typing import Literal, cast
+from uuid import uuid4
 
 import yaml
 from openai.types.chat import (
@@ -9,25 +11,21 @@ from openai.types.chat import (
 )
 
 from engine.config import config
-from engine.models import Npc
-from engine.storage import storage
+from engine.storage import Message, storage
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
-from engine.stores.npc_store import NpcStore
 
 EMPTY_PLACEHOLDER = "(leer)"
 
 
 class NpcTurnService:
     def __init__(self) -> None:
-        self.npc_store = NpcStore()
         self.etm_retrieval = EtmService()
 
     def _build_turn_messages_for_context(
         self,
-        npc: Npc,
         retrieved_memories: str,
     ) -> list[ChatCompletionMessageParam]:
-        system_prompt = self._build_system_prompt(npc, retrieved_memories)
+        system_prompt = self._build_system_prompt(retrieved_memories)
         system_message: ChatCompletionSystemMessageParam = {
             "role": "system",
             "content": system_prompt,
@@ -35,7 +33,7 @@ class NpcTurnService:
 
         memory_messages = [
             self._to_message_param(message.role, message.content)
-            for message in npc.stm
+            for message in storage.npc.stm.get()
         ]
         return [system_message, *memory_messages]
 
@@ -45,16 +43,17 @@ class NpcTurnService:
         return cast(ChatCompletionMessageParam, cast(object, {"role": role, "content": content}))
 
     @staticmethod
-    def _build_system_prompt(npc: Npc, retrieved_memories: str) -> str:
-        character_yaml = yaml.dump(npc.character, allow_unicode=True, sort_keys=False).strip()
+    def _build_system_prompt(retrieved_memories: str) -> str:
+        character = storage.npc.character_original.get()
+        character_yaml = yaml.dump(character, allow_unicode=True, sort_keys=False).strip()
         base_prompt = storage.prompts.chat_general_rules.get().strip()
 
         replacements = {
-            "{{ROLE}}": npc.system_prompt.strip() or EMPTY_PLACEHOLDER,
+            "{{ROLE}}": storage.npc.system_prompt_original.get().strip() or EMPTY_PLACEHOLDER,
             "{{CHARACTER_DATA}}": character_yaml or EMPTY_PLACEHOLDER,
-            "{{CHARACTER_DESCRIPTION}}": npc.description.strip() or EMPTY_PLACEHOLDER,
-            "{{CURRENT_SCENE}}": npc.scene.description.strip() or EMPTY_PLACEHOLDER,
-            "{{CURRENT_STATE}}": npc.state.strip() or EMPTY_PLACEHOLDER,
+            "{{CHARACTER_DESCRIPTION}}": storage.npc.description.get().strip() or EMPTY_PLACEHOLDER,
+            "{{CURRENT_SCENE}}": storage.scene.description.strip() or EMPTY_PLACEHOLDER,
+            "{{CURRENT_STATE}}": storage.npc.state.strip() or EMPTY_PLACEHOLDER,
             "{{CURRENT_ETM}}": retrieved_memories,
         }
 
@@ -67,21 +66,38 @@ class NpcTurnService:
         self,
         player_input: str,
     ) -> list[ChatCompletionMessageParam]:
-        npc = self.npc_store.load()
-        retrieval_query = self._build_retrieval_query(npc, player_input)
+        retrieval_query = self._build_retrieval_query(player_input)
         retrieved_memories = self.etm_retrieval.load_relevant(retrieval_query) or EMPTY_ETM_TEXT
         user_message = self._to_message_param("user", player_input.strip())
-        turn_messages = self._build_turn_messages_for_context(npc, retrieved_memories)
+        turn_messages = self._build_turn_messages_for_context(retrieved_memories)
         return [*turn_messages, user_message]
 
     def finalize_turn(self, player_input: str, assistant_reply: str) -> None:
         user_content = player_input.strip()
         assistant_content = assistant_reply.strip()
-        self.npc_store.append_stm_turn(user_content, assistant_content)
+        user_message = self._make_message("user", user_content)
+        assistant_message = self._make_message("assistant", assistant_content)
+        storage.npc.stm.append(user_message)
+        storage.npc.stm.append(assistant_message)
 
     @staticmethod
-    def _build_retrieval_query(npc: Npc, player_input: str) -> str:
-        context_block = npc.stm.as_string_short(last_n=config.ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES) if npc.stm else ""
+    def _make_message(
+        role: Literal["user", "assistant", "system"],
+        content: str,
+    ) -> Message:
+        return Message(
+            id=str(uuid4()),
+            timestamp_utc=datetime.now(UTC).isoformat(),
+            role=role,
+            content=content,
+        )
+
+    @staticmethod
+    def _build_retrieval_query(player_input: str) -> str:
+        messages = storage.npc.stm.get()
+        context_block = ""
+        if messages:
+            context_block = storage.npc.stm.as_string_short(last_n=config.ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES)
         player_line = f"user: {player_input.strip()}"
         if not context_block:
             return player_line

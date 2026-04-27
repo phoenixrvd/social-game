@@ -12,26 +12,24 @@ from uuid import uuid4
 
 from engine.config import config
 from engine.llm.client import client
-from engine.models import Stm
 from engine.storage import storage
-from engine.stores.npc_store import NpcStore
 
 EMPTY_ETM_TEXT = "(keine zusätzlichen relevanten Erinnerungen)"
 
 
 class EtmService:
     def __init__(self) -> None:
-        self.npc_store = NpcStore()
         self._local_embedding_fn: Callable[[list[str]], list[list[float]]] | None = None
 
     def compress_stm(self) -> str:
-        batch = self.npc_store.load().stm.get_batch()
-        if not batch:
+        batch_messages = storage.npc.stm.batch_messages()
+        if not batch_messages:
             return ""
 
-        episode = self._create_episode(batch)
+        batch_text = storage.npc.stm.as_batch_string
+        episode = self._create_episode(batch_text)
         self._store_etm_text(storage.npc.etm_sqlite, episode)
-        self.npc_store.remove_stm_by_ids([message.id for message in batch])
+        storage.npc.stm.remove(batch_messages)
         return episode
 
     def load_relevant(self, query_text: str) -> str:
@@ -42,8 +40,7 @@ class EtmService:
         return "\n".join(f"- {memory}" for memory in memories)
 
     @staticmethod
-    def _create_episode(batch: Stm) -> str:
-        stm_text = batch.as_string_short()
+    def _create_episode(stm_text: str) -> str:
         prompt = (
             storage.prompts.etm_update.get()
             .strip()

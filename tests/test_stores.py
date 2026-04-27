@@ -1,33 +1,27 @@
+from types import SimpleNamespace
+
 import engine.storage as storage_module
-import engine.stores.session_store as session_store_module
-from engine.models import Session
-from engine.stores.npc_store import NpcStore
+from engine.storage import Message
 
 
-class FakeSessionStore:
-    def load(self) -> Session:
-        return Session(npc_id="vika", scene_id="default")
-
-
-def _patch_storage(monkeypatch, tmp_path, session_store_cls) -> None:
+def _patch_storage(monkeypatch, tmp_path, session_provider) -> None:
     monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
     monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", tmp_path / "data" / "npcs")
     monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
     monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
-    monkeypatch.setattr(session_store_module, "SessionStore", session_store_cls)
-    storage_module.storage._npc_view = None
-    storage_module.storage._scene_view = None
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "get",
+        lambda _self: session_provider(),
+    )
 
 
-def test_npc_store_loads_and_saves_scene(tmp_path, monkeypatch):
-    _patch_storage(monkeypatch, tmp_path, FakeSessionStore)
+def test_storage_loads_and_saves_scene(tmp_path, monkeypatch):
+    _patch_storage(monkeypatch, tmp_path, lambda: SimpleNamespace(npc_id="vika", scene_id="default"))
 
     (tmp_path / "scenes" / "default").mkdir(parents=True)
-    (tmp_path / "scenes" / "default" / "scene.md").write_text(
-        "# Default Szene",
-        encoding="utf-8",
-    )
+    (tmp_path / "scenes" / "default" / "scene.md").write_text("# Default Szene", encoding="utf-8")
     (tmp_path / "npcs" / "vika").mkdir(parents=True)
     (tmp_path / "npcs" / "vika" / "description.md").write_text("NPC", encoding="utf-8")
     (tmp_path / "npcs" / "vika" / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
@@ -35,26 +29,20 @@ def test_npc_store_loads_and_saves_scene(tmp_path, monkeypatch):
     (tmp_path / "npcs" / "vika" / "state.md").write_text("mood: neutral", encoding="utf-8")
     (tmp_path / "npcs" / "vika" / "relationship.md").write_text("", encoding="utf-8")
 
-    store = NpcStore()
-    npc = store.load()
-
-    assert npc.scene.scene_id == "default"
-    assert "Default Szene" in npc.scene.description
+    assert storage_module.storage.scene.scene_id == "default"
+    assert "Default Szene" in storage_module.storage.scene.description
 
     storage_module.storage.scene.scene_runtime.save("# Testbeschreibung\nDie Szene wurde aktualisiert.")
-
-    reloaded = store.load()
-    assert "Testbeschreibung" in reloaded.scene.description
+    assert "Testbeschreibung" in storage_module.storage.scene.description
 
 
-def test_npc_store_keeps_runtime_data_separated_per_scene(tmp_path, monkeypatch):
-    class SwitchableSessionStore:
-        current_scene = "office"
+def test_storage_keeps_runtime_data_separated_per_scene(tmp_path, monkeypatch):
+    current_scene = {"value": "office"}
 
-        def load(self) -> Session:
-            return Session(npc_id="vika", scene_id=type(self).current_scene)
+    def session_provider() -> SimpleNamespace:
+        return SimpleNamespace(npc_id="vika", scene_id=current_scene["value"])
 
-    _patch_storage(monkeypatch, tmp_path, SwitchableSessionStore)
+    _patch_storage(monkeypatch, tmp_path, session_provider)
 
     for scene_id in ("office", "cafe"):
         (tmp_path / "scenes" / scene_id).mkdir(parents=True, exist_ok=True)
@@ -68,32 +56,27 @@ def test_npc_store_keeps_runtime_data_separated_per_scene(tmp_path, monkeypatch)
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
     (npc_dir / "relationship.md").write_text("", encoding="utf-8")
 
-    store = NpcStore()
     storage_module.storage.npc.state_runtime.save("mood: office")
-    SwitchableSessionStore.current_scene = "cafe"
+    current_scene["value"] = "cafe"
     storage_module.storage.npc.state_runtime.save("mood: cafe")
-    SwitchableSessionStore.current_scene = "office"
-    store.append_stm_turn("hi office", "reply office")
-    SwitchableSessionStore.current_scene = "cafe"
-    store.append_stm_turn("hi cafe", "reply cafe")
+    current_scene["value"] = "office"
+    storage_module.storage.npc.stm.append(Message(id="1", timestamp_utc="2026-03-22T10:00:00+00:00", role="user", content="hi office"))
+    storage_module.storage.npc.stm.append(Message(id="2", timestamp_utc="2026-03-22T10:00:01+00:00", role="assistant", content="reply office"))
+    current_scene["value"] = "cafe"
+    storage_module.storage.npc.stm.append(Message(id="3", timestamp_utc="2026-03-22T10:00:02+00:00", role="user", content="hi cafe"))
+    storage_module.storage.npc.stm.append(Message(id="4", timestamp_utc="2026-03-22T10:00:03+00:00", role="assistant", content="reply cafe"))
 
-    SwitchableSessionStore.current_scene = "office"
-    office_npc = store.load()
-    assert office_npc.state == "mood: office"
-    assert [msg.content for msg in office_npc.stm] == ["hi office", "reply office"]
+    current_scene["value"] = "office"
+    assert storage_module.storage.npc.state == "mood: office"
+    assert [msg.content for msg in storage_module.storage.npc.stm.get()] == ["hi office", "reply office"]
 
-    SwitchableSessionStore.current_scene = "cafe"
-    cafe_npc = store.load()
-    assert cafe_npc.state == "mood: cafe"
-    assert [msg.content for msg in cafe_npc.stm] == ["hi cafe", "reply cafe"]
+    current_scene["value"] = "cafe"
+    assert storage_module.storage.npc.state == "mood: cafe"
+    assert [msg.content for msg in storage_module.storage.npc.stm.get()] == ["hi cafe", "reply cafe"]
 
 
-def test_npc_store_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
-    class SessionWithMissingSceneImage:
-        def load(self) -> Session:
-            return Session(npc_id="mira", scene_id="office")
-
-    _patch_storage(monkeypatch, tmp_path, SessionWithMissingSceneImage)
+def test_storage_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
+    _patch_storage(monkeypatch, tmp_path, lambda: SimpleNamespace(npc_id="mira", scene_id="office"))
 
     for scene_id in ("office", "departure"):
         (tmp_path / "scenes" / scene_id).mkdir(parents=True, exist_ok=True)
@@ -109,14 +92,11 @@ def test_npc_store_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
     (npc_dir / "scenes" / "departure" / "img.png").write_bytes(b"img")
     (npc_dir / "img.png").write_bytes(b"root-img")
 
-    store = NpcStore()
-    npc = store.load()
-
-    assert npc.img_current == npc_dir / "img.png"
+    assert storage_module.storage.npc.img_current.get() == npc_dir / "img.png"
 
 
-def test_npc_store_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatch):
-    _patch_storage(monkeypatch, tmp_path, FakeSessionStore)
+def test_storage_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatch):
+    _patch_storage(monkeypatch, tmp_path, lambda: SimpleNamespace(npc_id="vika", scene_id="default"))
 
     (tmp_path / "scenes" / "default").mkdir(parents=True)
     (tmp_path / "scenes" / "default" / "scene.md").write_text("# Default Szene", encoding="utf-8")
@@ -128,16 +108,14 @@ def test_npc_store_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatc
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
     (npc_dir / "relationship.md").write_text("relationship-default", encoding="utf-8")
 
-    store = NpcStore()
     storage_module.storage.scene.scene_runtime.save("Runtime Szene")
-    reloaded = store.load()
-    assert "Runtime Szene" in reloaded.scene.description
-    assert reloaded.relationship == "relationship-default"
-    assert reloaded.state == "mood: neutral\n\nrelationship-default"
+    assert "Runtime Szene" in storage_module.storage.scene.description
+    assert storage_module.storage.npc.relationship.get() == "relationship-default"
+    assert storage_module.storage.npc.state == "mood: neutral\n\nrelationship-default"
 
 
-def test_npc_store_prefers_data_then_overrides_then_default(tmp_path, monkeypatch):
-    _patch_storage(monkeypatch, tmp_path, FakeSessionStore)
+def test_storage_prefers_data_then_overrides_then_default(tmp_path, monkeypatch):
+    _patch_storage(monkeypatch, tmp_path, lambda: SimpleNamespace(npc_id="vika", scene_id="default"))
 
     (tmp_path / "scenes" / "default").mkdir(parents=True)
     (tmp_path / "scenes" / "default" / "scene.md").write_text("Default Scene", encoding="utf-8")
@@ -155,13 +133,9 @@ def test_npc_store_prefers_data_then_overrides_then_default(tmp_path, monkeypatc
     (overrides_npc / "state.md").write_text("state-override", encoding="utf-8")
     (overrides_npc / "relationship.md").write_text("relationship-override", encoding="utf-8")
 
-    store = NpcStore()
-    loaded = store.load()
-    assert loaded.state == "state-override\n\nrelationship-override"
-    assert loaded.relationship == "relationship-override"
+    assert storage_module.storage.npc.state == "state-override\n\nrelationship-override"
+    assert storage_module.storage.npc.relationship.get() == "relationship-override"
 
     storage_module.storage.npc.state_runtime.save("state-runtime")
-    runtime_loaded = store.load()
-    assert runtime_loaded.state == "state-runtime"
-    assert runtime_loaded.relationship == "relationship-override"
-
+    assert storage_module.storage.npc.state == "state-runtime"
+    assert storage_module.storage.npc.relationship.get() == "relationship-override"

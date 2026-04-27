@@ -143,11 +143,11 @@ def test_load_relevant_returns_formatted_matches(monkeypatch, tmp_path):
     monkeypatch.setattr(EtmService, "_query_etm_texts", fake_query)
 
     # Make storage bootstrap deterministic for this test run.
-    from engine.models import Session
-
-    monkeypatch.setattr(storage_module.storage, "_session", staticmethod(lambda: Session(npc_id="vika", scene_id="office")))
-    storage_module.storage._npc_view = None
-    storage_module.storage._scene_view = None
+    monkeypatch.setattr(
+        storage_module.SessionStorageItem,
+        "get",
+        lambda _self: SimpleNamespace(npc_id="vika", scene_id="office"),
+    )
 
     result = EtmService().load_relevant("Wollen wir wieder in eine Bar gehen?")
 

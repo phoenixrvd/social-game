@@ -1,16 +1,33 @@
 from __future__ import annotations
 
+import json
+import yaml
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-import yaml
+from typing import Any, Literal
+from pydantic import BaseModel, field_validator, Field
 
 from engine.config import config
 
-if TYPE_CHECKING:
-    from engine.models import Session
+
+class Message(BaseModel):
+    id: str
+    timestamp_utc: str
+    role: Literal["user", "assistant", "system"]
+    content: str
+
+    model_config = {"str_strip_whitespace": True}
+
+    @property
+    def text_short(self) -> str:
+        role_labels = {"user": "U", "assistant": "A", "system": "S"}
+        return f"{role_labels[self.role]}: {self.content.strip()}"
+
+    @property
+    def text_long(self) -> str:
+        return f"{self.role}: {self.content.strip()}"
 
 
 def runtime_npc_scene_dir(npc_id: str, scene_id: str) -> Path:
@@ -120,18 +137,68 @@ class TextItem(StorageItem):
 
 
 @dataclass(frozen=True)
-class JsonlItem(StorageItem):
-    def get(self) -> list[dict[str, Any]]:
+class StmStorageView(StorageItem):
+    def get(self, last_n: int | None = None) -> list[Message]:
         text = TextItem(self.path).get()
-        return [json.loads(line) for line in text.splitlines() if line.strip()]
+        messages: list[Message] = []
+        for line in text.splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            msg = Message.model_validate(row)
+            messages.append(msg)
+        if last_n is None:
+            return messages
+        return messages[-last_n:]
 
-    def save(self, value: list[dict[str, Any]]) -> None:
-        payload = "".join(json.dumps(row, ensure_ascii=True) + "\n" for row in value)
+    def save(self, value: list[Message]) -> None:
+        payload = "".join(json.dumps(msg.model_dump(), ensure_ascii=False) + "\n" for msg in value)
         TextItem(self.path).save(payload)
 
-    def append(self, value: dict[str, Any]) -> None:
-        existing = TextItem(self.path).get()
-        TextItem(self.path).save(existing + json.dumps(value, ensure_ascii=True) + "\n")
+    def append(self, value: Message) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(value.model_dump(), ensure_ascii=False) + "\n")
+
+    def remove(self, value: list[Message]) -> None:
+        if not value:
+            return
+        remove_ids = {message.id for message in value}
+        kept = [message for message in self.get() if message.id not in remove_ids]
+        self.save(kept)
+
+    def as_string_short(self, last_n: int | None = None) -> str:
+        """Formatiert Messages als Kurztext (Role-Labels: U/A/S)."""
+        messages = self.get(last_n)
+        if not messages:
+            return "(keine Nachrichten)"
+        return "\n".join(message.text_short for message in messages)
+
+    def as_string_long(self, last_n: int | None = None) -> str:
+        """Formatiert Messages als Langtext (volle Role-Namen)."""
+        messages = self.get(last_n)
+        if not messages:
+            return "(keine Nachrichten)"
+        return "\n".join(message.text_long for message in messages)
+
+    def batch_messages(self) -> list[Message]:
+        """Gibt Batch-Messages zurück, die verarbeitet werden sollen."""
+        messages = self.get()
+        messages_to_keep = config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP
+        batch_size_threshold = config.UPDATER_ETM_BATCH_SIZE_THRESHOLD
+
+        batch = messages[:-messages_to_keep] if messages_to_keep > 0 else list(messages)
+        if len(batch) <= batch_size_threshold:
+            return []
+        return batch
+
+    @property
+    def as_batch_string(self) -> str:
+        """Formatiert den zu verarbeitenden Batch als Text (mit text_short)."""
+        batch = self.batch_messages()
+        if not batch:
+            return ""
+        return "\n".join(message.text_short for message in batch)
 
 
 @dataclass(frozen=True)
@@ -151,6 +218,48 @@ class ImageItem(StorageItem):
     def save(self, value: bytes) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_bytes(value)
+
+
+class SessionState(BaseModel):
+    npc_id: str = Field(default_factory=lambda: config.DEFAULT_NPC_ID)
+    scene_id: str = Field(default_factory=lambda: config.DEFAULT_SCENE_ID)
+
+    @field_validator("npc_id")
+    @classmethod
+    def validate_npc(cls, value: str) -> str:
+        if not npc_exists(value):
+            raise ValueError(f"NPC '{value}' existiert nicht.")
+        return value
+
+    @field_validator("scene_id")
+    @classmethod
+    def validate_scene(cls, value: str) -> str:
+        if not scene_exists(value):
+            raise ValueError(f"Scene '{value}' existiert nicht.")
+        return value
+
+
+@dataclass(frozen=True)
+class SessionStorageItem(YamlItem):
+
+    def get(self) -> SessionState:
+        data = super().get() or {}
+        return SessionState.model_validate(data)
+
+    def save(
+        self,
+        npc_id: str | None = None,
+        scene_id: str | None = None
+    ) -> SessionStorageItem:
+        current = self.get()
+
+        state = SessionState(
+            npc_id=npc_id if npc_id is not None else str(current.npc_id),
+            scene_id=scene_id if scene_id is not None else str(current.scene_id),
+        )
+
+        YamlItem.save(self, state.model_dump())
+        return self
 
 
 @dataclass(frozen=True)
@@ -302,7 +411,13 @@ class NpcStorageView(_StorageViewBase):
 
     @property
     def description(self) -> TextItem:
-        return TextItem(self._resolve_npc("description.md"))
+        runtime_item = TextItem(self.base_runtime / "description.md")
+        if runtime_item.is_file():
+            return runtime_item
+        resolved_original = self.description_original
+        if resolved_original.is_file():
+            return resolved_original
+        return TextItem(self.default_base / "description.md")
 
     @property
     def system_prompt_original(self) -> TextItem:
@@ -329,8 +444,14 @@ class NpcStorageView(_StorageViewBase):
         return TextItem(self._resolve_npc_original("state.md"))
 
     @property
-    def state(self) -> TextItem:
-        return TextItem(self._resolve_npc("state.md"))
+    def state(self) -> str:
+        runtime_item = self.state_runtime
+        if runtime_item.is_file():
+            return runtime_item.get()
+
+        base_state = self.state_original.get().strip()
+        relationship = self.relationship.get().strip()
+        return "\n\n".join(part for part in (base_state, relationship) if part)
 
     @property
     def relationship_original(self) -> TextItem:
@@ -341,8 +462,8 @@ class NpcStorageView(_StorageViewBase):
         return self.relationship_original
 
     @property
-    def stm(self) -> JsonlItem:
-        return JsonlItem(self.base_runtime / "stm.jsonl")
+    def stm(self) -> StmStorageView:
+        return StmStorageView(self.base_runtime / "stm.jsonl")
 
     @property
     def etm_sqlite(self) -> Path:
@@ -424,6 +545,22 @@ class SceneStorageView(_StorageViewBase):
             fallback_path=self.default_base / filename,
         )
 
+    def _resolve_npc_scene_original(self, filename: str) -> Path:
+        npc_base = config.NPC_DIR / self.npc_id
+        npc_base_override = config.OVERRIDES_NPC_DIR / self.npc_id
+        npc_default_base = config.NPC_DIR / config.DEFAULT_NPC_ID
+        npc_default_scene_base = npc_default_base / "scenes" / self.scene_id
+        return preferred_file(
+            _ordered_unique_paths(
+                npc_base_override / filename,
+                npc_base_override / "scenes" / self.scene_id / filename,
+                npc_base / "scenes" / self.scene_id / filename,
+                npc_base / filename,
+                npc_default_scene_base / filename,
+                npc_default_base / filename,
+            )
+        )
+
     @property
     def scene_runtime(self) -> TextItem:
         return TextItem(self.base_runtime / "scene.md")
@@ -437,19 +574,30 @@ class SceneStorageView(_StorageViewBase):
         return TextItem(self._resolve_scene("scene.md"))
 
     @property
+    def npc_scene_original(self) -> TextItem:
+        return TextItem(self._resolve_npc_scene_original("scene.md"))
+
+    @property
+    def description(self) -> str:
+        runtime_scene = self.scene_runtime
+        if runtime_scene.is_file():
+            return runtime_scene.get()
+        description = self.scene_original.get()
+        npc_scene = self.npc_scene_original
+        if npc_scene.is_file():
+            return "\n".join([description, npc_scene.get()])
+        return description
+
+    @property
     def img_original(self) -> ImageItem:
         return ImageItem(self._resolve_scene_original("img.png"))
 
     @property
-    def img(self) -> ImageItem:
-        return ImageItem(self._resolve_scene("img.png"))
+    def img(self) -> Path:
+        return self.img_original.get()
 
 
 class Storage:
-    def __init__(self) -> None:
-        self._npc_view: NpcStorageView | None = None
-        self._scene_view: SceneStorageView | None = None
-
     def npc_view(self, npc_id: str, scene_id: str) -> NpcStorageView:
         return NpcStorageView(npc_id=npc_id, scene_id=scene_id)
 
@@ -461,18 +609,6 @@ class Storage:
 
     def list_scenes(self) -> list[SceneStorageView]:
         return [self.scene_view(npc_id="", scene_id=scene_id) for scene_id in _list_scene_ids()]
-
-    def bootstrap(self, npc_id: str, scene_id: str) -> None:
-        self._npc_view = self.npc_view(npc_id, scene_id)
-        self._scene_view = self.scene_view(npc_id, scene_id)
-
-    def _ensure_bootstrapped(self) -> None:
-        session = self._session()
-        if self._npc_view is None or self._scene_view is None:
-            self.bootstrap(session.npc_id, session.scene_id)
-            return
-        if self._npc_view.npc_id != session.npc_id or self._npc_view.scene_id != session.scene_id:
-            self.bootstrap(session.npc_id, session.scene_id)
 
     @property
     def data(self) -> Path:
@@ -491,26 +627,24 @@ class Storage:
         return PromptStorageView()
 
     @property
-    def session(self) -> YamlItem:
-        return YamlItem(config.SESSION_PATH)
+    def session(self) -> SessionStorageItem:
+        return SessionStorageItem(config.SESSION_PATH)
 
     @property
     def npc(self) -> NpcStorageView:
-        self._ensure_bootstrapped()
-        assert self._npc_view is not None
-        return self._npc_view
+        session = self.session.get()
+        return self.npc_view(
+            npc_id=session.npc_id,
+            scene_id=session.scene_id,
+        )
 
     @property
     def scene(self) -> SceneStorageView:
-        self._ensure_bootstrapped()
-        assert self._scene_view is not None
-        return self._scene_view
-
-    @staticmethod
-    def _session() -> Session:
-        from engine.stores.session_store import SessionStore
-
-        return SessionStore().load()
+        session = self.session.get()
+        return self.scene_view(
+            npc_id=session.npc_id,
+            scene_id=session.scene_id,
+        )
 
 
 storage = Storage()

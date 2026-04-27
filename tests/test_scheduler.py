@@ -3,17 +3,6 @@ from __future__ import annotations
 import logging
 
 import engine.tools.scheduler as scheduler_module
-from engine.tools.abstract_job import AbstractJob
-
-
-class DemoJob(AbstractJob):
-    rate_limit_seconds = 0
-
-    def __init__(self) -> None:
-        self.run_count = 0
-
-    def execute(self) -> None:
-        self.run_count += 1
 
 
 def test_enqueue_logs_activation(caplog):

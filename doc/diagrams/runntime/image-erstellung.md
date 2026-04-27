@@ -10,8 +10,8 @@ Der Fokus liegt auf dem aktuell implementierten zeitgesteuerten Ablauf über den
 - `engine/web/app.py`: manueller Trigger über `POST /api/image/refresh-active` und Lifespan-Start des Schedulers
 - `engine/tools/scheduler.py`: stößt periodisch `execute_pending_jobs()` an
 - `engine/tools/image_job.py`: startet Bild-Updates über den `ImageService`
-- `engine/services/character_image_service.py`: orchestriert Prompt-Erzeugung, Bildgenerierung, Backup und Persistierung
-- `engine/stores/npc_store.py`: lädt aktiven NPC-, Szenen- und Bildkontext
+- `engine/services/image_service.py`: orchestriert Prompt-Erzeugung, Bildgenerierung, Backup und Persistierung
+- `engine/storage.py`: liefert aktiven NPC-, Szenen- und Bildkontext über `storage.npc`/`storage.scene`
 - `engine/llm/client.py`: ruft LLM für Prompt-Optimierung und Bildmodell für das neue Bild auf
 
 ## Überblick
@@ -43,7 +43,7 @@ Die Ausführung erfolgt anschließend durch den Scheduler über `execute_pending
 
 ### 2. Kontext laden und Bildquellen auflösen
 
-`ImageService.update_from_context()` lädt den aktiven NPC-Kontext über `NpcStore.load()` und nutzt:
+`ImageService.update_from_context()` lädt den aktiven NPC-/Szenen-Kontext über `storage.npc` und `storage.scene` und nutzt:
 
 - NPC-Beschreibung
 - aktueller State
@@ -69,7 +69,7 @@ Dieser Pfad nutzt:
 - `npc.scene.img` als Szenenbild
 - `npc.scene.description` als zusammengeführte Szenenbeschreibung
 
-Nach erfolgreichem Merge wird zusätzlich ein Initialwert für den späteren Refresh-Prompt unter `.data/npcs/<npc_id>/<scene_id>/scheduler/image_updater_update_prompt.txt` gespeichert.
+Nach erfolgreichem Merge wird zusätzlich ein Initialwert für den späteren Refresh-Prompt unter `.data/npcs/<npc_id>/<scene_id>/orchestrator/image_updater_update_prompt.txt` gespeichert.
 
 ### 4. Rohprompt aufbauen
 
@@ -136,7 +136,7 @@ Wichtige Laufzeitdateien pro NPC-Szenen-Kontext:
 
 - `.data/npcs/<npc_id>/<scene_id>/img.png`
 - `.data/npcs/<npc_id>/<scene_id>/img_backup/img-<timestamp>.png`
-- `.data/npcs/<npc_id>/<scene_id>/scheduler/image_updater_update_prompt.txt`
+- `.data/npcs/<npc_id>/<scene_id>/orchestrator/image_updater_update_prompt.txt`
 
 ## Aktivitätsdiagramm
 
