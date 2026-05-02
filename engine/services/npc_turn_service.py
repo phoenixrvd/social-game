@@ -11,7 +11,8 @@ from openai.types.chat import (
 )
 
 from engine.config import config
-from engine.storage import Message, storage
+from engine.storage import storage
+from engine.storage.models import Message
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 
 EMPTY_PLACEHOLDER = "(leer)"
@@ -97,7 +98,7 @@ class NpcTurnService:
         messages = storage.npc.stm.get()
         context_block = ""
         if messages:
-            context_block = storage.npc.stm.as_string_short(last_n=config.ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES)
+            context_block = storage.npc.stm.text_short_latest
         player_line = f"user: {player_input.strip()}"
         if not context_block:
             return player_line

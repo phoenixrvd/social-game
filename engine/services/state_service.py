@@ -17,7 +17,7 @@ class StateService:
         return state
 
     def _build_prompt(self) -> str:
-        stm_text = storage.npc.stm.as_string_long()
+        stm_text = storage.npc.stm.text
         etm_text = self.etm_retrieval.load_relevant(stm_text)
         return (
             storage.prompts.state_update.get().strip()

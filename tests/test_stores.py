@@ -1,19 +1,29 @@
 from types import SimpleNamespace
 
-import engine.storage as storage_module
-from engine.storage import Message
+from engine.config import config
+from engine.storage import storage
+from engine.storage.models import Message
 
 
 def _patch_storage(monkeypatch, tmp_path, session_provider) -> None:
-    monkeypatch.setattr(storage_module.config, "SCENE_DIR", tmp_path / "scenes")
-    monkeypatch.setattr(storage_module.config, "NPC_DIR", tmp_path / "npcs")
-    monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", tmp_path / "data" / "npcs")
-    monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
-    monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
-    monkeypatch.setattr(
-        storage_module.SessionStorageItem,
-        "get",
-        lambda _self: session_provider(),
+    monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / "data" / "npcs")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    session = session_provider()
+    (tmp_path / "session.yaml").write_text(
+        f"npc_id: {session.npc_id}\nscene_id: {session.scene_id}\n",
+        encoding="utf-8",
+    )
+
+
+def _set_scene(tmp_path, current_scene: dict[str, str], scene_id: str) -> None:
+    current_scene["value"] = scene_id
+    (tmp_path / "session.yaml").write_text(
+        f"npc_id: vika\nscene_id: {scene_id}\n",
+        encoding="utf-8",
     )
 
 
@@ -29,11 +39,11 @@ def test_storage_loads_and_saves_scene(tmp_path, monkeypatch):
     (tmp_path / "npcs" / "vika" / "state.md").write_text("mood: neutral", encoding="utf-8")
     (tmp_path / "npcs" / "vika" / "relationship.md").write_text("", encoding="utf-8")
 
-    assert storage_module.storage.scene.scene_id == "default"
-    assert "Default Szene" in storage_module.storage.scene.description
+    assert storage.scene.scene_id == "default"
+    assert "Default Szene" in storage.scene.description
 
-    storage_module.storage.scene.scene_runtime.save("# Testbeschreibung\nDie Szene wurde aktualisiert.")
-    assert "Testbeschreibung" in storage_module.storage.scene.description
+    storage.scene.scene_runtime.save("# Testbeschreibung\nDie Szene wurde aktualisiert.")
+    assert "Testbeschreibung" in storage.scene.description
 
 
 def test_storage_keeps_runtime_data_separated_per_scene(tmp_path, monkeypatch):
@@ -56,23 +66,23 @@ def test_storage_keeps_runtime_data_separated_per_scene(tmp_path, monkeypatch):
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
     (npc_dir / "relationship.md").write_text("", encoding="utf-8")
 
-    storage_module.storage.npc.state_runtime.save("mood: office")
-    current_scene["value"] = "cafe"
-    storage_module.storage.npc.state_runtime.save("mood: cafe")
-    current_scene["value"] = "office"
-    storage_module.storage.npc.stm.append(Message(id="1", timestamp_utc="2026-03-22T10:00:00+00:00", role="user", content="hi office"))
-    storage_module.storage.npc.stm.append(Message(id="2", timestamp_utc="2026-03-22T10:00:01+00:00", role="assistant", content="reply office"))
-    current_scene["value"] = "cafe"
-    storage_module.storage.npc.stm.append(Message(id="3", timestamp_utc="2026-03-22T10:00:02+00:00", role="user", content="hi cafe"))
-    storage_module.storage.npc.stm.append(Message(id="4", timestamp_utc="2026-03-22T10:00:03+00:00", role="assistant", content="reply cafe"))
+    storage.npc.state_runtime.save("mood: office")
+    _set_scene(tmp_path, current_scene, "cafe")
+    storage.npc.state_runtime.save("mood: cafe")
+    _set_scene(tmp_path, current_scene, "office")
+    storage.npc.stm.append(Message(id="1", timestamp_utc="2026-03-22T10:00:00+00:00", role="user", content="hi office"))
+    storage.npc.stm.append(Message(id="2", timestamp_utc="2026-03-22T10:00:01+00:00", role="assistant", content="reply office"))
+    _set_scene(tmp_path, current_scene, "cafe")
+    storage.npc.stm.append(Message(id="3", timestamp_utc="2026-03-22T10:00:02+00:00", role="user", content="hi cafe"))
+    storage.npc.stm.append(Message(id="4", timestamp_utc="2026-03-22T10:00:03+00:00", role="assistant", content="reply cafe"))
 
-    current_scene["value"] = "office"
-    assert storage_module.storage.npc.state == "mood: office"
-    assert [msg.content for msg in storage_module.storage.npc.stm.get()] == ["hi office", "reply office"]
+    _set_scene(tmp_path, current_scene, "office")
+    assert storage.npc.state == "mood: office"
+    assert [msg.content for msg in storage.npc.stm.get()] == ["hi office", "reply office"]
 
-    current_scene["value"] = "cafe"
-    assert storage_module.storage.npc.state == "mood: cafe"
-    assert [msg.content for msg in storage_module.storage.npc.stm.get()] == ["hi cafe", "reply cafe"]
+    _set_scene(tmp_path, current_scene, "cafe")
+    assert storage.npc.state == "mood: cafe"
+    assert [msg.content for msg in storage.npc.stm.get()] == ["hi cafe", "reply cafe"]
 
 
 def test_storage_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
@@ -92,7 +102,7 @@ def test_storage_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
     (npc_dir / "scenes" / "departure" / "img.png").write_bytes(b"img")
     (npc_dir / "img.png").write_bytes(b"root-img")
 
-    assert storage_module.storage.npc.img_current.get() == npc_dir / "img.png"
+    assert storage.npc.img.get() == npc_dir / "img.png"
 
 
 def test_storage_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatch):
@@ -108,10 +118,10 @@ def test_storage_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatch)
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
     (npc_dir / "relationship.md").write_text("relationship-default", encoding="utf-8")
 
-    storage_module.storage.scene.scene_runtime.save("Runtime Szene")
-    assert "Runtime Szene" in storage_module.storage.scene.description
-    assert storage_module.storage.npc.relationship.get() == "relationship-default"
-    assert storage_module.storage.npc.state == "mood: neutral\n\nrelationship-default"
+    storage.scene.scene_runtime.save("Runtime Szene")
+    assert "Runtime Szene" in storage.scene.description
+    assert storage.npc.relationship.get() == "relationship-default"
+    assert storage.npc.state == "mood: neutral\n\nrelationship-default"
 
 
 def test_storage_prefers_data_then_overrides_then_default(tmp_path, monkeypatch):
@@ -133,9 +143,9 @@ def test_storage_prefers_data_then_overrides_then_default(tmp_path, monkeypatch)
     (overrides_npc / "state.md").write_text("state-override", encoding="utf-8")
     (overrides_npc / "relationship.md").write_text("relationship-override", encoding="utf-8")
 
-    assert storage_module.storage.npc.state == "state-override\n\nrelationship-override"
-    assert storage_module.storage.npc.relationship.get() == "relationship-override"
+    assert storage.npc.state == "state-override\n\nrelationship-override"
+    assert storage.npc.relationship.get() == "relationship-override"
 
-    storage_module.storage.npc.state_runtime.save("state-runtime")
-    assert storage_module.storage.npc.state == "state-runtime"
-    assert storage_module.storage.npc.relationship.get() == "relationship-override"
+    storage.npc.state_runtime.save("state-runtime")
+    assert storage.npc.state == "state-runtime"
+    assert storage.npc.relationship.get() == "relationship-override"

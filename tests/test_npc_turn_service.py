@@ -1,9 +1,10 @@
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Literal, cast
 
 import engine.services.npc_turn_service as npc_turn_service_module
 from engine.services.npc_turn_service import NpcTurnService
-from engine.storage import Message
+from engine.storage.models import Message
 
 
 class FakeStmView:
@@ -13,8 +14,9 @@ class FakeStmView:
     def get(self) -> list[Message]:
         return list(self._messages)
 
-    def as_string_short(self, last_n: int | None = None) -> str:
-        selected = self._messages[-last_n:] if last_n is not None else list(self._messages)
+    @property
+    def text_short_latest(self) -> str:
+        selected = self._messages[-npc_turn_service_module.config.STM_LATEST_MESSAGES:]
         if not selected:
             return "(keine Nachrichten)"
         return "\n".join(f"{m.role}: {m.content.strip()}" for m in selected)
@@ -28,7 +30,7 @@ def _build_npc(**overrides) -> SimpleNamespace:
         state="mood: neutral",
         relationship="Kennt den Spieler",
         scene=SimpleNamespace(scene_id="office", description="Im Buero", img=Path(__file__)),
-        img_current=Path(__file__),
+        img=Path(__file__),
         stm=FakeStmView(),
         character={"name": "Vika", "hobby": "Kaffee"},
     )
@@ -201,7 +203,7 @@ def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatc
             return ""
 
     monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
-    monkeypatch.setattr(npc_turn_service_module.config, "ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES", 3)
+    monkeypatch.setattr(npc_turn_service_module.config, "STM_LATEST_MESSAGES", 3)
     _patch_storage(monkeypatch, npc, "{{CURRENT_ETM}}")
 
     service = NpcTurnService()
@@ -229,9 +231,14 @@ def test_finalize_turn_persists_trimmed_messages(monkeypatch):
     make_calls: list[tuple[str, str]] = []
     appended_messages: list[Message] = []
 
-    def fake_make_message(self, role: str, content: str):
+    def fake_make_message(self, role: Literal["user", "assistant", "system"], content: str):
         make_calls.append((role, content))
-        return Message(id=f"{role}-id", timestamp_utc="2026-03-22T10:00:00+00:00", role=role, content=content)
+        return Message(
+            id=f"{role}-id",
+            timestamp_utc="2026-03-22T10:00:00+00:00",
+            role=cast(Literal["user", "assistant", "system"], role),
+            content=content,
+        )
 
     class FakeStm:
         def append(self, msg: Message):

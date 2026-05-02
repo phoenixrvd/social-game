@@ -1,18 +1,12 @@
 from __future__ import annotations
 
-from contextlib import closing
-import json
-import math
-import sqlite3
-from datetime import datetime, timezone
-from pathlib import Path
 from typing import Callable
 from rapidfuzz import fuzz
-from uuid import uuid4
 
 from engine.config import config
 from engine.llm.client import client
 from engine.storage import storage
+from engine.storage.models import Episode
 
 EMPTY_ETM_TEXT = "(keine zusätzlichen relevanten Erinnerungen)"
 
@@ -26,14 +20,14 @@ class EtmService:
         if not batch_messages:
             return ""
 
-        batch_text = storage.npc.stm.as_batch_string
+        batch_text = storage.npc.stm.batch_text_short
         episode = self._create_episode(batch_text)
-        self._store_etm_text(storage.npc.etm_sqlite, episode)
+        self._store_etm_text(episode)
         storage.npc.stm.remove(batch_messages)
         return episode
 
     def load_relevant(self, query_text: str) -> str:
-        matches = self._query_etm_texts(storage.npc.etm_sqlite, query_text)
+        matches = self._query_etm_texts(query_text)
         memories = self._deduplicate_memories(matches)
         if not memories:
             return EMPTY_ETM_TEXT
@@ -56,56 +50,46 @@ class EtmService:
         embeddings = embedding_fn(cleaned)
         return [list(vector) for vector in embeddings]
 
-    def _store_etm_text(self, path: Path, text: str) -> None:
+    def _store_etm_text(self, text: str) -> None:
         cleaned_text = text.strip()
         if not cleaned_text:
             return
+        storage.npc.etm.append(
+            text=cleaned_text,
+            embedding=self._embed_texts([cleaned_text])[0],
+        )
 
-        with closing(self._connect_etm_store(path)) as connection:
-            connection.execute(
-                """
-                INSERT OR REPLACE INTO etm_entries (entry_id, text, embedding, created_at)
-                VALUES (?, ?, ?, ?)
-                """,
-                (
-                    str(uuid4()),
-                    cleaned_text,
-                    json.dumps(self._embed_texts([cleaned_text])[0]),
-                    self._utc_timestamp(),
-                ),
-            )
-            connection.commit()
-
-    def _query_etm_texts(self, path: Path, query_text: str) -> list[str]:
+    def _query_etm_texts(self, query_text: str) -> list[str]:
         top_k = config.ETM_RETRIEVAL_TOP_K
-        max_distance = config.ETM_RETRIEVAL_MAX_DISTANCE
         cleaned_query = query_text.strip()
-        if top_k <= 0 or not cleaned_query or not path.exists():
+        if top_k <= 0 or not cleaned_query:
             return []
 
+        episodes = storage.npc.etm.get()
+        if not episodes:
+            return []
         query_embedding = self._embed_texts([cleaned_query])[0]
-        with closing(self._connect_etm_store(path)) as connection:
-            rows = connection.execute("SELECT text, embedding FROM etm_entries").fetchall()
-        if not rows:
-            return []
+        query_episode = Episode(
+            id="query",
+            text=cleaned_query,
+            embedding=query_embedding,
+            created_at="",
+        )
 
-        matches = self._collect_matches(rows, query_embedding, max_distance)
+        matches = self._collect_matches(episodes, query_episode)
         matches.sort(key=lambda item: item[0])
         return [text for _, text in matches[:top_k]]
 
     def _collect_matches(
         self,
-        rows: list[tuple[str, str]],
-        query_embedding: list[float],
-        max_distance: float | None,
+        episodes: list[Episode],
+        query_episode: Episode,
     ) -> list[tuple[float, str]]:
         matches: list[tuple[float, str]] = []
-        for text, raw_embedding in rows:
-            entry_embedding = [float(value) for value in json.loads(raw_embedding)]
-            distance = 1.0 - self._cosine_similarity(query_embedding, entry_embedding)
-            if max_distance is not None and distance > max_distance:
+        for episode in episodes:
+            if not episode.is_similar(query_episode):
                 continue
-            matches.append((distance, str(text)))
+            matches.append((episode.distance_to(query_episode), episode.text))
         return matches
 
     def _local_embedding_function(self) -> Callable[[list[str]], list[list[float]]]:
@@ -128,25 +112,6 @@ class EtmService:
         self._local_embedding_fn = fn
         return fn
 
-    def _connect_etm_store(self, path: Path) -> sqlite3.Connection:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(path)
-        connection.execute(
-            """
-            CREATE TABLE IF NOT EXISTS etm_entries (
-                entry_id TEXT PRIMARY KEY,
-                text TEXT NOT NULL,
-                embedding TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            )
-            """
-        )
-        connection.commit()
-        return connection
-
-    @staticmethod
-    def _utc_timestamp() -> str:
-        return datetime.now(timezone.utc).isoformat()
 
     def _deduplicate_memories(self, matches: list[str]) -> list[str]:
         kept_similarity_threshold = 92
@@ -162,13 +127,3 @@ class EtmService:
 
         return kept[: config.ETM_RETRIEVAL_TOP_K]
 
-    @staticmethod
-    def _cosine_similarity(a: list[float], b: list[float]) -> float:
-        dot_product = sum(left * right for left, right in zip(a, b, strict=False))
-        norm_a = math.sqrt(sum(value * value for value in a))
-        norm_b = math.sqrt(sum(value * value for value in b))
-
-        if norm_a == 0.0 or norm_b == 0.0:
-            return 0.0
-
-        return dot_product / (norm_a * norm_b)

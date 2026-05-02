@@ -57,7 +57,7 @@ class SocialGameMessage extends HTMLElement {
       return
     }
 
-    const formattedTimestamp = formatTimestamp(message.timestamp)
+    const formattedTimestamp = formatTimestamp(message.timestamp_utc)
 
     this.$.timestamp.className = formattedTimestamp
       ? `msg-timestamp ${message.role === "user" ? "msg-timestamp-user msg-time-user" : "msg-timestamp-assistant msg-time-assistant"}`

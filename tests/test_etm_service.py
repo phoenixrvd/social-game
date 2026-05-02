@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import sqlite3
 import sys
-from pathlib import Path
 from types import SimpleNamespace
 
-import engine.storage as storage_module
 import engine.services.etm_service as etm_service_module
+from engine.storage.models import Episode
+from engine.storage.nodes import EtmNode
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 
 
@@ -60,11 +60,17 @@ def test_store_etm_text_persists_embedding_and_text(tmp_path) -> None:
     service = EtmService()
     service._local_embedding_fn = lambda _texts: [[0.1, 0.2, 0.3]]
     store_path = tmp_path / "etm.sqlite"
+    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
+    original_storage = etm_service_module.storage
+    etm_service_module.storage = monkey_storage
 
-    service._store_etm_text(store_path, " Hallo ")
+    try:
+        service._store_etm_text(" Hallo ")
+    finally:
+        etm_service_module.storage = original_storage
 
     connection = sqlite3.connect(store_path)
-    row = connection.execute("SELECT entry_id, text, embedding, created_at FROM etm_entries").fetchone()
+    row = connection.execute("SELECT id, text, embedding, created_at FROM etm_entries").fetchone()
     connection.close()
 
     assert row is not None
@@ -83,20 +89,50 @@ def test_query_etm_texts_filters_by_max_distance(tmp_path) -> None:
     }
     service._local_embedding_fn = lambda texts: [vectors[text] for text in texts]
     store_path = tmp_path / "etm.sqlite"
+    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
+    original_storage = etm_service_module.storage
+    etm_service_module.storage = monkey_storage
 
-    service._store_etm_text(store_path, "nah")
-    service._store_etm_text(store_path, "fern")
-
-    results = service._query_etm_texts(store_path, "frage")
+    try:
+        service._store_etm_text("nah")
+        service._store_etm_text("fern")
+        results = service._query_etm_texts("frage")
+    finally:
+        etm_service_module.storage = original_storage
 
     assert results == ["fern"]
+
+
+def test_etm_node_get_returns_episode_models(tmp_path) -> None:
+    node = EtmNode(path=tmp_path / "etm.sqlite")
+
+    node.append(text="Episode A", embedding=[0.1, 0.2])
+    episodes = node.get()
+
+    assert len(episodes) == 1
+    assert isinstance(episodes[0], Episode)
+    assert episodes[0].text == "Episode A"
+    assert episodes[0].embedding == [0.1, 0.2]
+    assert episodes[0].id
+    assert episodes[0].created_at
+
+
+def test_episode_is_similar_uses_global_max_distance(monkeypatch) -> None:
+    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_MAX_DISTANCE", 0.25)
+
+    a = Episode(id="1", text="A", embedding=[1.0, 0.0], created_at="now")
+    b = Episode(id="2", text="B", embedding=[1.0, 0.0], created_at="now")
+    c = Episode(id="3", text="C", embedding=[0.0, 1.0], created_at="now")
+
+    assert a.distance_to(b) == 0.0
+    assert a.is_similar(b) is True
+    assert a.is_similar(c) is False
 
 
 def test_query_etm_texts_skips_blank_query_without_embedding_call(tmp_path) -> None:
     service = EtmService()
     service._local_embedding_fn = lambda _texts: (_ for _ in ()).throw(AssertionError("should not run"))
-
-    assert service._query_etm_texts(tmp_path / "etm.sqlite", "   ") == []
+    assert service._query_etm_texts("   ") == []
 
 
 def test_load_relevant_skips_embedding_without_store(monkeypatch, tmp_path):
@@ -131,8 +167,7 @@ def test_load_relevant_returns_formatted_matches(monkeypatch, tmp_path):
     store_path.parent.mkdir(parents=True)
     store_path.touch()
 
-    def fake_query(self, path: Path, query_text: str) -> list[str]:
-        assert path == store_path
+    def fake_query(self, query_text: str) -> list[str]:
         assert query_text == "Wollen wir wieder in eine Bar gehen?"
         return [
             "Er erinnert sich an eine ruhige Bar mit guten Gläsern.",
@@ -142,12 +177,6 @@ def test_load_relevant_returns_formatted_matches(monkeypatch, tmp_path):
     monkeypatch.setattr(etm_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
     monkeypatch.setattr(EtmService, "_query_etm_texts", fake_query)
 
-    # Make storage bootstrap deterministic for this test run.
-    monkeypatch.setattr(
-        storage_module.SessionStorageItem,
-        "get",
-        lambda _self: SimpleNamespace(npc_id="vika", scene_id="office"),
-    )
 
     result = EtmService().load_relevant("Wollen wir wieder in eine Bar gehen?")
 

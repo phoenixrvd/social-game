@@ -5,9 +5,10 @@ from pathlib import Path
 
 from rapidfuzz import fuzz
 
-from engine.config import config
 from engine.llm.client import client
-from engine.storage import ImageItem, NpcStorageView, SceneStorageView, storage
+from engine.storage import storage
+from engine.storage.files import ImageFile
+from engine.storage.nodes import NpcNode, SceneNode
 
 
 class ImageService:
@@ -20,7 +21,7 @@ class ImageService:
         image_path = npc.img_runtime
 
         if not image_path.exists() and self._has_scene_merge_prompt():
-            self.merge_with_scene(npc=npc, scene=scene)
+            self.merge_with_scene()
             return
 
         old_prompt = self._load_current_prompt(npc)
@@ -34,8 +35,8 @@ class ImageService:
     def get_preview(
         self,
         old_prompt: str,
-        npc: NpcStorageView | None = None,
-        scene: SceneStorageView | None = None,
+        npc: NpcNode | None = None,
+        scene: SceneNode | None = None,
     ) -> str:
         current_npc = npc or storage.npc
         current_scene = scene or storage.scene
@@ -45,30 +46,24 @@ class ImageService:
             .replace("{{CURRENT_IMAGE_PROMPT}}", old_prompt or "(none)")
             .replace("{{CURRENT_STATE}}", current_npc.state)
             .replace("{{CURRENT_SCENE}}", current_scene.description)
-            .replace(
-                "{{CURRENT_STM}}",
-                current_npc.stm.as_string_short(last_n=config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP),
-            )
+            .replace("{{CURRENT_STM}}", current_npc.stm.text_short_latest)
         )
 
-    def merge_with_scene(
-        self,
-        npc: NpcStorageView | None = None,
-        scene: SceneStorageView | None = None,
-    ) -> None:
-        current_npc = npc or storage.npc
-        current_scene = scene or storage.scene
+    def merge_with_scene(self) -> None:
+        current_npc = storage.npc
+        current_scene = storage.scene
         image_path = current_npc.img_runtime
         prompt = self._scene_merge_prompt(current_scene.description)
 
         merged_img = client.merge_character_scene_img(
             prompt,
-            current_npc.img_current.get().read_bytes(),
+            current_npc.img.get().read_bytes(),
             current_scene.img.read_bytes(),
         )
 
         self._write_image(image_path, current_npc.backup_dir, merged_img)
-        current_npc.image_prompt.save(self._generate_update_prompt(npc=current_npc, scene=current_scene, old_prompt=""))
+        new_prompt = self._generate_update_prompt(npc=current_npc, scene=current_scene, old_prompt="")
+        current_npc.image_prompt.save(new_prompt)
 
     def revert(self) -> None:
         npc = storage.npc
@@ -93,17 +88,17 @@ class ImageService:
             return
         image_path.unlink()
 
-    def _refresh_from_prompt(self, npc: NpcStorageView, image_path: ImageItem, new_prompt: str) -> None:
+    def _refresh_from_prompt(self, npc: NpcNode, image_path: ImageFile, new_prompt: str) -> None:
         new_img = client.refresh_img(
             self._render_refresh_prompt(new_prompt),
-            npc.img_current.get().read_bytes(),
+            npc.img.get().read_bytes(),
             npc.img_original.get().read_bytes(),
         )
         self._write_image(image_path, npc.backup_dir, new_img)
         npc.image_prompt.save(new_prompt)
 
     @staticmethod
-    def _backup_existing_image(image_path: ImageItem, backup_dir: Path) -> None:
+    def _backup_existing_image(image_path: ImageFile, backup_dir: Path) -> None:
         if not image_path.exists():
             return
 
@@ -112,7 +107,7 @@ class ImageService:
         image_path.path.rename(backup_path)
 
     @staticmethod
-    def _load_current_prompt(npc: NpcStorageView) -> str:
+    def _load_current_prompt(npc: NpcNode) -> str:
         prompt_item = npc.image_prompt
         if not prompt_item.exists():
             return ""
@@ -138,11 +133,11 @@ class ImageService:
             .replace("{{BASE_PROMPT}}", base_prompt.strip())
         )
 
-    def _write_image(self, image_path: ImageItem, backup_dir: Path, image_bytes: bytes) -> None:
+    def _write_image(self, image_path: ImageFile, backup_dir: Path, image_bytes: bytes) -> None:
         self._backup_existing_image(image_path, backup_dir)
         image_path.save(image_bytes)
 
-    def _generate_update_prompt(self, npc: NpcStorageView, scene: SceneStorageView, old_prompt: str) -> str:
+    def _generate_update_prompt(self, npc: NpcNode, scene: SceneNode, old_prompt: str) -> str:
         optimization_prompt = self.get_preview(old_prompt, npc=npc, scene=scene)
         return client.run_prompt_small(optimization_prompt).strip()
 

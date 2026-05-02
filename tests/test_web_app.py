@@ -11,9 +11,10 @@ import openai
 from PIL import Image
 import requests
 
+from engine.config import config
+from engine.storage import storage
 import engine.web.app as web_app_module
-import engine.storage as storage_module
-from engine.storage import Message
+from engine.storage.models import Message
 
 
 def _make_test_png(path: Path, width: int = 4, height: int = 4) -> Path:
@@ -35,6 +36,15 @@ class FakeSessionView:
         if scene_id is not None:
             cls.scene_id = scene_id
         return SimpleNamespace(npc_id=cls.npc_id, scene_id=cls.scene_id)
+
+
+def _write_session(tmp_path: Path, npc_id: str, scene_id: str) -> None:
+    FakeSessionView.npc_id = npc_id
+    FakeSessionView.scene_id = scene_id
+    (tmp_path / "session.yaml").write_text(
+        f"npc_id: {npc_id}\nscene_id: {scene_id}\n",
+        encoding="utf-8",
+    )
 
 
 class FakeNpcTurnService:
@@ -100,36 +110,20 @@ def _setup_web_app(
     FakeSessionView.npc_id = "vika"
     FakeSessionView.scene_id = "office"
 
-    monkeypatch.setattr(web_app_module.config, "NPC_DIR", npcs_dir)
-    monkeypatch.setattr(web_app_module.config, "SCENE_DIR", scenes_dir)
-    monkeypatch.setattr(web_app_module.config, "DATA_NPC_DIR", data_npcs_dir)
-    monkeypatch.setattr(web_app_module.config, "OVERRIDES_NPC_DIR", overrides_npcs_dir)
-    monkeypatch.setattr(web_app_module.config, "OVERRIDES_SCENE_DIR", overrides_scenes_dir)
-    monkeypatch.setattr(web_app_module.config, "WEB_DEBUG", web_debug)
-    monkeypatch.setattr(storage_module.config, "NPC_DIR", npcs_dir)
-    monkeypatch.setattr(storage_module.config, "SCENE_DIR", scenes_dir)
-    monkeypatch.setattr(storage_module.config, "DATA_NPC_DIR", data_npcs_dir)
-    monkeypatch.setattr(storage_module.config, "OVERRIDES_NPC_DIR", overrides_npcs_dir)
-    monkeypatch.setattr(storage_module.config, "OVERRIDES_SCENE_DIR", overrides_scenes_dir)
-    monkeypatch.setattr(
-        storage_module.SessionStorageItem,
-        "get",
-        lambda _self: SimpleNamespace(npc_id=FakeSessionView.npc_id, scene_id=FakeSessionView.scene_id),
-    )
-    monkeypatch.setattr(
-        storage_module.SessionStorageItem,
-        "save",
-        lambda _self, **kwargs: FakeSessionView.save(
-            npc_id=kwargs.get("npc_id", kwargs.get("npc")),
-            scene_id=kwargs.get("scene_id", kwargs.get("scene")),
-        ),
-    )
+    monkeypatch.setattr(config, "NPC_DIR", npcs_dir)
+    monkeypatch.setattr(config, "SCENE_DIR", scenes_dir)
+    monkeypatch.setattr(config, "DATA_NPC_DIR", data_npcs_dir)
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", overrides_npcs_dir)
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", overrides_scenes_dir)
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "WEB_DEBUG", web_debug)
+    _write_session(tmp_path, "vika", "office")
     monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
     web_app_module.app.state.watch_scheduler = None
     web_app_module._scheduler = None
 
-    storage_module.storage.npc.stm.save(
+    storage.npc.stm.save(
         [
             Message(id="m1", timestamp_utc="2026-03-22T10:00:00+00:00", role="user", content="Hi"),
             Message(id="m2", timestamp_utc="2026-03-22T10:01:00+00:00", role="assistant", content="Hallo."),
@@ -268,7 +262,7 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
 
 def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    storage_module.storage.npc.stm.save([])
+    storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
     assert len(payload["messages"]) == 3
@@ -299,7 +293,7 @@ def test_get_state_prefers_real_messages_over_context_fallback(tmp_path, monkeyp
 
 def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    storage_module.storage.npc.stm.save(
+    storage.npc.stm.save(
         [
             Message(
                 id="m-system",
@@ -322,9 +316,9 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
 
 def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    storage_module.storage.npc.description.save("[link](javascript:alert('x'))")
-    storage_module.storage.scene.scene_runtime.save("Szene [ok](https://example.com)")
-    storage_module.storage.npc.stm.save([])
+    storage.npc.description.save("[link](javascript:alert('x'))")
+    storage.scene.scene_runtime.save("Szene [ok](https://example.com)")
+    storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
     character_html = payload["messages"][0]["html"]
@@ -333,8 +327,8 @@ def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeyp
 
 def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    storage_module.storage.npc.description.save("Außen:\n\n- direkt\n- offen")
-    storage_module.storage.npc.stm.save([])
+    storage.npc.description.save("Außen:\n\n- direkt\n- offen")
+    storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
     character_html = payload["messages"][0]["html"]
@@ -346,7 +340,8 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
 def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     payload = web_app_module.update_session(web_app_module.SessionRequest(npc_id="mira", scene_id="cafe"))
-    assert FakeSessionView.saved_calls == [("mira", "cafe")]
+    assert storage.session.npc_id == "mira"
+    assert storage.session.scene_id == "cafe"
     assert payload["npc_id"] == "mira"
     assert payload["npc_name"] == "Mira"
     assert payload["scene_id"] == "cafe"
@@ -396,8 +391,8 @@ def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
 
 def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    runtime_image = storage_module.storage.npc.img_runtime.path
-    root_image = storage_module.storage.npc.img_original.path
+    runtime_image = storage.npc.img_runtime.path
+    root_image = storage.npc.img_original.path
     if runtime_image.exists():
         runtime_image.unlink()
     if root_image.exists():
@@ -407,7 +402,7 @@ def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
         web_app_module.current_image()
         raise AssertionError("Expected FileNotFoundError")
     except FileNotFoundError as exc:
-        assert exc.filename == str(storage_module.storage.npc.img_current.get())
+        assert exc.filename == str(storage.npc.img.get())
 
 
 def test_npc_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):

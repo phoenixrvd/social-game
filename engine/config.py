@@ -35,11 +35,9 @@ class Config(BaseSettings):
     ETM_RETRIEVAL_TOP_K: int = 4
     # Maximale Cosine-Distance für ETM-Retrieval-Treffer, kleiner ist relevanter
     ETM_RETRIEVAL_MAX_DISTANCE: float = 0.75
-    # Anzahl der letzten STM-Nachrichten, die als Kontext in die ETM-Query einfließen
-    ETM_RETRIEVAL_QUERY_LAST_N_STM_MESSAGES: int = 5
 
-    # Anzahl der letzten Nachrichten die für State-Updates berücksichtigt werden
-    STATE_AUTO_TRIGGER_LAST_N_MESSAGES: int = 5
+    # Anzahl der letzten STM-Nachrichten für allgemeine Latest-Properties im Storage
+    STM_LATEST_MESSAGES: int = 5
 
     # Orchestrator updater interval defaults (seconds)
     UPDATER_ETM_CHECK_INTERVAL_SECONDS: int = 350

@@ -34,7 +34,7 @@ class SceneService:
         return target_dir
 
     def _build_prompt(self) -> str:
-        stm_text = storage.npc.stm.as_string_long(last_n=config.STATE_AUTO_TRIGGER_LAST_N_MESSAGES)
+        stm_text = storage.npc.stm.text_latest
         etm_text = self.etm_retrieval.load_relevant(stm_text)
         return (
             storage.prompts.scene_update.get().strip()

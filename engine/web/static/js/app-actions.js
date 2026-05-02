@@ -101,7 +101,7 @@ function shouldOpenSelectorOnFirstLoad(payload = {}) {
 function appendAssistantChunk(messages, assistantId, assistantTimestamp, delta) {
   const assistantMessage = messages.find((message) => message.id === assistantId)
   if (!assistantMessage) {
-    return [...messages, { id: assistantId, role: "assistant", content: delta, timestamp: assistantTimestamp }]
+    return [...messages, { id: assistantId, role: "assistant", content: delta, timestamp_utc: assistantTimestamp }]
   }
 
   return messages.map((message) => {
@@ -403,7 +403,7 @@ async function submitMessage(payload = {}) {
   const assistantId = `assistant-local-${Date.now()}`
   const assistantTimestamp = createNowTimestamp()
   const messages = state.messages.filter((message) => !String(message?.id || "").startsWith("context-"))
-  messages.push({ id: `user-${Date.now()}`, role: "user", content: text, timestamp: createNowTimestamp() })
+  messages.push({ id: `user-${Date.now()}`, role: "user", content: text, timestamp_utc: createNowTimestamp() })
   appStore.setState({
     messages,
     input: "",

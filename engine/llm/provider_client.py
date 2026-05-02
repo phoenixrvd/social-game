@@ -15,8 +15,6 @@ NamedImage = tuple[str, bytes]
 T = TypeVar("T")
 
 
-# --- Text-Parse-Helfer ---
-
 def _extract_object_segment(text: str) -> str | None:
     decoder = json.JSONDecoder()
     for index, char in enumerate(text):
@@ -81,8 +79,6 @@ def _main_error_message(detail: str) -> str:
             cleaned = cleaned[:cut_index].rstrip()
     return cleaned
 
-
-# --- Fehler-Normalisierung (oeffentlich) ---
 
 def normalize_provider_error_detail(text: str) -> str:
     detail = _parsed_error_message(text)

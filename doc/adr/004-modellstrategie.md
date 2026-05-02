@@ -53,6 +53,7 @@ implemented
 - Keine
 
 ## Referenzen
+- ADR-009: Storage-Architektur und Zugriffsschicht
 - `engine/config.py`
 - `engine/services/etm_service.py`
 - `engine/services/npc_turn_service.py`

@@ -21,7 +21,8 @@ from engine.llm.client import client
 from engine.llm.provider_client import user_visible_provider_error_detail
 from engine.services.image_service import ImageService
 from engine.services.npc_turn_service import NpcTurnService
-from engine.storage import Message, NpcStorageView, SceneStorageView, storage
+from engine.storage import storage
+from engine.storage.models import Message
 from engine.tools.scheduler import Scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -176,21 +177,12 @@ class SessionRequest(BaseModel):
     scene_id: str | None = None
 
 
-def _message_to_payload(message: Message) -> dict[str, str]:
-    return {
-        "id": message.id,
-        "role": message.role,
-        "content": message.content,
-        "timestamp": message.timestamp_utc,
-    }
-
-
 def _render_markdown_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["extra", "sane_lists"])
 
 
-def _visible_messages(npc: NpcStorageView, scene: SceneStorageView) -> list[dict[str, Any]]:
-    visible = [_message_to_payload(m) for m in npc.stm.get() if m.role in {"user", "assistant"}]
+def _visible_messages(npc, scene) -> list[dict[str, Any]]:
+    visible = [m.model_dump() for m in npc.stm.get() if m.role in {"user", "assistant"}]
     if visible:
         return visible
     character_description = npc.description.get()
@@ -202,14 +194,14 @@ def _visible_messages(npc: NpcStorageView, scene: SceneStorageView) -> list[dict
             "role": "assistant",
             "content": "",
             "html": _render_markdown_to_html(character_description),
-            "timestamp": ""
+            "timestamp_utc": ""
         },
         {
             "id": "context-scene",
             "role": "assistant",
             "content": "",
             "html": _render_markdown_to_html(scene_description),
-            "timestamp": ""
+            "timestamp_utc": ""
         },
     ]
 
@@ -220,24 +212,24 @@ def _visible_messages(npc: NpcStorageView, scene: SceneStorageView) -> list[dict
                 "role": "assistant",
                 "content": "",
                 "html": _render_markdown_to_html(f"# Beziehung\n\n{relationship_description}"),
-                "timestamp": "",
+                "timestamp_utc": "",
             }
         )
 
     return context_messages
 
 
-def _visible_stm_messages(npc: NpcStorageView) -> list[Message]:
+def _visible_stm_messages(npc) -> list[Message]:
     return [m for m in npc.stm.get() if m.role in {"user", "assistant"}]
 
 
-def _messages_signature(npc: NpcStorageView) -> str:
+def _messages_signature(npc) -> str:
     visible = _visible_stm_messages(npc)
     last_id = visible[-1].id if visible else ""
     return f"{len(visible)}|{last_id}"
 
 
-def _read_scene_label(scene_view: SceneStorageView) -> str:
+def _read_scene_label(scene_view) -> str:
     scene_id = scene_view.scene_id
     scene_item = scene_view.scene_original
     for line in scene_item.get().splitlines():
@@ -247,12 +239,12 @@ def _read_scene_label(scene_view: SceneStorageView) -> str:
 
 
 def _npc_option_image_path(npc_id: str) -> Path:
-    scene_id = storage.session.get().scene_id
+    scene_id = storage.session.scene_id
     return storage.npc_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
 
 
 def _scene_option_image_path(scene_id: str) -> Path:
-    npc_id = storage.session.get().npc_id
+    npc_id = storage.session.npc_id
     return storage.scene_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
 
 
@@ -273,7 +265,7 @@ def _list_npcs() -> list[dict[str, str]]:
             "label": str(npc_view.character_original.get().get("name", npc_view.npc_id)).strip() or npc_view.npc_id,
             "image_url": _npc_option_image_url(npc_id=npc_view.npc_id),
         }
-        for npc_view in storage.list_npcs()
+        for npc_view in storage.list_npcs
     ]
 
 
@@ -285,16 +277,16 @@ def _list_scenes() -> list[dict[str, str]]:
             "label": _read_scene_label(scene_view),
             "image_url": _scene_option_image_url(scene_id=scene_view.scene_id),
         }
-        for scene_view in storage.list_scenes()
+        for scene_view in storage.list_scenes
     ]
 
 
-def _image_url(npc: NpcStorageView) -> str | None:
-    return "/api/image/current" if npc.img_current.is_file() else None
+def _image_url(npc) -> str | None:
+    return "/api/image/current" if npc.img.is_file() else None
 
 
-def _image_signature(npc: NpcStorageView) -> str:
-    return _file_signature(npc.img_current.get())
+def _image_signature(npc) -> str:
+    return _file_signature(npc.img.get())
 
 
 def _state_payload() -> dict[str, Any]:
@@ -327,14 +319,17 @@ def get_state() -> dict[str, Any]:
 def update_session(request: SessionRequest) -> dict[str, Any]:
     if request.npc_id is None and request.scene_id is None:
         raise HTTPException(status_code=422, detail="Mindestens npc_id oder scene_id muss gesetzt sein.")
-    storage.session.save(npc=request.npc_id, scene=request.scene_id)
+    if request.npc_id is not None:
+        storage.session.npc_id = request.npc_id
+    if request.scene_id is not None:
+        storage.session.scene_id = request.scene_id
     return _state_payload()
 
 
 @app.delete("/api/npc/reset-active")
 def reset_active_npc_runtime_data() -> dict[str, Any]:
     _get_scheduler().clear_pending_jobs()
-    session = storage.session.get()
+    session = storage.session
     scene_data_dir = storage.npc_view(
         npc_id=session.npc_id,
         scene_id=session.scene_id,
@@ -377,7 +372,7 @@ def chat_stream(request: ChatRequest) -> Any:
 
 @app.get("/api/image/current")
 def current_image() -> Any:
-    return _image_response(storage.npc.img_current.get())
+    return _image_response(storage.npc.img.get())
 
 
 @app.get("/api/npcs/{npc_id}/image")
