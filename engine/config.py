@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -8,7 +7,6 @@ load_dotenv()
 
 _NPC_SUBDIR = "npcs"
 _SCENE_SUBDIR = "scenes"
-Provider = Literal["openai", "grok"]
 
 
 class Config(BaseSettings):
@@ -49,25 +47,17 @@ class Config(BaseSettings):
     WEB_DEBUG: bool = False
 
     # LLM configuration
-    LLM_BIG: Provider = "openai"
-    LLM_SMALL: Provider = "openai"
-    IMAGE: Provider = "openai"
-
-    OPENAI_API_KEY: str | None = None
-    OPENAI_BASE_URL: str | None = None
-    OPENAI_MODEL_LLM_BIG: str = "gpt-5.4"
-    OPENAI_MODEL_LLM_SMALL: str = "gpt-5.4-mini"
-    OPENAI_MODEL_IMG_BASE: str = "gpt-image-1.5"
-
-    GROK_API_KEY: str | None = None
-    GROK_BASE_URL: str = "https://api.x.ai/v1"
-    GROK_MODEL_LLM_BIG: str = "grok-4.20-0309-non-reasoning"
-    GROK_MODEL_LLM_SMALL: str = "grok-4-1-fast-non-reasoning"
-    GROK_MODEL_LLM_IMG_BASE: str = "grok-imagine-image"
+    MODEL_API_KEY: str = "none"
+    MODEL_BASE_URL: str = "https://api.openai.com/v1"
+    MODEL_LLM_BIG: str = "gpt-5.4"
+    MODEL_LLM_SMALL: str = "gpt-5.4-mini"
+    MODEL_IMAGE: str = "gpt-image-1.5"
+    MODEL_EMBEDDING: str = "text-embedding-3-small"
 
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
+        env_prefix="SG_",
         extra="ignore",
     )
 

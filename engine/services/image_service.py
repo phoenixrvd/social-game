@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rapidfuzz import fuzz
 
-from engine.llm.client import client
+from engine.client import client
 from engine.storage import storage
 from engine.storage.files import ImageFile
 from engine.storage.nodes import NpcNode, SceneNode

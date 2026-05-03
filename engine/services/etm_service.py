@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Callable
 from rapidfuzz import fuzz
 
 from engine.config import config
-from engine.llm.client import client
+from engine.client import client
 from engine.storage import storage
 from engine.storage.models import Episode
 
@@ -12,9 +11,6 @@ EMPTY_ETM_TEXT = "(keine zusätzlichen relevanten Erinnerungen)"
 
 
 class EtmService:
-    def __init__(self) -> None:
-        self._local_embedding_fn: Callable[[list[str]], list[list[float]]] | None = None
-
     def compress_stm(self) -> str:
         batch_messages = storage.npc.stm.batch_messages()
         if not batch_messages:
@@ -42,13 +38,11 @@ class EtmService:
         )
         return client.run_prompt_small(prompt).strip()
 
-    def _embed_texts(self, texts: list[str]) -> list[list[float]]:
-        cleaned = [text for text in texts if text.strip()]
+    def _embed_texts(self, text: str) -> list[float]:
+        cleaned = text.strip()
         if not cleaned:
             return []
-        embedding_fn = self._local_embedding_function()
-        embeddings = embedding_fn(cleaned)
-        return [list(vector) for vector in embeddings]
+        return client.embed_texts(cleaned)
 
     def _store_etm_text(self, text: str) -> None:
         cleaned_text = text.strip()
@@ -56,7 +50,7 @@ class EtmService:
             return
         storage.npc.etm.append(
             text=cleaned_text,
-            embedding=self._embed_texts([cleaned_text])[0],
+            embedding=self._embed_texts(cleaned_text),
         )
 
     def _query_etm_texts(self, query_text: str) -> list[str]:
@@ -68,7 +62,7 @@ class EtmService:
         episodes = storage.npc.etm.get()
         if not episodes:
             return []
-        query_embedding = self._embed_texts([cleaned_query])[0]
+        query_embedding = self._embed_texts(cleaned_query)
         query_episode = Episode(
             id="query",
             text=cleaned_query,
@@ -92,25 +86,6 @@ class EtmService:
             matches.append((episode.distance_to(query_episode), episode.text))
         return matches
 
-    def _local_embedding_function(self) -> Callable[[list[str]], list[list[float]]]:
-        if self._local_embedding_fn is not None:
-            return self._local_embedding_fn
-
-        from fastembed import TextEmbedding
-
-        cache_dir = storage.etm_fastembed_cache
-        cache_dir.mkdir(parents=True, exist_ok=True)
-
-        model = TextEmbedding(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            cache_dir=str(cache_dir),
-        )
-
-        def fn(texts: list[str]) -> list[list[float]]:
-            return [[float(value) for value in vector] for vector in model.embed(texts)]
-
-        self._local_embedding_fn = fn
-        return fn
 
 
     def _deduplicate_memories(self, matches: list[str]) -> list[str]:
@@ -126,4 +101,3 @@ class EtmService:
             kept.append(candidate)
 
         return kept[: config.ETM_RETRIEVAL_TOP_K]
-

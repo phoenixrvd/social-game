@@ -161,7 +161,7 @@ def _make_user_visible_runtime_error(detail: str) -> RuntimeError:
 def _make_user_visible_http_runtime_error(detail: str) -> RuntimeError:
     response = requests.Response()
     response.status_code = 404
-    response.url = "https://imgen.x.ai/moderated_content.png"
+    response.url = "https://example.com/moderated_content.png"
     cause = requests.HTTPError("404 Not Found", response=response)
     try:
         raise cause

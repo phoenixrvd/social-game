@@ -7,13 +7,21 @@ name = "social-game"
 version = "0.1.0"
 description = "Web-GUI und CLI-Werkzeuge fuer Session, Updater und LLM-Pruefung im Social Game"
 requires-python = ">=3.11"
-
-[project.optional-dependencies]
-web = [
+dependencies = [
+	"apscheduler",
 	"fastapi",
-	"uvicorn",
 	"httpx",
 	"markdown",
+	"openai",
+	"Pillow",
+	"pydantic",
+	"pydantic-settings",
+	"python-dotenv",
+	"PyYAML",
+	"rapidfuzz",
+	"requests",
+	"typer",
+	"uvicorn",
 ]
 
 [project.scripts]

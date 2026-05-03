@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from engine.config import config
-from engine.llm.client import client
+from engine.client import client
 from engine.services.etm_service import EtmService
 from engine.services.id_normalizer import normalize_to_snake_id
 from engine.storage import storage

@@ -24,7 +24,7 @@ Die ETM-Erstellung läuft batch-orientiert:
 5. Es werden alle STM-Nachrichten außer den letzten `config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP` ausgewählt.
 6. Wenn die Anzahl dieser älteren Nachrichten `<= config.UPDATER_ETM_BATCH_SIZE_THRESHOLD` ist, endet der Lauf.
 7. `prompts/etm_update.md` verdichtet den Batch zu einer ETM-Episode aus Sicht des NPC.
-8. Die Episode wird lokal über FastEmbed (`sentence-transformers/all-MiniLM-L6-v2`) vektorisiert.
+8. Die Episode wird ueber den OpenAI-kompatiblen Embedding-Client vektorisiert (`MODEL_EMBEDDING`).
 9. Die Episode wird unter `.data/npcs/<npc_id>/<scene_id>/etm.sqlite` gespeichert.
 10. Die verarbeiteten STM-Nachrichten werden aus `stm.jsonl` entfernt.
 
@@ -60,6 +60,7 @@ Ohne vorhandenen ETM-Speicher, bei leerem Query-Text oder in Kontexten ohne ETM-
 - `UPDATER_ETM_CHECK_INTERVAL_SECONDS`: `350`
 - `ETM_RETRIEVAL_TOP_K`: `4`
 - `ETM_RETRIEVAL_MAX_DISTANCE`: `0.75`
+- `MODEL_EMBEDDING`: `text-embedding-3-small`
 
 ## Artefakte
 

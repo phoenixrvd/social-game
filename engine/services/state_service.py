@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from engine.llm.client import client
+from engine.client import client
 from engine.services.etm_service import EtmService
 from engine.storage import storage
 

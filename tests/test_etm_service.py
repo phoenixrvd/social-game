@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import sqlite3
-import sys
 from types import SimpleNamespace
 
 import engine.services.etm_service as etm_service_module
@@ -10,64 +9,57 @@ from engine.storage.nodes import EtmNode
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 
 
-def test_etm_service_uses_local_embedding_fn() -> None:
-    def fake_embedding_fn(_texts: list[str]) -> list[list[float]]:
-        return [[0.1, 0.2, 0.3]]
+def _set_embed_client(monkeypatch, embed_fn):
+    monkeypatch.setattr(etm_service_module, "client", SimpleNamespace(embed_texts=embed_fn))
 
+
+def test_etm_service_uses_client_embedding_fn(monkeypatch) -> None:
+    def fake_embedding_fn(_text: str) -> list[float]:
+        return [0.1, 0.2, 0.3]
+
+    _set_embed_client(monkeypatch, fake_embedding_fn)
     service = EtmService()
-    service._local_embedding_fn = fake_embedding_fn
 
-    first = service._embed_texts(["Hallo Welt"])[0]
-    second = service._embed_texts(["Hallo Welt"])[0]
+    first = service._embed_texts("Hallo Welt")
+    second = service._embed_texts("Hallo Welt")
+
     assert first == [0.1, 0.2, 0.3]
     assert first == second
 
 
-def test_etm_service_uses_data_cache_dir(monkeypatch, tmp_path) -> None:
+def test_etm_service_embed_texts_trims_before_client_call(monkeypatch) -> None:
     captured: dict[str, str] = {}
 
-    class FakeTextEmbedding:
-        def __init__(self, *, model_name, cache_dir):
-            captured["model_name"] = model_name
-            captured["cache_dir"] = cache_dir
+    def fake_embedding_fn(text: str) -> list[float]:
+        captured["text"] = text
+        return [0.4, 0.5]
 
-        @staticmethod
-        def embed(_texts: list[str]) -> list[list[float]]:
-            return [[0.4, 0.5]]
+    _set_embed_client(monkeypatch, fake_embedding_fn)
 
-    class FakeStorage:
-        @property
-        def etm_fastembed_cache(self):
-            return tmp_path / "fastembed_cache"
+    result = EtmService()._embed_texts("  Hallo  ")
 
-    monkeypatch.setitem(sys.modules, "fastembed", SimpleNamespace(TextEmbedding=FakeTextEmbedding))
-    monkeypatch.setattr(etm_service_module, "storage", FakeStorage())
+    assert result == [0.4, 0.5]
+    assert captured["text"] == "Hallo"
 
+
+def test_etm_service_returns_empty_for_blank_input(monkeypatch) -> None:
     service = EtmService()
-    assert service._embed_texts(["Hallo"]) == [[0.4, 0.5]]
-    assert captured["model_name"] == "sentence-transformers/all-MiniLM-L6-v2"
-    assert captured["cache_dir"] == str(tmp_path / "fastembed_cache")
+    _set_embed_client(
+        monkeypatch,
+        lambda _text: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+
+    assert service._embed_texts("   ") == []
 
 
-def test_etm_service_returns_empty_for_blank_inputs() -> None:
+def test_store_etm_text_persists_embedding_and_text(monkeypatch, tmp_path) -> None:
     service = EtmService()
-    service._local_embedding_fn = lambda _texts: (_ for _ in ()).throw(AssertionError("should not run"))
-
-    assert service._embed_texts(["", "   "]) == []
-
-
-def test_store_etm_text_persists_embedding_and_text(tmp_path) -> None:
-    service = EtmService()
-    service._local_embedding_fn = lambda _texts: [[0.1, 0.2, 0.3]]
+    _set_embed_client(monkeypatch, lambda _text: [0.1, 0.2, 0.3])
     store_path = tmp_path / "etm.sqlite"
     monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
-    original_storage = etm_service_module.storage
-    etm_service_module.storage = monkey_storage
+    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
 
-    try:
-        service._store_etm_text(" Hallo ")
-    finally:
-        etm_service_module.storage = original_storage
+    service._store_etm_text(" Hallo ")
 
     connection = sqlite3.connect(store_path)
     row = connection.execute("SELECT id, text, embedding, created_at FROM etm_entries").fetchone()
@@ -80,25 +72,21 @@ def test_store_etm_text_persists_embedding_and_text(tmp_path) -> None:
     assert row[3]
 
 
-def test_query_etm_texts_filters_by_max_distance(tmp_path) -> None:
+def test_query_etm_texts_filters_by_max_distance(monkeypatch, tmp_path) -> None:
     service = EtmService()
     vectors = {
         "frage": [1.0, 0.0],
         "fern": [1.0, 0.0],
         "nah": [0.0, 1.0],
     }
-    service._local_embedding_fn = lambda texts: [vectors[text] for text in texts]
+    _set_embed_client(monkeypatch, lambda text: vectors[text])
     store_path = tmp_path / "etm.sqlite"
     monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
-    original_storage = etm_service_module.storage
-    etm_service_module.storage = monkey_storage
+    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
 
-    try:
-        service._store_etm_text("nah")
-        service._store_etm_text("fern")
-        results = service._query_etm_texts("frage")
-    finally:
-        etm_service_module.storage = original_storage
+    service._store_etm_text("nah")
+    service._store_etm_text("fern")
+    results = service._query_etm_texts("frage")
 
     assert results == ["fern"]
 
@@ -129,9 +117,13 @@ def test_episode_is_similar_uses_global_max_distance(monkeypatch) -> None:
     assert a.is_similar(c) is False
 
 
-def test_query_etm_texts_skips_blank_query_without_embedding_call(tmp_path) -> None:
+def test_query_etm_texts_skips_blank_query_without_embedding_call(monkeypatch) -> None:
     service = EtmService()
-    service._local_embedding_fn = lambda _texts: (_ for _ in ()).throw(AssertionError("should not run"))
+    _set_embed_client(
+        monkeypatch,
+        lambda _text: (_ for _ in ()).throw(AssertionError("should not run")),
+    )
+
     assert service._query_etm_texts("   ") == []
 
 
@@ -140,7 +132,7 @@ def test_load_relevant_skips_embedding_without_store(monkeypatch, tmp_path):
     monkeypatch.setattr(
         EtmService,
         "_embed_texts",
-        lambda _self, _texts: (_ for _ in ()).throw(
+        lambda _self, _text: (_ for _ in ()).throw(
             AssertionError("Ohne ETM-Speicher darf kein Embedding-Call erfolgen")
         ),
     )
@@ -154,7 +146,7 @@ def test_load_relevant_skips_embedding_for_empty_query(monkeypatch):
     monkeypatch.setattr(
         EtmService,
         "_embed_texts",
-        lambda _self, _texts: (_ for _ in ()).throw(AssertionError("Ohne Query darf kein Embedding-Call erfolgen")),
+        lambda _self, _text: (_ for _ in ()).throw(AssertionError("Ohne Query darf kein Embedding-Call erfolgen")),
     )
 
     result = EtmService().load_relevant("   ")

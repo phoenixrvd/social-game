@@ -27,7 +27,6 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 - `.data/session.yaml` – aktiver NPC/Szene-Kontext mit Keys `npc_id` und `scene_id`
 - `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm.sqlite, img.png)
 - `.data/npcs/<npc_id>/<scene_id>/orchestrator/` – orchestrator-spezifische Laufzeitartefakte (z. B. gespeicherte Bildprompts)
-- `.data/fastembed_cache/` – lokaler Cache für Embeddings beim Grok-Embedding-Pfad
 
 **Priorität beim Laden:** Laufzeitdatei → `.overrides`-Datei → szenenspezifisches NPC-Asset → statisches Default.
 
@@ -73,9 +72,9 @@ Bei Konflikten gelten spezifischere Guidelines vor allgemeinen Mustern in dieser
 Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC_DESCRIPTION}}", "<npc description>")
 ```
 
-**Konfiguration** – alle Werte über `engine/config.py` (pydantic-settings), `.env` mit Provider-spezifischen Schlüsseln (`OPENAI_*`, `GROK_*`) und Provider-Schaltern pro Fähigkeit (`LLM_BIG`, `LLM_SMALL`, `IMAGE`, `EMBEDDING`). Kein Direktzugriff auf `os.environ`.
+**Konfiguration** – alle Werte über `engine/config.py` (pydantic-settings), `.env` mit `SG_MODEL_API_KEY`, `SG_MODEL_BASE_URL`, `SG_MODEL_LLM_BIG`, `SG_MODEL_LLM_SMALL`, `SG_MODEL_IMAGE`, `SG_MODEL_EMBEDDING` (allgemein: `SG_`-Prefix fuer alle Config-Werte). Kein Direktzugriff auf `os.environ`.
 
-**Fehlerbehandlung** – Provider-Fehler (OpenAI/Grok) werden in `RuntimeError` mit lesbarer Meldung gewrappt; user-sichtbare Details werden über `user_visible_provider_error_detail(...)` normalisiert. Keine stillen Catches.
+**Fehlerbehandlung** – Provider-Fehler werden in `RuntimeError` mit lesbarer Meldung gewrappt; user-sichtbare Details werden über `user_visible_provider_error_detail(...)` normalisiert. Keine stillen Catches.
 
 **Web-Frontend** – Vanilla-JS Web Components in `engine/web/static/js/`. Komponentenkommunikation ausschließlich via `CustomEvent`, kein direkter DOM-Zugriff auf Kind-Komponenten.
 
@@ -98,10 +97,9 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 ## Externe Abhängigkeiten
 
 - **OpenAI** – Provider für Chat/Bilder/Embeddings über OpenAI-API
-- **xAI SDK (`xai-sdk`)** – Grok-Bildgenerierung via `Client.image.sample(...)`
 - **APScheduler** – Background-Scheduler für den periodischen `execute_pending_jobs()`-Loop (10s Intervall)
 - **FastAPI + uvicorn** – Web-Backend
 - **pydantic-settings** – Konfiguration
-- **fastembed** – lokaler Embedding-Pfad für Grok (`engine/llm/grok_provider_client.py`)
 - **rapidfuzz** – Prompt-Ähnlichkeitsprüfung im `ImageService`
 - **Pillow** – Bildkomprimierung vor LLM-Upload (PNG → JPEG)
+- **LiteLLM (optional)** – kann fuer eigene Embedding-Modelle oder weitere OpenAI-kompatible Modellanbieter genutzt werden

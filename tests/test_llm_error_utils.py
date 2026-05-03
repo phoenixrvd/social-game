@@ -3,7 +3,7 @@ from __future__ import annotations
 import openai
 import requests
 
-from engine.llm.provider_client import normalize_provider_error_detail, user_visible_provider_error_detail
+from engine.client import normalize_provider_error_detail, user_visible_provider_error_detail
 
 
 def _runtime_error_from_openai(detail: str) -> RuntimeError:
@@ -52,7 +52,7 @@ def test_user_visible_provider_error_detail_uses_direct_provider_message_when_ne
 def test_user_visible_provider_error_detail_detects_wrapped_request_errors():
     response = requests.Response()
     response.status_code = 404
-    response.url = "https://imgen.x.ai/moderated_content.png"
+    response.url = "https://example.com/moderated_content.png"
     cause = requests.HTTPError("404 Not Found", response=response)
     try:
         raise cause

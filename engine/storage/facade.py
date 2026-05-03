@@ -26,9 +26,6 @@ class Storage:
     def data(self) -> Path:
         return config.DATA_DIR
 
-    @property
-    def etm_fastembed_cache(self) -> Path:
-        return self.data / "fastembed_cache"
 
     @property
     def overrides_root(self) -> Path:

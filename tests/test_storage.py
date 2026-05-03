@@ -49,7 +49,6 @@ def test_storage_base_paths_exposed(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "OVERRIDES_DIR", tmp_path / ".overrides")
 
     assert storage.data == tmp_path / ".data"
-    assert storage.etm_fastembed_cache == tmp_path / ".data" / "fastembed_cache"
     assert storage.overrides_root == tmp_path / ".overrides"
 
 

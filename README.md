@@ -134,18 +134,16 @@ Ziel ist Vielfalt in Interaktionen statt viele ähnliche Charaktere.
 Im Projektverzeichnis eine `.env` anlegen.
 
 ```env
-OPENAI_API_KEY=<your_openai_api_key>
-GROK_API_KEY=<your_grok_api_key>
-
-# Provider-Schalter pro Fähigkeit (Optional. Standardmäßig alle auf openai)
-LLM_BIG=grok
-LLM_SMALL=grok
-IMAGE=grok
-EMBEDDING=grok
+SG_MODEL_API_KEY=<your_openai_api_key>
+SG_MODEL_BASE_URL=https://api.openai.com/v1
+# Optional: Modell-Overrides
+# SG_MODEL_LLM_BIG=gpt-5.4
+# SG_MODEL_LLM_SMALL=gpt-5.4-mini
+# SG_MODEL_IMAGE=gpt-image-1.5
+# SG_MODEL_EMBEDDING=text-embedding-3-small
 ```
 
-Hinweis: Pro Fähigkeit kann `openai` oder `grok` gewählt werden.
-Modelle, API-Keys und Base-URLs werden dann automatisch aus den jeweiligen `OPENAI_*`- bzw. `GROK_*`-Feldern verwendet.
+Fuer eigene Embedding-Modelle kann ein OpenAI-kompatibler Endpoint genutzt werden (z. B. ueber LiteLLM).
 
 ## Schnellstart (Docker – Quick Preview)
 

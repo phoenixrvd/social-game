@@ -4,12 +4,8 @@ from io import BytesIO
 from types import SimpleNamespace
 from typing import Iterator, cast
 
-import engine.llm.client as llm_client_module
-import engine.llm.openai_provider_client as openai_client_module
+import engine.client as llm_client_module
 import openai
-import requests
-from engine.llm.grok_provider_client import GrokProviderClient
-from engine.llm.openai_provider_client import OpenAiProviderClient
 from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
 
@@ -36,11 +32,11 @@ def test_stream_prompt_streams_chunks(monkeypatch):
 
     class FakeBigClient:
         @staticmethod
-        def request_big(_messages):
+        def _request_big(_messages):
             assert _messages == messages
             return iter(["Hallo", " Welt"])
 
-    monkeypatch.setattr(llm_client_module.client, "_big_client", FakeBigClient())
+    monkeypatch.setattr(llm_client_module.client, "_request_big", FakeBigClient()._request_big)
     assert list(llm_client_module.client.stream_prompt(messages)) == ["Hallo", " Welt"]
 
 
@@ -50,11 +46,11 @@ def test_stream_prompt_delegates_to_big_request_without_tools_override(monkeypat
 
     class FakeBigClient:
         @staticmethod
-        def request_big(_messages):
+        def _request_big(_messages):
             captured["messages"] = _messages
             return iter(["ok"])
 
-    monkeypatch.setattr(llm_client_module.client, "_big_client", FakeBigClient())
+    monkeypatch.setattr(llm_client_module.client, "_request_big", FakeBigClient()._request_big)
 
     assert list(llm_client_module.client.stream_prompt(messages)) == ["ok"]
     assert captured["messages"] == messages
@@ -79,12 +75,12 @@ def test_merge_character_scene_img_uses_named_files_for_openai(monkeypatch, tmp_
 
     class FakeImageClient:
         @staticmethod
-        def request_image(prompt, images):
+        def _request_image(prompt, images):
             captured["prompt"] = prompt
             captured["images"] = images
             return b"img"
 
-    monkeypatch.setattr(llm_client_module.client, "_image_client", FakeImageClient())
+    monkeypatch.setattr(llm_client_module.client, "_request_image", FakeImageClient()._request_image)
 
     result = llm_client_module.client.merge_character_scene_img("merge prompt", char_bytes, scene_bytes)
     assert result == b"img"
@@ -97,11 +93,11 @@ def test_refresh_img_uses_compressed_named_files(monkeypatch):
 
     class FakeImageClient:
         @staticmethod
-        def request_image(prompt, images):
+        def _request_image(prompt, images):
             captured["images"] = images
             return b"img"
 
-    monkeypatch.setattr(llm_client_module.client, "_image_client", FakeImageClient())
+    monkeypatch.setattr(llm_client_module.client, "_request_image", FakeImageClient()._request_image)
 
     current = BytesIO()
     Image.new("RGB", (1600, 1200), (10, 20, 30)).save(current, format="PNG")
@@ -122,11 +118,11 @@ def test_run_prompt_small_uses_small_client(monkeypatch):
 
     class FakeSmallClient:
         @staticmethod
-        def request_small(messages):
+        def _request_small(messages):
             captured["messages"] = messages
             return "ok-small"
 
-    monkeypatch.setattr(llm_client_module.client, "_small_client", FakeSmallClient())
+    monkeypatch.setattr(llm_client_module.client, "_request_small", FakeSmallClient()._request_small)
     result = llm_client_module.client.run_prompt_small("Hi")
     assert result == "ok-small"
     msg = cast(list[dict[str, str]], captured["messages"])[0]
@@ -134,192 +130,8 @@ def test_run_prompt_small_uses_small_client(monkeypatch):
     assert msg["content"] == "Hi"
 
 
-def test_grok_image_response_bytes_downloads_from_url(monkeypatch):
-    import httpx
-
-    captured: dict[str, object] = {}
-
-    image_bytes = BytesIO()
-    Image.new("RGB", (8, 8), color="green").save(image_bytes, format="PNG")
-
-    def fake_get(url, timeout):
-        captured["url"] = url
-        captured["timeout"] = timeout
-        return SimpleNamespace(content=b"downloaded")
-
-    class FakeSdkClient:
-        class image:
-            @staticmethod
-            def sample(**_payload):
-                return SimpleNamespace(url="https://cdn.x.ai/generated.png")
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-    client = GrokProviderClient()
-    monkeypatch.setattr(client, "_sdk_client", lambda: FakeSdkClient())
-
-    result = client.request_image("prompt", [("current.jpg", image_bytes.getvalue())])
-    assert result == b"downloaded"
-    assert captured == {"url": "https://cdn.x.ai/generated.png", "timeout": 120.0}
-
-
-def test_grok_image_response_bytes_falls_back_to_url_when_image_property_is_invalid(monkeypatch):
-    import httpx
-
-    captured: dict[str, object] = {}
-
-    image_bytes = BytesIO()
-    Image.new("RGB", (8, 8), color="green").save(image_bytes, format="PNG")
-
-    def fake_get(url, timeout):
-        captured["url"] = url
-        captured["timeout"] = timeout
-        return SimpleNamespace(content=b"downloaded")
-
-    class FakeImageResponse:
-        url = "https://cdn.x.ai/generated.png"
-
-        @property
-        def image(self):
-            raise ValueError("not enough values to unpack (expected 2, got 1)")
-
-    class FakeSdkClient:
-        class image:
-            @staticmethod
-            def sample(**_payload):
-                return FakeImageResponse()
-
-    monkeypatch.setattr(httpx, "get", fake_get)
-    client = GrokProviderClient()
-    monkeypatch.setattr(client, "_sdk_client", lambda: FakeSdkClient())
-
-    result = client.request_image("prompt", [("current.jpg", image_bytes.getvalue())])
-    assert result == b"downloaded"
-    assert captured == {"url": "https://cdn.x.ai/generated.png", "timeout": 120.0}
-
-
-def test_grok_image_request_wraps_moderated_content_http_error(monkeypatch):
-    client = GrokProviderClient()
-    image_bytes = BytesIO()
-    Image.new("RGB", (8, 8), color="red").save(image_bytes, format="PNG")
-
-    class FakeImageResponse:
-        @property
-        def image(self):
-            response = requests.Response()
-            response.status_code = 404
-            response.url = "https://imgen.x.ai/moderated_content.png"
-            raise requests.HTTPError("404 Not Found", response=response)
-
-    class FakeSdkClient:
-        class image:
-            @staticmethod
-            def sample(**_payload):
-                return FakeImageResponse()
-
-    monkeypatch.setattr(client, "_sdk_client", lambda: FakeSdkClient())
-
-    try:
-        client.request_image("prompt", [("current.jpg", image_bytes.getvalue())])
-        assert False, "Should have raised RuntimeError"
-    except RuntimeError as exc:
-        assert str(exc) == "Anfrage durch Moderation blockiert."
-        assert isinstance(exc.__cause__, requests.HTTPError)
-
-
-def test_grok_big_request_wraps_direct_openai_error_with_main_message(monkeypatch):
-    client = GrokProviderClient()
-
-    class FakePermissionDenied(openai.OpenAIError):
-        pass
-
-    class FakeTextClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**_kwargs):
-                    raise FakePermissionDenied(
-                        "PermissionDeniedError(\"Error code: 403 - {'code': 'forbidden', 'error': 'Content violates "
-                        "usage guidelines. Team: abc Failed check: SAFETY_CHECK_TYPE_CSAM'}\")"
-                    )
-
-    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
-
-    try:
-        stream = _require_iterator(client.request_big([]))
-        _next_chunk(stream)
-        assert False, "Should have raised RuntimeError"
-    except RuntimeError as exc:
-        assert str(exc) == "Content violates usage guidelines."
-        assert isinstance(exc.__cause__, FakePermissionDenied)
-
-
-def test_grok_streaming_wraps_iteration_error_with_main_message(monkeypatch):
-    client = GrokProviderClient()
-
-    class FakePermissionDenied(openai.OpenAIError):
-        pass
-
-    class FailingStream:
-        def __iter__(self):
-            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hallo"))])
-            raise FakePermissionDenied(
-                "PermissionDeniedError(\"Error code: 403 - {'code': 'forbidden', 'error': 'Content violates usage "
-                "guidelines. Team: abc Failed check: SAFETY_CHECK_TYPE_CSAM'}\")"
-            )
-
-    class FakeTextClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**_kwargs):
-                    return FailingStream()
-
-    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
-
-    stream = _require_iterator(client.request_big([]))
-    assert _next_chunk(stream) == "Hallo"
-    try:
-        _next_chunk(stream)
-        assert False, "Should have raised RuntimeError"
-    except RuntimeError as exc:
-        assert str(exc) == "Content violates usage guidelines."
-        assert isinstance(exc.__cause__, FakePermissionDenied)
-
-
-def test_grok_big_request_maps_grpc_quota_error(monkeypatch):
-    client = GrokProviderClient()
-
-    class FakeGrpcQuotaError(openai.OpenAIError):
-        pass
-
-    class FakeTextClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**_kwargs):
-                    raise FakeGrpcQuotaError(
-                        'UNKNOWN:Error received from peer ipv6:%5B2606:4700::6812:1350%5D:443 '
-                        '{grpc_message:"Your team 0adb8a1f-be5b-4491-845e-f4df321edb57 has either used all '
-                        'available credits or reached its monthly spending limit. To continue making API '
-                        'requests, please purchase more credits or raise your spending limit.", grpc_status:8}'
-                    )
-
-    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
-
-    try:
-        stream = _require_iterator(client.request_big([]))
-        _next_chunk(stream)
-        assert False, "Should have raised RuntimeError"
-    except RuntimeError as exc:
-        assert (
-            str(exc)
-            == "Your team 0adb8a1f-be5b-4491-845e-f4df321edb57 has either used all available credits or reached its monthly spending limit. To continue making API requests, please purchase more credits or raise your spending limit."
-        )
-        assert isinstance(exc.__cause__, FakeGrpcQuotaError)
-
-
 def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
-    client = OpenAiProviderClient()
+    client = llm_client_module.Client()
 
     class FakePermissionDenied(openai.OpenAIError):
         pass
@@ -339,9 +151,9 @@ def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
                 def create(**_kwargs):
                     return FailingStream()
 
-    monkeypatch.setattr(openai_client_module.OpenAiProviderClient, "_text_client", staticmethod(lambda: FakeClient()))
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
-    stream = _require_iterator(client.request_big([]))
+    stream = _require_iterator(client._request_big([]))
     assert _next_chunk(stream) == "Hallo"
     try:
         _next_chunk(stream)
@@ -362,10 +174,10 @@ def test_openai_big_request_sends_no_tools(monkeypatch):
                     captured.update(kwargs)
                     return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])]
 
-    client = OpenAiProviderClient()
-    monkeypatch.setattr(openai_client_module.OpenAiProviderClient, "_text_client", staticmethod(lambda: FakeClient()))
+    client = llm_client_module.Client()
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
-    assert list(client.request_big([])) == ["ok"]
+    assert list(client._request_big([])) == ["ok"]
     assert "tools" not in captured
 
 
@@ -380,47 +192,39 @@ def test_openai_small_request_sends_no_tools(monkeypatch):
                     captured.update(kwargs)
                     return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])]
 
-    client = OpenAiProviderClient()
-    monkeypatch.setattr(openai_client_module.OpenAiProviderClient, "_text_client", staticmethod(lambda: FakeClient()))
+    client = llm_client_module.Client()
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
-    assert client.request_small([]) == "ok"
+    assert client._request_small([]) == "ok"
     assert "tools" not in captured
 
 
-def test_grok_big_request_sends_no_tools(monkeypatch):
+def test_embed_texts_uses_configured_embedding_model(monkeypatch):
     captured: dict[str, object] = {}
+    client = llm_client_module.Client()
 
-    class FakeTextClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**kwargs):
-                    captured.update(kwargs)
-                    return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])]
+    class FakeClient:
+        class embeddings:
+            @staticmethod
+            def create(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(data=[SimpleNamespace(embedding=[0.1, 0.2])])
 
-    client = GrokProviderClient()
-    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
+    monkeypatch.setattr(llm_client_module.config, "MODEL_EMBEDDING", "text-embedding-test")
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
-    assert list(client.request_big([])) == ["ok"]
-    assert "tools" not in captured
+    result = client.embed_texts(" Hallo ")
+
+    assert result == [0.1, 0.2]
+    assert captured["model"] == "text-embedding-test"
+    assert captured["input"] == ["Hallo"]
 
 
-def test_grok_small_request_sends_no_tools(monkeypatch):
-    captured: dict[str, object] = {}
+def test_embed_texts_skips_blank_input_without_request(monkeypatch):
+    client = llm_client_module.Client()
+    monkeypatch.setattr(client, "_request_embedding", lambda _text: (_ for _ in ()).throw(AssertionError("should not run")))
 
-    class FakeTextClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**kwargs):
-                    captured.update(kwargs)
-                    return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])]
-
-    client = GrokProviderClient()
-    monkeypatch.setattr(client, "_text_client", lambda: FakeTextClient())
-
-    assert client.request_small([]) == "ok"
-    assert "tools" not in captured
+    assert client.embed_texts("   ") == []
 
 
 

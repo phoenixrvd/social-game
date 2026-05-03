@@ -1,5 +1,4 @@
 openai
-xai-sdk
 python-dotenv
 apscheduler
 fastapi
@@ -8,5 +7,8 @@ httpx
 markdown
 rapidfuzz
 Pillow
+pydantic
 pydantic-settings
-fastembed
+pyyaml
+requests
+typer

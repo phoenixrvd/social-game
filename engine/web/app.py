@@ -17,8 +17,7 @@ from pydantic import BaseModel
 import uvicorn
 
 from engine.config import config
-from engine.llm.client import client
-from engine.llm.provider_client import user_visible_provider_error_detail
+from engine.client import client, user_visible_provider_error_detail
 from engine.services.image_service import ImageService
 from engine.services.npc_turn_service import NpcTurnService
 from engine.storage import storage

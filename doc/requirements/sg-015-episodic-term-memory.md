@@ -12,8 +12,9 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 ## Annahmen
 - ETM-Episoden werden pro Spielinstanz in einer lokalen SQLite-Datei gespeichert.
 - Episoden werden pro `npc_id` und `scene_id` isoliert gespeichert.
-- State und Scene dürfen als Kontext für Episodenbildung und Antwortgenerierung dienen, sind aber keine primären Memory-Quellen.
+- State und Scene werden aktuell nicht als Kontext für Episodenbildung oder Antwortgenerierung genutzt.
 - ETM ist kein direkter Bildgenerierungs-Kontext.
+- Embeddings werden ueber einen OpenAI-kompatiblen Client erzeugt; das Modell ist ueber `MODEL_EMBEDDING` konfigurierbar.
 
 ## Offene Fragen
 - Keine
@@ -39,13 +40,14 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 **Akzeptanzkriterien:**
 - Jede gespeicherte Episode wird mit einem Embedding abgelegt.
 - Embeddings werden im `EtmService` erzeugt.
-- Für Embeddings wird kein externer Embedding-Provider verwendet.
-- Das Embedding-Service verwendet lokal das Modell `sentence-transformers/all-MiniLM-L6-v2`.
+- Das Embedding-Modell ist ueber `MODEL_EMBEDDING` konfigurierbar.
+- Das Embedding-Service nutzt einen OpenAI-kompatiblen Embedding-Endpunkt.
+- Wenn ein eigenes Embedding-Modell genutzt werden soll, kann ein OpenAI-kompatibler Gateway wie LiteLLM verwendet werden.
 - Die Speicherung erfolgt isoliert pro `npc_id` und `scene_id`.
 - Das Retrieval berechnet Cosine-Distanzen nativ in Python auf den gespeicherten Embeddings.
 - Episoden anderer NPCs oder Szenen werden nicht im selben Retrieval-Kontext verwendet.
 - Ein Reset der aktiven Spielinstanz entfernt auch die zugehörigen Episoden.
-- Für ETM ist keine externe Vector-DB-Abhängigkeit erforderlich.
+- Fuer ETM ist keine externe Vector-DB-Abhaengigkeit erforderlich.
 
 **Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`, `doc/adr/008-sqlite-als-etm-store.md`
 
@@ -73,18 +75,6 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 
 **Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
 
-### Begrenzung von Embedding-Requests
-**Typ:** Nicht-funktional
-**Beschreibung:** Das System muss die Berücksichtigung früherer Episoden sparsam und anlassbezogen halten.
-**Akzeptanzkriterien:**
-- Pro relevanter User-Nachricht wird die Berücksichtigung früherer Episoden höchstens einmal angestoßen.
-- Bei der Fortschreibung des aktuellen Charakterzustands oder der aktuellen Szene werden frühere Episoden nur einbezogen, wenn dies fachlich erforderlich ist.
-- Ohne vorhandene Episoden wird keine Berücksichtigung früherer Episoden ausgelöst.
-- Für die unmittelbare Bilderzeugung werden keine früheren Episoden einbezogen.
-- Leere oder rein technische Eingaben lösen keine Berücksichtigung früherer Episoden aus.
-
-**Referenzen:** `doc/adr/004-modellstrategie.md`, `doc/adr/008-sqlite-als-etm-store.md`
-
 ### Trennung von Initialkontext und ETM
 **Typ:** Randbedingung
 **Beschreibung:** Das System muss frühere Gesprächsepisoden fachlich von statischem Ausgangskontext trennen.
@@ -99,12 +89,11 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 
 ### Nutzung von State und Scene als Kontext
 **Typ:** Randbedingung
-**Beschreibung:** Das System darf den aktuellen Charakterzustand und die aktuelle Szene zur Einordnung von Episoden und Antworten nutzen, muss sie aber als abgeleitete Momentaufnahme behandeln.
+**Beschreibung:** Das System darf die Nutzung des aktuellen Charakterzustands und der aktuellen Szene als Kontext für ETM offenlassen.
 **Akzeptanzkriterien:**
-- Der aktuelle Charakterzustand darf helfen, die emotionale Einordnung einer Episode vorsichtig zu formulieren.
-- Die aktuelle Szene darf helfen, Ereignisse einer Situation einzuordnen.
+- Für Episodenbildung und ETM-Retrieval ist kein aktueller Charakterzustand erforderlich.
+- Für Episodenbildung und ETM-Retrieval ist keine aktuelle Szene erforderlich.
 - Inhalte aus aktuellem Charakterzustand oder aktueller Szene werden nicht ohne Bezug zu Gesprächsereignissen als dauerhafte Erinnerung festgehalten.
-- Relevante Episoden dürfen spätere Fortschreibungen von Charakterzustand und Szene beeinflussen.
 
 **Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
 
