@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from rapidfuzz import fuzz
+import math
 
 from engine.config import config
 from engine.client import client
@@ -23,8 +23,7 @@ class EtmService:
         return episode
 
     def load_relevant(self, query_text: str) -> str:
-        matches = self._query_etm_texts(query_text)
-        memories = self._deduplicate_memories(matches)
+        memories = self._query_etm_texts(query_text)
         if not memories:
             return EMPTY_ETM_TEXT
         return "\n".join(f"- {memory}" for memory in memories)
@@ -62,42 +61,49 @@ class EtmService:
         episodes = storage.npc.etm.get()
         if not episodes:
             return []
-        query_embedding = self._embed_texts(cleaned_query)
-        query_episode = Episode(
-            id="query",
-            text=cleaned_query,
-            embedding=query_embedding,
-            created_at="",
-        )
 
-        matches = self._collect_matches(episodes, query_episode)
+        query_embedding = self._embed_texts(cleaned_query)
+        matches = self._collect_matches(episodes, query_embedding)
         matches.sort(key=lambda item: item[0])
-        return [text for _, text in matches[:top_k]]
+        deduplicated = self._deduplicate_memories(matches)
+        return [episode.text for episode in deduplicated[:top_k]]
 
     def _collect_matches(
         self,
         episodes: list[Episode],
-        query_episode: Episode,
-    ) -> list[tuple[float, str]]:
-        matches: list[tuple[float, str]] = []
+        query_embedding: list[float],
+    ) -> list[tuple[float, Episode]]:
+        matches: list[tuple[float, Episode]] = []
         for episode in episodes:
-            if not episode.is_similar(query_episode):
+            distance = self._embedding_distance(episode.embedding, query_embedding)
+            if distance > config.ETM_RETRIEVAL_MAX_DISTANCE:
                 continue
-            matches.append((episode.distance_to(query_episode), episode.text))
+            matches.append((distance, episode))
         return matches
 
+    def _deduplicate_memories(self, matches: list[tuple[float, Episode]]) -> list[Episode]:
+        kept: list[Episode] = []
 
-
-    def _deduplicate_memories(self, matches: list[str]) -> list[str]:
-        kept_similarity_threshold = 92
-        kept: list[str] = []
-
-        for match in matches:
-            candidate = match.strip()
-            if not candidate:
+        for _, episode in matches:
+            if not episode.text.strip():
                 continue
-            if any(fuzz.ratio(candidate, item) > kept_similarity_threshold for item in kept):
+            if any(
+                self._embedding_distance(episode.embedding, kept_episode.embedding)
+                <= config.ETM_DEDUPLICATION_MAX_DISTANCE
+                for kept_episode in kept
+            ):
                 continue
-            kept.append(candidate)
+            kept.append(episode)
 
-        return kept[: config.ETM_RETRIEVAL_TOP_K]
+        return kept
+
+    def _embedding_distance(self, left: list[float], right: list[float]) -> float:
+        return 1.0 - self._cosine_similarity(left, right)
+
+    def _cosine_similarity(self, left: list[float], right: list[float]) -> float:
+        dot_product = sum(a * b for a, b in zip(left, right, strict=True))
+        left_norm = math.sqrt(sum(value * value for value in left))
+        right_norm = math.sqrt(sum(value * value for value in right))
+        if left_norm == 0.0 or right_norm == 0.0:
+            return 0.0
+        return dot_product / (left_norm * right_norm)

@@ -12,8 +12,6 @@ from engine.storage.nodes import NpcNode, SceneNode
 
 
 class ImageService:
-    def has_generated_image(self) -> bool:
-        return storage.npc.img_runtime.exists()
 
     def update_from_context(self, force: bool = False) -> None:
         npc = storage.npc
@@ -53,7 +51,7 @@ class ImageService:
         current_npc = storage.npc
         current_scene = storage.scene
         image_path = current_npc.img_runtime
-        prompt = self._scene_merge_prompt(current_scene.description)
+        prompt = self._scene_merge_prompt(self._initial_scene_description(current_scene))
 
         merged_img = client.merge_character_scene_img(
             prompt,
@@ -64,6 +62,23 @@ class ImageService:
         self._write_image(image_path, current_npc.backup_dir, merged_img)
         new_prompt = self._generate_update_prompt(npc=current_npc, scene=current_scene, old_prompt="")
         current_npc.image_prompt.save(new_prompt)
+
+    @staticmethod
+    def _initial_scene_description(scene: SceneNode) -> str:
+        parts: list[str] = [scene.scene_original.get().strip()]
+
+        npc_scene = scene.npc_scene_original
+        if npc_scene.is_file():
+            parts.append(npc_scene.get().strip())
+
+        runtime_scene = scene.scene_runtime
+        if runtime_scene.is_file():
+            parts.append(runtime_scene.get().strip())
+
+        merged = "\n\n".join(part for part in parts if part)
+        if merged:
+            return merged
+        return scene.description
 
     def revert(self) -> None:
         npc = storage.npc

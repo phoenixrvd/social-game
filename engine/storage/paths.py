@@ -58,6 +58,14 @@ class PathResolver:
             )
         )
 
+    def user_profile_candidates(self, npc_id: str, scene_id: str) -> tuple[Path, ...]:
+        """Return candidates for user profile with priority: runtime-active > overrides > default."""
+        filename = "user_profile.md"
+        runtime_path = self.runtime_npc_scene_dir(npc_id, scene_id) / filename
+        override_path = config.OVERRIDES_NPC_DIR / filename
+        default_path = config.NPC_DIR / filename
+        return self.ordered_unique_paths(runtime_path, override_path, default_path)
+
     def npc_scene_original_file(self, npc_id: str, scene_id: str, filename: str) -> Path:
         npc_base = config.NPC_DIR / npc_id
         npc_override_base = config.OVERRIDES_NPC_DIR / npc_id

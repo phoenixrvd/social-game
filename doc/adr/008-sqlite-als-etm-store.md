@@ -10,7 +10,7 @@ draft
 ## Kontext
 - SG-015 führt Episodic Term Memory (ETM) ein, das ältere STM-Gesprächsabschnitte als kompakte Episoden vektorisiert.
 - Der Chat-Flow lädt semantisch passende Episoden pro `npc_id` + `scene_id` in den Prompt.
-- Statischer Beziehungskontext wird separat über `relationship.md` in den initialen State eingebracht und nicht aus ETM-Treffern fortgeschrieben.
+- Statischer Beziehungskontext ist Bestandteil von `state.md`, wird über den State geladen und nicht aus ETM-Treffern fortgeschrieben.
 - Bildgenerierung lädt ETM nicht direkt, sondern nutzt davon abgeleitete State- oder Scene-Informationen.
 - Dafür wird ein lokaler ETM-Store benötigt, der ohne separaten Server betrieben werden kann und pro `npc_id` + `scene_id` klar isoliert ist.
 

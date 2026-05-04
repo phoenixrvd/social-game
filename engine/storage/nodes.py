@@ -93,22 +93,18 @@ class EtmNode:
     path: Path
 
     @property
-    def sqlite(self) -> Path:
-        return self.path
-
-    @property
     def _store(self) -> _EtmSqliteStore:
         return _EtmSqliteStore(self.path)
 
     def append(self, text: str, embedding: list[float]) -> str:
-        id = str(uuid4())
+        episode_id = str(uuid4())
         self._store.append(
-            id=id,
+            id=episode_id,
             text=text,
             embedding=embedding,
             created_at=datetime.now(timezone.utc).isoformat(),
         )
-        return id
+        return episode_id
 
     def delete(self, ids: list[str]) -> None:
         self._store.delete(ids)
@@ -191,17 +187,16 @@ class PromptsNode:
     def scene_update(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("scene_update.md"))
 
+    @property
+    def user_profile_update(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("user_profile_update.md"))
+
 
 @dataclass(frozen=True)
 class NpcNode(_StorageNodeBase):
-
     @property
     def base(self) -> Path:
         return config.NPC_DIR / self.npc_id
-
-    @property
-    def base_override(self) -> Path:
-        return config.OVERRIDES_NPC_DIR / self.npc_id
 
     @property
     def base_runtime(self) -> Path:
@@ -210,10 +205,6 @@ class NpcNode(_StorageNodeBase):
     @property
     def default_base(self) -> Path:
         return config.NPC_DIR / config.DEFAULT_NPC_ID
-
-    @property
-    def default_scene_base(self) -> Path:
-        return self.default_base / "scenes" / self.scene_id
 
     @property
     def description_original(self) -> TextFile:
@@ -255,17 +246,7 @@ class NpcNode(_StorageNodeBase):
         runtime_item = self.state_runtime
         if runtime_item.is_file():
             return runtime_item.get()
-        base_state = self.state_original.get().strip()
-        relationship = self.relationship.get().strip()
-        return "\n\n".join(part for part in (base_state, relationship) if part)
-
-    @property
-    def relationship_original(self) -> TextFile:
-        return TextFile(path_resolver.npc_original_file(self.npc_id, "relationship.md"))
-
-    @property
-    def relationship(self) -> TextFile:
-        return self.relationship_original
+        return self.state_original.get()
 
     @property
     def stm(self) -> StmNode:
@@ -301,23 +282,25 @@ class NpcNode(_StorageNodeBase):
     def orchestrator_dir(self) -> Path:
         return self.base_runtime / "orchestrator"
 
-    def orchestrator_text(self, filename: str) -> TextFile:
-        return TextFile(self.orchestrator_dir / filename)
-
     @property
     def image_prompt(self) -> TextFile:
         return TextFile(self.orchestrator_dir / "image_updater_update_prompt.txt")
 
+    @property
+    def user_profile_runtime(self) -> TextFile:
+        return TextFile(self.base_runtime / "user_profile.md")
+
+    @property
+    def user_profile(self) -> str:
+        preferred = path_resolver.preferred_file(path_resolver.user_profile_candidates(self.npc_id, self.scene_id))
+        return TextFile(preferred).get() or ""
+
+
 @dataclass(frozen=True)
 class SceneNode(_StorageNodeBase):
-
     @property
     def base(self) -> Path:
         return config.SCENE_DIR / self.scene_id
-
-    @property
-    def base_override(self) -> Path:
-        return config.OVERRIDES_SCENE_DIR / self.scene_id
 
     @property
     def base_runtime(self) -> Path:
@@ -361,4 +344,3 @@ class SceneNode(_StorageNodeBase):
     @property
     def img(self) -> Path:
         return self.img_original.get()
-

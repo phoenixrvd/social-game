@@ -14,7 +14,7 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 ## Datenpfade
 
 **Statische Quelldaten (versioniert):**
-- `npcs/<npc_id>/` → `description.md`, `state.md`, `relationship.md`, `system_prompt.md`, `character.yaml`, `img.png`
+- `npcs/<npc_id>/` → `description.md`, `state.md`, `system_prompt.md`, `character.yaml`, `img.png`
 - `scenes/<scene_id>/scene.md` + `npcs/<npc_id>/scenes/<scene_id>/scene.md` (werden beim Laden zusammengeführt)
 - `prompts/*.md` – alle LLM-Prompt-Templates mit `{{PLACEHOLDER}}`-Syntax
 

@@ -93,8 +93,10 @@ def _setup_web_app(
         (npc_dir / "character.yaml").write_text(f"name: {label}\n", encoding="utf-8")
         (npc_dir / "description.md").write_text(f"Charakterbeschreibung {npc_id}", encoding="utf-8")
         (npc_dir / "system_prompt.md").write_text("Bleib in Character", encoding="utf-8")
-        (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
-        (npc_dir / "relationship.md").write_text("kennt den Spieler", encoding="utf-8")
+        (npc_dir / "state.md").write_text(
+            "---\nmood: neutral\ntrust: 50\n---\n\n- kennt den Spieler",
+            encoding="utf-8",
+        )
         _make_test_png(npc_dir / "img.png")
 
     for scene_id, heading in (("office", "# Office"), ("cafe", "# Cafe")):
@@ -247,7 +249,6 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["npc_name"] == "Vika"
     assert payload["character_description"] == "Charakterbeschreibung vika"
     assert payload["character_data"] == {"name": "Vika"}
-    assert payload["relationship"] == "kennt den Spieler"
     assert payload["scene_id"] == "office"
     assert payload["image_url"] == "/api/image/current"
     assert payload["messages"][0]["content"] == "Hi"
@@ -268,19 +269,22 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
     assert len(payload["messages"]) == 3
     character_message = payload["messages"][0]
     scene_message = payload["messages"][1]
-    relationship_message = payload["messages"][2]
+    state_message = payload["messages"][2]
     assert character_message["id"] == "context-character"
     assert scene_message["id"] == "context-scene"
-    assert relationship_message["id"] == "context-relationship"
+    assert state_message["id"] == "context-state"
     assert character_message["role"] == "assistant"
     assert scene_message["role"] == "assistant"
-    assert relationship_message["role"] == "assistant"
+    assert state_message["role"] == "assistant"
     assert character_message["content"] == ""
     assert scene_message["content"] == ""
-    assert relationship_message["content"] == ""
+    assert state_message["content"] == ""
     assert "Charakterbeschreibung vika" in character_message["html"]
     assert "Office" in scene_message["html"]
-    assert "kennt den Spieler" in relationship_message["html"]
+    assert "kennt den Spieler" in state_message["html"]
+    assert "<pre>" in state_message["html"]
+    assert "mood: neutral" in state_message["html"]
+    assert "<li>kennt den Spieler</li>" in state_message["html"]
 
 
 def test_get_state_prefers_real_messages_over_context_fallback(tmp_path, monkeypatch):
@@ -308,10 +312,12 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
     assert len(payload["messages"]) == 3
     assert payload["messages"][0]["id"] == "context-character"
     assert payload["messages"][1]["id"] == "context-scene"
-    assert payload["messages"][2]["id"] == "context-relationship"
+    assert payload["messages"][2]["id"] == "context-state"
     assert "Charakterbeschreibung vika" in payload["messages"][0]["html"]
     assert "Office" in payload["messages"][1]["html"]
     assert "kennt den Spieler" in payload["messages"][2]["html"]
+    assert "<pre>" in payload["messages"][2]["html"]
+    assert "<li>kennt den Spieler</li>" in payload["messages"][2]["html"]
 
 
 def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeypatch):
@@ -900,6 +906,18 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
         {"type": "error", "detail": "Interner Serverfehler."},
     ]
     assert calls == []
+
+
+def test_update_user_profile_persists_active_runtime_profile_and_returns_it(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    scene_profile = config.DATA_NPC_DIR / "vika" / "office" / "user_profile.md"
+    (config.NPC_DIR / "user_profile.md").write_text("default", encoding="utf-8")
+
+    payload = web_app_module.update_user_profile(web_app_module.UserProfileRequest(content="global-profile"))
+
+    assert scene_profile.read_text(encoding="utf-8") == "global-profile"
+    assert payload["user_profile"] == "global-profile"
 
 
 def test_web_lifespan_uses_scheduler_directly(monkeypatch):

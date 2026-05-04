@@ -91,6 +91,58 @@ def test_query_etm_texts_filters_by_max_distance(monkeypatch, tmp_path) -> None:
     assert results == ["fern"]
 
 
+def test_query_etm_texts_deduplicates_semantically_by_embedding_distance(monkeypatch, tmp_path) -> None:
+    service = EtmService()
+    vectors = {
+        "frage": [1.0, 0.0],
+        "nahe1": [1.0, 0.0],
+        "nahe2": [0.999, 0.001],
+        "anders": [0.0, 1.0],
+    }
+    _set_embed_client(monkeypatch, lambda text: vectors[text])
+    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_MAX_DISTANCE", 1.0)
+    monkeypatch.setattr(etm_service_module.config, "ETM_DEDUPLICATION_MAX_DISTANCE", 0.01)
+    store_path = tmp_path / "etm.sqlite"
+    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
+    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
+
+    service._store_etm_text("nahe1")
+    service._store_etm_text("nahe2")
+    service._store_etm_text("anders")
+
+    results = service._query_etm_texts("frage")
+
+    assert results == ["nahe1", "anders"]
+
+
+def test_query_etm_texts_deduplication_uses_existing_embeddings_only(monkeypatch, tmp_path) -> None:
+    service = EtmService()
+    calls: list[str] = []
+    vectors = {
+        "frage": [1.0, 0.0],
+        "nahe1": [1.0, 0.0],
+        "nahe2": [0.999, 0.001],
+    }
+
+    def fake_embedding_fn(text: str) -> list[float]:
+        calls.append(text)
+        return vectors[text]
+
+    _set_embed_client(monkeypatch, fake_embedding_fn)
+    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_MAX_DISTANCE", 1.0)
+    monkeypatch.setattr(etm_service_module.config, "ETM_DEDUPLICATION_MAX_DISTANCE", 0.01)
+    store_path = tmp_path / "etm.sqlite"
+    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
+    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
+
+    service._store_etm_text("nahe1")
+    service._store_etm_text("nahe2")
+
+    service._query_etm_texts("frage")
+
+    assert calls == ["nahe1", "nahe2", "frage"]
+
+
 def test_etm_node_get_returns_episode_models(tmp_path) -> None:
     node = EtmNode(path=tmp_path / "etm.sqlite")
 
@@ -104,17 +156,6 @@ def test_etm_node_get_returns_episode_models(tmp_path) -> None:
     assert episodes[0].id
     assert episodes[0].created_at
 
-
-def test_episode_is_similar_uses_global_max_distance(monkeypatch) -> None:
-    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_MAX_DISTANCE", 0.25)
-
-    a = Episode(id="1", text="A", embedding=[1.0, 0.0], created_at="now")
-    b = Episode(id="2", text="B", embedding=[1.0, 0.0], created_at="now")
-    c = Episode(id="3", text="C", embedding=[0.0, 1.0], created_at="now")
-
-    assert a.distance_to(b) == 0.0
-    assert a.is_similar(b) is True
-    assert a.is_similar(c) is False
 
 
 def test_query_etm_texts_skips_blank_query_without_embedding_call(monkeypatch) -> None:

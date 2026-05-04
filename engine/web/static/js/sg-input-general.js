@@ -15,7 +15,7 @@ const THEME_DARK_ICON = /*html*/ `
   </svg>
 `
 
-const THEME_LIGHT_ICON = /*html*/`
+const THEME_LIGHT_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
   </svg>
@@ -52,6 +52,7 @@ class SocialGameInputGeneral extends HTMLElement {
     this._state = {
       disabled: false,
       theme: "dark",
+      userProfile: "",
     }
 
     this.$ = {}
@@ -68,15 +69,25 @@ class SocialGameInputGeneral extends HTMLElement {
           </button>
         </div>
       </section>
+      <section class="sg-settings-section">
+        <h3 class="sg-selector-legend">Dein Profile</h3>
+        <textarea
+          data-element="user-profile-textarea"
+          class="sg-settings-textarea chat-scrollbar"
+          placeholder="Was soll der NPC über dich wissen? (Name, Beruf, Geschlecht)"
+          aria-label="User Profile editieren"></textarea>
+      </section>
     `
 
     this.$ = {
       themeButton: this.querySelector('[data-action="toggle-theme"]'),
       resetButton: this.querySelector('[data-action="reset-active-npc"]'),
+      userProfileTextarea: this.querySelector('[data-element="user-profile-textarea"]'),
     }
 
     this.$.themeButton.addEventListener("click", this.handleThemeClick.bind(this))
     this.$.resetButton.addEventListener("click", this.handleResetClick.bind(this))
+    this.$.userProfileTextarea.addEventListener("blur", this.handleUserProfileBlur.bind(this))
     this.registerSubscriptions()
     this.syncFromStore()
     this.render()
@@ -86,6 +97,7 @@ class SocialGameInputGeneral extends HTMLElement {
     const state = appStore.getState()
     this._state.theme = state.theme === "light" ? "light" : "dark"
     this._state.disabled = Boolean(state.isSending) || Boolean(state.isSessionLoading)
+    this._state.userProfile = state.user_profile || ""
   }
 
   registerSubscriptions() {
@@ -93,6 +105,7 @@ class SocialGameInputGeneral extends HTMLElement {
       ["theme", this.onThemeChanged.bind(this)],
       ["isSending", this.onDisabledTriggerChanged.bind(this)],
       ["isSessionLoading", this.onDisabledTriggerChanged.bind(this)],
+      ["user_profile", this.onUserProfileChanged.bind(this)],
     ]
 
     for (const [key, listener] of subscriptions) {
@@ -125,6 +138,16 @@ class SocialGameInputGeneral extends HTMLElement {
     }
   }
 
+  onUserProfileChanged(userProfile) {
+    this._state.userProfile = userProfile || ""
+    this.render()
+  }
+
+  async handleUserProfileBlur() {
+    const content = this.$.userProfileTextarea.value.trim()
+    await appActions.updateUserProfile(content)
+  }
+
   render() {
     this.$.themeButton.innerHTML = renderActionContent(
       getThemeToggleIcon(this._state.theme),
@@ -133,6 +156,8 @@ class SocialGameInputGeneral extends HTMLElement {
     )
     this.$.themeButton.disabled = this._state.disabled
     this.$.resetButton.disabled = this._state.disabled
+    this.$.userProfileTextarea.value = this._state.userProfile
+    this.$.userProfileTextarea.disabled = this._state.disabled
   }
 }
 

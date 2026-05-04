@@ -30,7 +30,7 @@ Die ETM-Erstellung läuft batch-orientiert:
 
 LLM-Tool-/Function-Calling wird dafür nicht verwendet. Hintergrund: In diesem Modus liefert das Modell typischerweise keine normale Antwort. Ein Twice-Call-Pattern würde für dieselbe fachliche Wirkung unnötige Kosten und zusätzliche Komplexität verursachen.
 
-ETM schreibt keine `relationship.md`. Der statische Beziehungskontext bleibt getrennt und wird nur als Initialkontext für den State verwendet.
+ETM schreibt keine zustandsfremden Dateiartefakte. Der statische Beziehungskontext ist Bestandteil von `state.md`.
 
 ## Retrieval-Kontexte
 

@@ -37,7 +37,6 @@ def test_storage_loads_and_saves_scene(tmp_path, monkeypatch):
     (tmp_path / "npcs" / "vika" / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
     (tmp_path / "npcs" / "vika" / "character.yaml").write_text("name: Vika\n", encoding="utf-8")
     (tmp_path / "npcs" / "vika" / "state.md").write_text("mood: neutral", encoding="utf-8")
-    (tmp_path / "npcs" / "vika" / "relationship.md").write_text("", encoding="utf-8")
 
     assert storage.scene.scene_id == "default"
     assert "Default Szene" in storage.scene.description
@@ -64,7 +63,6 @@ def test_storage_keeps_runtime_data_separated_per_scene(tmp_path, monkeypatch):
     (npc_dir / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
     (npc_dir / "character.yaml").write_text("name: Vika\n", encoding="utf-8")
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
-    (npc_dir / "relationship.md").write_text("", encoding="utf-8")
 
     storage.npc.state_runtime.save("mood: office")
     _set_scene(tmp_path, current_scene, "cafe")
@@ -98,14 +96,13 @@ def test_storage_image_falls_back_to_npc_root_image(tmp_path, monkeypatch):
     (npc_dir / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
     (npc_dir / "character.yaml").write_text("name: Mira\n", encoding="utf-8")
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
-    (npc_dir / "relationship.md").write_text("", encoding="utf-8")
     (npc_dir / "scenes" / "departure" / "img.png").write_bytes(b"img")
     (npc_dir / "img.png").write_bytes(b"root-img")
 
     assert storage.npc.img.get() == npc_dir / "img.png"
 
 
-def test_storage_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatch):
+def test_storage_runtime_scene_and_state_bootstrap(tmp_path, monkeypatch):
     _patch_storage(monkeypatch, tmp_path, lambda: SimpleNamespace(npc_id="vika", scene_id="default"))
 
     (tmp_path / "scenes" / "default").mkdir(parents=True)
@@ -116,12 +113,10 @@ def test_storage_runtime_scene_and_relationship_bootstrap(tmp_path, monkeypatch)
     (npc_dir / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
     (npc_dir / "character.yaml").write_text("name: Vika\n", encoding="utf-8")
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
-    (npc_dir / "relationship.md").write_text("relationship-default", encoding="utf-8")
 
     storage.scene.scene_runtime.save("Runtime Szene")
     assert "Runtime Szene" in storage.scene.description
-    assert storage.npc.relationship.get() == "relationship-default"
-    assert storage.npc.state == "mood: neutral\n\nrelationship-default"
+    assert storage.npc.state == "mood: neutral"
 
 
 def test_storage_prefers_data_then_overrides_then_default(tmp_path, monkeypatch):
@@ -136,16 +131,12 @@ def test_storage_prefers_data_then_overrides_then_default(tmp_path, monkeypatch)
     (npc_dir / "system_prompt.md").write_text("SYSTEM", encoding="utf-8")
     (npc_dir / "character.yaml").write_text("name: Vika\n", encoding="utf-8")
     (npc_dir / "state.md").write_text("state-default", encoding="utf-8")
-    (npc_dir / "relationship.md").write_text("relationship-default", encoding="utf-8")
 
     overrides_npc = tmp_path / ".overrides" / "npcs" / "vika"
     overrides_npc.mkdir(parents=True)
     (overrides_npc / "state.md").write_text("state-override", encoding="utf-8")
-    (overrides_npc / "relationship.md").write_text("relationship-override", encoding="utf-8")
 
-    assert storage.npc.state == "state-override\n\nrelationship-override"
-    assert storage.npc.relationship.get() == "relationship-override"
+    assert storage.npc.state == "state-override"
 
     storage.npc.state_runtime.save("state-runtime")
     assert storage.npc.state == "state-runtime"
-    assert storage.npc.relationship.get() == "relationship-override"

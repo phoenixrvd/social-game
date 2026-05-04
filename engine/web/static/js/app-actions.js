@@ -63,7 +63,7 @@ function parseChatStreamEvent(line) {
 
 function waitForNextPaint() {
   return new Promise((resolve) => {
-    requestAnimationFrame(() => resolve())
+    requestAnimationFrame(resolve)
   })
 }
 
@@ -76,6 +76,7 @@ function mapStatePayload(payload = {}) {
     scenes: Array.isArray(payload.scenes) ? payload.scenes : [],
     npcId: typeof payload.npc_id === "string" ? payload.npc_id : null,
     sceneId: typeof payload.scene_id === "string" ? payload.scene_id : null,
+    user_profile: typeof payload.user_profile === "string" ? payload.user_profile : "",
   }
 }
 
@@ -455,6 +456,29 @@ function setImageError() {
   appStore.setState({ imageUrl: null, isImageExpanded: false })
 }
 
+async function updateUserProfile(content = "") {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading) {
+    return
+  }
+
+  try {
+    const response = await fetch("/api/user-profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ errorMessage: getErrorMessage(payload, "User Profile konnte nicht aktualisiert werden.") })
+      return
+    }
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+  } catch (error) {
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "User Profile konnte nicht aktualisiert werden." })
+  }
+}
+
 export const appActions = {
   loadInitialState,
   submitMessage,
@@ -468,4 +492,5 @@ export const appActions = {
   toggleSelectorPanel,
   toggleImageExpand,
   setImageError,
+  updateUserProfile,
 }

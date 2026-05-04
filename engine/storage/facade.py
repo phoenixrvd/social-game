@@ -28,10 +28,6 @@ class Storage:
 
 
     @property
-    def overrides_root(self) -> Path:
-        return config.OVERRIDES_DIR
-
-    @property
     def prompts(self) -> PromptsNode:
         return PromptsNode()
 

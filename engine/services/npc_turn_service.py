@@ -10,7 +10,6 @@ from openai.types.chat import (
     ChatCompletionSystemMessageParam,
 )
 
-from engine.config import config
 from engine.storage import storage
 from engine.storage.models import Message
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
@@ -49,13 +48,20 @@ class NpcTurnService:
         character_yaml = yaml.dump(character, allow_unicode=True, sort_keys=False).strip()
         base_prompt = storage.prompts.chat_general_rules.get().strip()
 
+        role_text = storage.npc.system_prompt_original.get().strip() or EMPTY_PLACEHOLDER
+        character_description = storage.npc.description.get().strip() or EMPTY_PLACEHOLDER
+        scene_description = storage.scene.description.strip() or EMPTY_PLACEHOLDER
+        state_text = storage.npc.state.strip() or EMPTY_PLACEHOLDER
+        user_profile = storage.npc.user_profile.strip() or EMPTY_PLACEHOLDER
+
         replacements = {
-            "{{ROLE}}": storage.npc.system_prompt_original.get().strip() or EMPTY_PLACEHOLDER,
+            "{{ROLE}}": role_text,
             "{{CHARACTER_DATA}}": character_yaml or EMPTY_PLACEHOLDER,
-            "{{CHARACTER_DESCRIPTION}}": storage.npc.description.get().strip() or EMPTY_PLACEHOLDER,
-            "{{CURRENT_SCENE}}": storage.scene.description.strip() or EMPTY_PLACEHOLDER,
-            "{{CURRENT_STATE}}": storage.npc.state.strip() or EMPTY_PLACEHOLDER,
+            "{{CHARACTER_DESCRIPTION}}": character_description,
+            "{{CURRENT_SCENE}}": scene_description,
+            "{{CURRENT_STATE}}": state_text,
             "{{CURRENT_ETM}}": retrieved_memories,
+            "{{USER_PROFILE}}": user_profile,
         }
 
         prompt = base_prompt
@@ -95,11 +101,9 @@ class NpcTurnService:
 
     @staticmethod
     def _build_retrieval_query(player_input: str) -> str:
-        messages = storage.npc.stm.get()
-        context_block = ""
-        if messages:
-            context_block = storage.npc.stm.text_short_latest
         player_line = f"user: {player_input.strip()}"
-        if not context_block:
+        messages = storage.npc.stm.get()
+        if not messages:
             return player_line
-        return "\n".join([context_block, player_line])
+
+        return "\n".join([storage.npc.stm.text_short_latest, player_line])

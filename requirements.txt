@@ -5,10 +5,10 @@ fastapi
 uvicorn
 httpx
 markdown
-rapidfuzz
 Pillow
 pydantic
 pydantic-settings
 pyyaml
 requests
 typer
+rapidfuzz

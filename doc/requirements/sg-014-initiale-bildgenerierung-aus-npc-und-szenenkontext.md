@@ -44,11 +44,14 @@ SG-014 beschreibt Auslösung, fachliche Eingaben, Sicherung, Ablage und die Grun
 
 ### Einbezug der zusammengeführten Szenenbeschreibung
 **Typ:** Funktional  
-**Beschreibung:** Das System muss für die erstmalige Bilderzeugung die vollständige Szenenbeschreibung des aktiven NPC in der aktiven Szene verwenden. Diese umfasst die allgemeine Szene und die NPC-spezifische Ergänzung.  
+**Beschreibung:** Das System muss für die erstmalige Bilderzeugung die vollständige Szenenbeschreibung des aktiven NPC in der aktiven Szene verwenden. Diese umfasst die allgemeine Szene und die NPC-spezifische Ergänzung; vorhandene Runtime-Szeneninfos dürfen diese Grundlage nur ergänzen.  
 **Akzeptanzkriterien:**
 - Die verwendete Szenenbeschreibung entspricht der vollständigen Beschreibung des aktiven NPC in der aktiven Szene.
 - Die verwendete Szenenbeschreibung enthält die allgemeine Beschreibung der aktiven Szene.
 - Die verwendete Szenenbeschreibung enthält die NPC-spezifische Ergänzung für die aktive Szene.
+- Existiert unter `.data/npcs/<npc_id>/<scene_id>/img.png` noch kein aktives Laufzeitbild, aber unter `.data/npcs/<npc_id>/<scene_id>/scene.md` bereits eine Runtime-Szenendatei, bleibt die vollständige zusammengeführte Szenenbeschreibung die Basis der erstmaligen Bilderzeugung.
+- Vorhandene Runtime-Szeneninfos ergänzen diese Basis nur.
+- Vorhandene Runtime-Szeneninfos ersetzen weder die allgemeine Szenenbeschreibung noch die NPC-spezifische Ergänzung.
 
 **Referenzen:** `doc/requirements/sg-006-dynamischer-scene-state.md`, `prompts/image_scene.md`
 

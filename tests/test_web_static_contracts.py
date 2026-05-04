@@ -131,7 +131,7 @@ def test_sg_chat_routes_context_messages_to_context_component():
     assert '"sg-context-message"' in source
     assert '"context-character"' in source
     assert '"context-scene"' in source
-    assert '"context-relationship"' in source
+    assert '"context-state"' in source
 
 
 def test_sg_input_keeps_focus_stable_while_sending():

@@ -33,7 +33,7 @@ def test_enqueue_all_marks_every_job_pending():
 
     scheduler.enqueue_all()
 
-    assert scheduler._pending_jobs == {"etm", "state", "scene", "image"}
+    assert scheduler._pending_jobs == {"etm", "state", "scene", "image", "user_profile"}
 
 
 def test_clear_pending_jobs_removes_all_pending_entries():

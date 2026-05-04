@@ -18,11 +18,10 @@ SG-012 beschreibt nur Platzierung, Bearbeitungsablauf und Betriebsverhalten dies
 
 ### Platzierung der editierbaren Bereiche
 **Typ:** Funktional  
-**Beschreibung:** Das System muss Scene-State und Charakterzustand direkt im Context-Bereich sowie den statischen Beziehungs-Initialkontext im Panel unter der Session-Auswahl bearbeitbar bereitstellen.  
+**Beschreibung:** Das System muss Scene-State und Charakterzustand direkt im Context-Bereich bearbeitbar bereitstellen.  
 **Akzeptanzkriterien:**
 - Die Bearbeitung von Scene-State erfolgt im Context-Bereich.
 - Die Bearbeitung des Charakterzustands erfolgt im Context-Bereich.
-- Die Bearbeitung von `relationship.md` erfolgt im Panel unter der Session-Auswahl.
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/adr/007-ui-architektur-mit-web-components.md`
 
 ### Icon-Aktionen für die Bearbeitung
@@ -56,7 +55,7 @@ SG-012 beschreibt nur Platzierung, Bearbeitungsablauf und Betriebsverhalten dies
 **Beschreibung:** Das System muss den Bearbeitungsmodus des betroffenen Bereichs nach erfolgreichem Speichern beenden.  
 **Akzeptanzkriterien:**
 - Nach erfolgreichem Speichern ist der betroffene Bereich nicht mehr im Bearbeitungsmodus.
-**Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
+**Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
 
 ### Ende des Bearbeitungsmodus nach Revert
 **Typ:** Funktional  
@@ -71,7 +70,7 @@ SG-012 beschreibt nur Platzierung, Bearbeitungsablauf und Betriebsverhalten dies
 **Beschreibung:** Das System muss bei Fehlern den zuletzt erfolgreich gespeicherten Zustand wahren.  
 **Akzeptanzkriterien:**
 - Bei einem Fehler bleiben bereits erfolgreich gespeicherte Zustände unverändert.
-**Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
+**Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
 
 ### Generische Fehlerhinweise
 **Typ:** Funktional  

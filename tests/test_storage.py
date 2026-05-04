@@ -16,7 +16,6 @@ def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
     monkeypatch.setattr(config, "DATA_DIR", tmp_path / ".data")
-    monkeypatch.setattr(config, "OVERRIDES_DIR", tmp_path / ".overrides")
     monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
     monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -46,10 +45,8 @@ def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
 
 def test_storage_base_paths_exposed(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA_DIR", tmp_path / ".data")
-    monkeypatch.setattr(config, "OVERRIDES_DIR", tmp_path / ".overrides")
 
     assert storage.data == tmp_path / ".data"
-    assert storage.overrides_root == tmp_path / ".overrides"
 
 
 def test_prompt_image_refresh_prefers_override_over_default(tmp_path, monkeypatch):

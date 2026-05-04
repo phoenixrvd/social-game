@@ -8,7 +8,7 @@ state: implemented
 Das System bildet den Zustand von Charakteren dynamisch ab.  
 Der fachliche Fokus liegt auf veränderbaren Eigenschaften im Spielverlauf.
 Charakterzustand ist eine abgeleitete Sicht auf aktuelle und erinnerte Ereignisse.
-Der initiale Zustandskontext kann zusätzlich aus einer statischen Beziehungsgrundlage stammen.
+Der Beziehungskontext ist Bestandteil von `state.md`.
 
 ## Annahmen
 - Keine
@@ -39,12 +39,11 @@ Der initiale Zustandskontext kann zusätzlich aus einer statischen Beziehungsgru
 
 ### Zustand im Spielkontext
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss Charakterzustände innerhalb des fachlichen Spielkontexts führen.  
+**Beschreibung:** Das System muss Charakterzustände innerhalb des fachlichen Spielkontexts ausschließlich über `state.md` führen.  
 **Akzeptanzkriterien:**
 - Zustandsinformationen bleiben auf spielrelevante Merkmale begrenzt.
 - Zustände werden nicht losgelöst von der laufenden Handlung interpretiert.
-- Wenn noch keine Laufzeit-`state.md` für die aktive Spielinstanz existiert, wird `npcs/<npc_id>/relationship.md` an den initial geladenen Zustand angehängt.
-- Sobald eine Laufzeit-`state.md` existiert, ersetzt diese den initial kombinierten Zustand vollständig.
-- `relationship.md` ist nur initialer Kontext und kein separates Laufzeitgedächtnis.
+- Für die aktive Spielinstanz wird ausschließlich `state.md` als Zustandsquelle verwendet.
+- Ein separater Beziehungskontext außerhalb von `state.md` wird fachlich nicht verwendet.
 
-**Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-015-episodic-term-memory.md`
+**Referenzen:** `doc/requirements/sg-015-episodic-term-memory.md`

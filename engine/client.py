@@ -4,6 +4,7 @@ import json
 from io import BytesIO
 from typing import Any, Callable, Iterable, Iterator, TypeVar, cast
 
+import httpx
 import openai
 import requests
 from openai import OpenAI
@@ -11,6 +12,7 @@ from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
 
 from engine.config import config
+from engine.logger import logger
 
 NamedImage = tuple[str, bytes]
 T = TypeVar("T")
@@ -208,34 +210,59 @@ class Client:
         try:
             return action(self._text_client())
         except openai.OpenAIError as exc:
-            raise RuntimeError(self._llm_error_message(exc)) from exc
+            error_msg = self._llm_error_message(exc)
+            logger.error(f"LLM Request Error (Base URL: {config.MODEL_BASE_URL}): {type(exc).__name__} - {error_msg}")
+            raise RuntimeError(error_msg) from exc
 
     def _stream_chunks(self, stream: Iterable[object]) -> Iterator[str]:
         try:
             for chunk in stream:
-                delta = self._extract_delta(chunk)
-                if delta is None:
+                content = self._chunk_content(chunk)
+                if content is None:
                     continue
-                content = self._extract_delta_content(delta)
-                if content is not None:
-                    yield content
+                yield content
         except openai.OpenAIError as exc:
             raise RuntimeError(self._llm_error_message(exc)) from exc
 
+    def _chunk_content(self, chunk: object) -> str | None:
+        delta = self._extract_delta(chunk)
+        if delta is None:
+            return None
+        return self._extract_delta_content(delta)
+
     def _llm_error_message(self, exc: openai.OpenAIError) -> str:
         if isinstance(exc, openai.APIStatusError):
-            code: str = getattr(exc, "code", None) or ""
-            detail = self._status_error_message(exc.status_code, code)
-            if detail is not None:
-                return detail
-            normalized = normalize_provider_error_detail(str(exc))
-            return normalized or f"Fehler ({exc.status_code})"
-
+            return self._api_status_error_message(exc)
         if isinstance(exc, openai.APITimeoutError):
             return "Anfrage hat zu lange gedauert (Timeout)."
         if isinstance(exc, openai.APIConnectionError):
-            return "OpenAI nicht erreichbar - Verbindung pruefen."
+            return self._api_connection_error_message(exc)
         return normalize_provider_error_detail(str(exc))
+
+    def _api_status_error_message(self, exc: openai.APIStatusError) -> str:
+        code: str = getattr(exc, "code", None) or ""
+        detail = self._status_error_message(exc.status_code, code)
+        if detail is not None:
+            return detail
+        normalized = normalize_provider_error_detail(str(exc))
+        return normalized or f"Fehler ({exc.status_code})"
+
+    def _api_connection_error_message(self, exc: openai.APIConnectionError) -> str:
+        error_text = str(exc).strip()
+        base_url = config.MODEL_BASE_URL
+        if self._is_ssl_certificate_error(error_text):
+            ssl_hint = " [Tipp: SG_MODEL_VERIFY_SSL=false in .env für selbstsignierte Zertifikate]"
+            return f"SSL-Zertifikatsfehler zu {base_url}{ssl_hint}"
+
+        original_error = getattr(exc, "__cause__", None)
+        cause_msg = f" ({type(original_error).__name__})" if original_error else ""
+        if error_text:
+            return f"Verbindungsfehler zu {base_url}{cause_msg}: {error_text}"
+        return f"Verbindungsfehler zu {base_url}{cause_msg} - konfiguration oder netzwerk pruefen."
+
+    @staticmethod
+    def _is_ssl_certificate_error(error_text: str) -> bool:
+        return "CERTIFICATE_VERIFY_FAILED" in error_text or "SSL" in error_text
 
     @staticmethod
     def _status_error_message(status: int, code: str) -> str | None:
@@ -271,7 +298,12 @@ class Client:
 
     @staticmethod
     def _text_client() -> OpenAI:
-        return OpenAI(api_key=config.MODEL_API_KEY, base_url=config.MODEL_BASE_URL)
+        http_client = httpx.Client(verify=config.MODEL_VERIFY_SSL)
+        return OpenAI(
+            api_key=config.MODEL_API_KEY,
+            base_url=config.MODEL_BASE_URL,
+            http_client=http_client,
+        )
 
 
 def normalize_provider_error_detail(text: str) -> str:

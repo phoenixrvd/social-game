@@ -28,7 +28,7 @@ def _build_npc(**overrides) -> SimpleNamespace:
         description="Beschreibung",
         system_prompt="Bleib in Character",
         state="mood: neutral",
-        relationship="Kennt den Spieler",
+        user_profile="",
         scene=SimpleNamespace(scene_id="office", description="Im Buero", img=Path(__file__)),
         img=Path(__file__),
         stm=FakeStmView(),
@@ -58,6 +58,7 @@ def _patch_storage(monkeypatch, npc_data: SimpleNamespace, template: str) -> Non
         system_prompt_original = FakeText(npc_data.system_prompt)
         description = FakeText(npc_data.description)
         state = npc_data.state
+        user_profile = npc_data.user_profile
 
     class FakeStorage:
         prompts = FakePrompts()
@@ -89,7 +90,7 @@ def test_build_chat_messages_uses_prompt_template_with_placeholders(monkeypatch)
 
 
 def test_build_chat_messages_uses_leer_for_empty_values(monkeypatch):
-    npc = _build_npc(system_prompt="   ", description="", state=" ", relationship=" ", character={})
+    npc = _build_npc(system_prompt="   ", description="", state=" ", character={})
     _patch_storage(monkeypatch, npc, "{{ROLE}} | {{CHARACTER_DATA}} | {{CHARACTER_DESCRIPTION}} | {{CURRENT_STATE}} | {{CURRENT_ETM}}")
 
     service = NpcTurnService()

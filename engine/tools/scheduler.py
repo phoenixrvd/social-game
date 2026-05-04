@@ -10,6 +10,7 @@ from engine.tools.etm_job import EtmJob
 from engine.tools.image_job import ImageJob
 from engine.tools.scene_job import SceneJob
 from engine.tools.state_job import StateJob
+from engine.tools.user_profile_job import UserProfileJob
 
 
 class Scheduler:
@@ -20,15 +21,13 @@ class Scheduler:
             "state": StateJob(),
             "scene": SceneJob(),
             "image": ImageJob(),
+            "user_profile": UserProfileJob(),
         }
         self._pending_jobs: set[str] = set()
         self._last_execution_time: dict[str, float] = {}
 
     def enqueue(self, job_name: str) -> None:
-        if job_name not in self._jobs:
-            return
-
-        if job_name in self._pending_jobs:
+        if job_name not in self._jobs or job_name in self._pending_jobs:
             return
 
         self._pending_jobs.add(job_name)
@@ -39,9 +38,6 @@ class Scheduler:
             self.enqueue(job_name)
 
     def clear_pending_jobs(self) -> None:
-        if not self._pending_jobs:
-            return
-
         self._pending_jobs.clear()
 
     def execute_pending_jobs(self) -> None:
@@ -51,8 +47,8 @@ class Scheduler:
             if job_name not in self._pending_jobs:
                 continue
 
-            last_execution_time = self._last_execution_time.get(job_name, 0)
-            if now - last_execution_time < job.rate_limit_seconds:
+            last_run_at = self._last_execution_time.get(job_name, 0)
+            if now - last_run_at < job.rate_limit_seconds:
                 continue
 
             logger.info("Job wird gestartet: %s", job_name)

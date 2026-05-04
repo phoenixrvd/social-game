@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import shutil
 from contextlib import asynccontextmanager
+from html import escape
 from io import BytesIO
 from pathlib import Path
-from typing import Any, AsyncIterator, cast
+from typing import Any, AsyncIterator
 
 import markdown
+import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import Response, StreamingResponse
@@ -25,6 +27,8 @@ from engine.storage.models import Message
 from engine.tools.scheduler import Scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
+STATIC_ASSET_PREFIXES = ("/css/", "/js/", "/icons/")
+VISIBLE_CHAT_ROLES = {"user", "assistant"}
 
 _webp_cache: dict[str, dict[str, Any]] = {}
 _scheduler: Scheduler | None = None
@@ -34,8 +38,7 @@ def _get_scheduler() -> Scheduler:
     global _scheduler
     if _scheduler is None:
         _scheduler = Scheduler()
-
-    return cast(Scheduler, _scheduler)
+    return _scheduler
 
 
 def _problem_response(status_code: int, detail: Any) -> Response:
@@ -51,9 +54,7 @@ def _stream_event(event_type: str, **payload: Any) -> str:
 
 
 def _stream_error_event(exc: Exception) -> str:
-    detail = user_visible_provider_error_detail(exc)
-    if detail is None:
-        return _stream_event("error", detail="Interner Serverfehler.")
+    detail = user_visible_provider_error_detail(exc) or "Interner Serverfehler."
     return _stream_event("error", detail=detail)
 
 
@@ -131,7 +132,7 @@ async def _add_web_headers(request: Request, call_next):
     response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
     response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
 
-    if not request.url.path.startswith(("/css/", "/js/", "/icons/")):
+    if not request.url.path.startswith(STATIC_ASSET_PREFIXES):
         return response
 
     if config.WEB_DEBUG:
@@ -176,16 +177,50 @@ class SessionRequest(BaseModel):
     scene_id: str | None = None
 
 
+class UserProfileRequest(BaseModel):
+    content: str
+
+
 def _render_markdown_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["extra", "sane_lists"])
 
 
+def _parse_state_meta(state_text: str) -> tuple[dict[str, Any], str]:
+    parser = markdown.Markdown(extensions=["meta", "extra", "sane_lists"])
+    body_html = parser.convert(state_text)
+    raw_meta = getattr(parser, "Meta", {})
+    meta_values: dict[str, Any] = {}
+    for key, values in raw_meta.items():
+        raw_value = "\n".join(values).strip() if isinstance(values, list) else str(values).strip()
+        if not raw_value:
+            continue
+        meta_values[key] = yaml.safe_load(raw_value)
+    return meta_values, body_html
+
+
+def _dump_state_meta_yaml(meta_values: dict[str, Any]) -> str:
+    if not meta_values:
+        return ""
+    return yaml.safe_dump(meta_values, sort_keys=False, allow_unicode=True).strip()
+
+
+def _render_state_to_html(state_text: str) -> str:
+    meta_values, body_html = _parse_state_meta(state_text)
+    html_parts = [_render_markdown_to_html("# Beziehung")]
+    meta_yaml = _dump_state_meta_yaml(meta_values)
+    if meta_yaml:
+        html_parts.append(f"<pre>{escape(meta_yaml)}</pre>")
+    if body_html.strip():
+        html_parts.append(body_html)
+    return "\n".join(html_parts)
+
+
 def _visible_messages(npc, scene) -> list[dict[str, Any]]:
-    visible = [m.model_dump() for m in npc.stm.get() if m.role in {"user", "assistant"}]
+    visible = [m.model_dump() for m in npc.stm.get() if m.role in VISIBLE_CHAT_ROLES]
     if visible:
         return visible
     character_description = npc.description.get()
-    relationship_description = npc.relationship.get().strip()
+    npc_state = npc.state.strip()
     scene_description = scene.description.strip() or "Keine Szenenbeschreibung verfügbar."
     context_messages = [
         {
@@ -202,24 +237,20 @@ def _visible_messages(npc, scene) -> list[dict[str, Any]]:
             "html": _render_markdown_to_html(scene_description),
             "timestamp_utc": ""
         },
+        {
+            "id": "context-state",
+            "role": "assistant",
+            "content": "",
+            "html": _render_state_to_html(npc_state),
+            "timestamp_utc": "",
+        },
     ]
-
-    if relationship_description:
-        context_messages.append(
-            {
-                "id": "context-relationship",
-                "role": "assistant",
-                "content": "",
-                "html": _render_markdown_to_html(f"# Beziehung\n\n{relationship_description}"),
-                "timestamp_utc": "",
-            }
-        )
 
     return context_messages
 
 
 def _visible_stm_messages(npc) -> list[Message]:
-    return [m for m in npc.stm.get() if m.role in {"user", "assistant"}]
+    return [m for m in npc.stm.get() if m.role in VISIBLE_CHAT_ROLES]
 
 
 def _messages_signature(npc) -> str:
@@ -269,7 +300,6 @@ def _list_npcs() -> list[dict[str, str]]:
 
 
 def _list_scenes() -> list[dict[str, str]]:
-
     return [
         {
             "id": scene_view.scene_id,
@@ -296,7 +326,6 @@ def _state_payload() -> dict[str, Any]:
         "npc_id": npc.npc_id,
         "npc_name": str(character.get("name", npc.npc_id)).strip() or npc.npc_id,
         "character_description": npc.description.get(),
-        "relationship": npc.relationship.get(),
         "scene_id": scene.scene_id,
         "scene_description": scene.description,
         "character_data": character,
@@ -306,6 +335,7 @@ def _state_payload() -> dict[str, Any]:
         "image_signature": _image_signature(npc),
         "npcs": _list_npcs(),
         "scenes": _list_scenes(),
+        "user_profile": npc.user_profile,
     }
 
 
@@ -322,6 +352,12 @@ def update_session(request: SessionRequest) -> dict[str, Any]:
         storage.session.npc_id = request.npc_id
     if request.scene_id is not None:
         storage.session.scene_id = request.scene_id
+    return _state_payload()
+
+
+@app.put("/api/user-profile")
+def update_user_profile(request: UserProfileRequest) -> dict[str, Any]:
+    storage.npc.user_profile_runtime.save(request.content)
     return _state_payload()
 
 
@@ -363,8 +399,8 @@ def chat_stream(request: ChatRequest) -> Any:
             npc_turn.finalize_turn(message_text, reply)
             _get_scheduler().enqueue_all()
             yield _stream_event("done")
-        except Exception:
-            yield _stream_event("error", detail="Interner Serverfehler.")
+        except Exception as exc:
+            yield _stream_error_event(exc)
 
     return StreamingResponse(event_stream(), media_type="application/x-ndjson")
 

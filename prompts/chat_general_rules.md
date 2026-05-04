@@ -130,6 +130,10 @@ Bei Bedrohung:
 
 {{CHARACTER_DESCRIPTION}}
 
+## User Profile
+
+{{USER_PROFILE}}
+
 ## Current Scene
 
 {{CURRENT_SCENE}}
