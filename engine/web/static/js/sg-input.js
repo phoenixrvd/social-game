@@ -2,7 +2,10 @@ import { appStore } from "./app-store.js"
 import "./sg-input-context.js"
 import "./sg-input-image.js"
 import "./sg-input-general.js"
+import "./sg-input-scene-creator.js"
 import "./sg-input-composer.js"
+
+const SCENE_CREATOR_OPTION_ID = "scene-creator"
 
 function renderTab(optionId, title, isSelected = false) {
   const selected = isSelected ? "true" : "false"
@@ -23,14 +26,28 @@ function renderTab(optionId, title, isSelected = false) {
   `
 }
 
-function renderTabPanel(optionId, contentMarkup) {
+function renderTabPanel(optionId, contentMarkup, isHidden = false, withAriaLabelledBy = true) {
+  const labelledBy = withAriaLabelledBy ? `aria-labelledby="sg-options-tab-${optionId}"` : ""
+  if (isHidden) {
+    return /*html*/ `
+      <div
+        id="sg-options-tab-panel-${optionId}"
+        class="sg-options-tab-panel sg-hidden"
+        role="tabpanel"
+        data-option="${optionId}"
+        ${labelledBy}
+      >
+        ${contentMarkup}
+      </div>
+    `
+  }
   return /*html*/ `
     <div
       id="sg-options-tab-panel-${optionId}"
       class="sg-options-tab-panel"
       role="tabpanel"
       data-option="${optionId}"
-      aria-labelledby="sg-options-tab-${optionId}"
+      ${labelledBy}
     >
       ${contentMarkup}
     </div>
@@ -46,9 +63,13 @@ function renderOptionsTabs() {
   const tabsMarkup = tabs.map((tab) => renderTab(tab.optionId, tab.title, Boolean(tab.isSelected))).join("")
   const panelsMarkup = tabs.map((tab) => renderTabPanel(tab.optionId, tab.contentMarkup)).join("")
 
+  // Scene creator panel without own tab button
+  const sceneCreatorPanel = renderTabPanel(SCENE_CREATOR_OPTION_ID, "<sg-input-scene-creator></sg-input-scene-creator>", true, false)
+
   return /*html*/ `
     <div class="sg-options-tab-panels">
       ${panelsMarkup}
+      ${sceneCreatorPanel}
     </div>
     <div class="sg-options-tabs-list" role="tablist" aria-label="Optionen">
       ${tabsMarkup}
@@ -86,10 +107,12 @@ class SocialGameInput extends HTMLElement {
       form: this.querySelector(".sg-chat-form"),
       optionsPanel: this.querySelector(".sg-options-panel"),
       composer: this.querySelector("sg-input-composer"),
+      sceneCreatorPanel: this.querySelector(`.sg-options-tab-panel[data-option="${SCENE_CREATOR_OPTION_ID}"]`),
       tabEntries: this.collectTabEntries(),
     }
 
     this.registerTabEvents()
+    this.registerSceneCreatorEvents()
     this.registerOutsideClickClose()
     this.syncTabState()
     this.registerSubscriptions()
@@ -118,6 +141,11 @@ class SocialGameInput extends HTMLElement {
     for (const entry of this.$.tabEntries) {
       entry.tab.addEventListener("click", this.onTabClick.bind(this))
     }
+  }
+
+  registerSceneCreatorEvents() {
+    this.$.optionsPanel.addEventListener("createSceneRequested", this.onCreateSceneRequested.bind(this))
+    this.$.optionsPanel.addEventListener("sceneCreateFinished", this.onSceneCreateFinished.bind(this))
   }
 
   registerOutsideClickClose() {
@@ -152,19 +180,37 @@ class SocialGameInput extends HTMLElement {
     this.syncTabState()
   }
 
-  syncTabState() {
-    for (const entry of this.$.tabEntries) {
-      const isSelected = entry.optionId === this._activeTabOption
-      this.setTabEntrySelectedState(entry, isSelected)
+  onCreateSceneRequested() {
+    if (this._activeTabOption === SCENE_CREATOR_OPTION_ID) {
+      return
     }
+    this._activeTabOption = SCENE_CREATOR_OPTION_ID
+    this.syncTabState()
+  }
+
+  onSceneCreateFinished() {
+    this._activeTabOption = "context"
+    this.syncTabState()
+  }
+
+  syncTabState() {
+    const isSceneCreatorActive = this._activeTabOption === SCENE_CREATOR_OPTION_ID
+    for (const entry of this.$.tabEntries) {
+      const isSelected = !isSceneCreatorActive && entry.optionId === this._activeTabOption
+      this.setTabEntrySelectedState(entry, isSelected)
+      if (entry.panel) {
+        entry.panel.hidden = isSceneCreatorActive || !isSelected
+      }
+    }
+
+    if (!this.$.sceneCreatorPanel) return
+    this.$.sceneCreatorPanel.classList.toggle("sg-hidden", !isSceneCreatorActive)
+    this.$.sceneCreatorPanel.hidden = !isSceneCreatorActive
   }
 
   setTabEntrySelectedState(entry, isSelected) {
     entry.tab.setAttribute("aria-selected", isSelected ? "true" : "false")
     entry.tab.tabIndex = isSelected ? 0 : -1
-    if (entry.panel) {
-      entry.panel.hidden = !isSelected
-    }
   }
 
   syncFromStore() {

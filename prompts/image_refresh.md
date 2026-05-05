@@ -5,10 +5,10 @@
 - [0] identity.png → defines the character's identity (face, hair, skin, body)
 - [1] current.png → defines the current scene and context
 
-## Identity (LOCK)
+{{IMAGE_STYLE_RULES}}
+
 Use identity.png for face, hair, skin, body.
 Clothing from identity.png is LAST fallback only.
-Change never the identity features (body proportions and older/younger appearance)
 
 ## Clothing Priority (STRICT)
 1. If BASE PROMPT defines clothing → USE IT

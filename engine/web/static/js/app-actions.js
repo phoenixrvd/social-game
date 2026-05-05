@@ -76,7 +76,10 @@ function mapStatePayload(payload = {}) {
     scenes: Array.isArray(payload.scenes) ? payload.scenes : [],
     npcId: typeof payload.npc_id === "string" ? payload.npc_id : null,
     sceneId: typeof payload.scene_id === "string" ? payload.scene_id : null,
+    defaultSceneId: typeof payload.default_scene_id === "string" ? payload.default_scene_id : null,
+    isDynamicScene: Boolean(payload.is_dynamic_scene),
     user_profile: typeof payload.user_profile === "string" ? payload.user_profile : "",
+    imageAutogenerate: typeof payload.image_autogenerate === "boolean" ? payload.image_autogenerate : true,
   }
 }
 
@@ -319,6 +322,34 @@ async function resetNpc() {
   }
 }
 
+async function resetNpcAndDynamicScene() {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || !state.isDynamicScene) {
+    return false
+  }
+
+  if (!window.confirm("Soll der Verlauf und die erstellte Scene wirklich gelöscht werden?")) {
+    return false
+  }
+
+  appStore.setState({ isSessionLoading: true })
+  try {
+    const response = await fetch("/api/scene/reset-active", { method: "DELETE" })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf und Scene konnten nicht gelöscht werden.") })
+      return false
+    }
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+    return true
+  } catch (error) {
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf und Scene konnten nicht gelöscht werden." })
+    return false
+  } finally {
+    appStore.setState({ isSessionLoading: false })
+  }
+}
+
 function handleChatStreamEvent(event, assistantId, assistantTimestamp) {
   if (!event || typeof event.type !== "string") {
     throw new Error("Ungültige Streaming-Antwort vom Server.")
@@ -456,8 +487,66 @@ function setImageError() {
   appStore.setState({ imageUrl: null, isImageExpanded: false })
 }
 
-async function updateUserProfile(content = "") {
+async function toggleImageAutogenerate() {
+   const nextValue = !appStore.getState().imageAutogenerate
+   try {
+     const response = await fetch("/api/session", {
+       method: "PUT",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ image_autogenerate: nextValue }),
+     })
+     const payload = await readJsonResponse(response)
+     if (!response.ok) {
+       appStore.setState({ errorMessage: getErrorMessage(payload, "Einstellung konnte nicht gespeichert werden.") })
+       return
+     }
+     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+   } catch (error) {
+     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Einstellung konnte nicht gespeichert werden." })
+   }
+ }
+
+async function createScene(payload = {}) {
   const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isSceneCreatorLoading) {
+    return
+  }
+
+  const sceneDescription = typeof payload.scene_description === "string" ? payload.scene_description.trim() : ""
+
+  if (!sceneDescription) {
+    appStore.setState({ sceneCreatorError: "Szenenbeschreibung ist erforderlich." })
+    return
+  }
+
+  appStore.setState({ isSceneCreatorLoading: true, sceneCreatorError: "" })
+  await waitForNextPaint()
+
+  try {
+    const response = await fetch("/api/scenes/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene_description: sceneDescription,
+      }),
+    })
+    const responsePayload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ sceneCreatorError: getErrorMessage(responsePayload, "Szene konnte nicht erstellt werden.") })
+      return
+    }
+
+    appStore.setState({ ...mapStatePayload(responsePayload), errorMessage: "" })
+  } catch (error) {
+    appStore.setState({
+      sceneCreatorError: error instanceof Error ? error.message : "Szene konnte nicht erstellt werden.",
+    })
+  } finally {
+    appStore.setState({ isSceneCreatorLoading: false })
+  }
+}
+
+ async function updateUserProfile(content = "") {
   if (state.isSending || state.isSessionLoading) {
     return
   }
@@ -480,17 +569,20 @@ async function updateUserProfile(content = "") {
 }
 
 export const appActions = {
-  loadInitialState,
-  submitMessage,
-  updateSession,
-  refreshImage,
-  revertImage,
-  deleteImage,
-  resetNpc,
-  setInput,
-  toggleTheme,
-  toggleSelectorPanel,
-  toggleImageExpand,
-  setImageError,
-  updateUserProfile,
-}
+   loadInitialState,
+   submitMessage,
+   updateSession,
+   refreshImage,
+   revertImage,
+   deleteImage,
+   resetNpc,
+   resetNpcAndDynamicScene,
+   setInput,
+   toggleTheme,
+   toggleSelectorPanel,
+   toggleImageExpand,
+   setImageError,
+   updateUserProfile,
+   toggleImageAutogenerate,
+   createScene,
+ }

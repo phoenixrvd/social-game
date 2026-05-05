@@ -33,6 +33,7 @@ class Episode(BaseModel):
 class SessionState(BaseModel):
     npc_id: str = Field(default_factory=lambda: config.DEFAULT_NPC_ID)
     scene_id: str = Field(default_factory=lambda: config.DEFAULT_SCENE_ID)
+    image_autogenerate: bool = True
 
     @field_validator("npc_id")
     @classmethod

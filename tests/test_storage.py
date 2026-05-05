@@ -66,6 +66,40 @@ def test_prompt_image_refresh_prefers_override_over_default(tmp_path, monkeypatc
     assert item.get() == "override"
 
 
+def test_prompt_image_style_rules_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "image_style_rules.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default-style", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "image_style_rules.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override-style", encoding="utf-8")
+
+    item = storage.prompts.image_style_rules
+    assert item.path == override_prompt
+    assert item.get() == "override-style"
+
+
+def test_prompt_npc_scene_create_text_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "npc_scene_create_text.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default-npc-scene", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "npc_scene_create_text.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override-npc-scene", encoding="utf-8")
+
+    item = storage.prompts.npc_scene_create_text
+    assert item.path == override_prompt
+    assert item.get() == "override-npc-scene"
+
+
 def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
     monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")

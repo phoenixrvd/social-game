@@ -38,7 +38,8 @@ def test_update_from_context_without_runtime_image_uses_initial_scene_descriptio
             scene_runtime=TextFile(runtime_scene_path),
         ),
         prompts=SimpleNamespace(
-            image_scene=SimpleNamespace(get=lambda: "SCENE\n{{SCENE_DESCRIPTION}}"),
+            image_scene=SimpleNamespace(get=lambda: "{{IMAGE_STYLE_RULES}}\nSCENE\n{{SCENE_DESCRIPTION}}"),
+            image_style_rules=SimpleNamespace(get=lambda: "STYLE"),
         ),
     )
 
@@ -60,6 +61,7 @@ def test_update_from_context_without_runtime_image_uses_initial_scene_descriptio
     assert "Basis: cremefarbenes Top" in captured["prompt"]
     assert "NPC: helles Cardigan" in captured["prompt"]
     assert "Runtime: sitzt seitlich am Tisch" in captured["prompt"]
+    assert "STYLE" in captured["prompt"]
     assert fake_storage.npc.img_runtime.get().read_bytes() == b"generated"
     assert saved_prompt["value"] == "seed"
 

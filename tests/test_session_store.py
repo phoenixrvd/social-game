@@ -25,6 +25,7 @@ def test_session_storage_saves_and_exposes_direct_session_ids(tmp_path, monkeypa
     assert yaml.safe_load((tmp_path / "session.yaml").read_text(encoding="utf-8")) == {
         "npc_id": "mira",
         "scene_id": "cafe",
+        "image_autogenerate": True,
     }
 
 

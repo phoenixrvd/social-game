@@ -250,6 +250,8 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["character_description"] == "Charakterbeschreibung vika"
     assert payload["character_data"] == {"name": "Vika"}
     assert payload["scene_id"] == "office"
+    assert payload["default_scene_id"] == config.DEFAULT_SCENE_ID
+    assert payload["is_dynamic_scene"] is False
     assert payload["image_url"] == "/api/image/current"
     assert payload["messages"][0]["content"] == "Hi"
     npc_options = {(entry["id"], entry["label"]) for entry in payload["npcs"]}
@@ -361,7 +363,7 @@ def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
         raise AssertionError("Expected HTTPException")
     except HTTPException as exc:
         assert exc.status_code == 422
-        assert exc.detail == "Mindestens npc_id oder scene_id muss gesetzt sein."
+        assert exc.detail == "Mindestens npc_id, scene_id oder image_autogenerate muss gesetzt sein."
 
 
 def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
@@ -384,6 +386,61 @@ def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
     assert calls == ["clear_pending_jobs"]
     assert payload["npc_id"] == "vika"
     assert payload["scene_id"] == "office"
+
+
+def test_reset_active_dynamic_scene_deletes_scene_data_and_resets_session(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    dynamic_scene_id = "created_rooftop"
+    _write_session(tmp_path, "vika", dynamic_scene_id)
+
+    dynamic_scene_dir = tmp_path / ".overrides" / "scenes" / dynamic_scene_id
+    dynamic_scene_dir.mkdir(parents=True)
+    (dynamic_scene_dir / "scene.md").write_text("# Rooftop", encoding="utf-8")
+    _make_test_png(dynamic_scene_dir / "img.png")
+
+    active_runtime = tmp_path / ".data" / "npcs" / "vika" / dynamic_scene_id
+    other_runtime = tmp_path / ".data" / "npcs" / "mira" / dynamic_scene_id
+    active_runtime.mkdir(parents=True, exist_ok=True)
+    other_runtime.mkdir(parents=True, exist_ok=True)
+    (active_runtime / "stm.jsonl").write_text("{}\n", encoding="utf-8")
+
+    active_npc_scene_override = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / dynamic_scene_id
+    other_npc_scene_override = tmp_path / ".overrides" / "npcs" / "mira" / "scenes" / dynamic_scene_id
+    active_npc_scene_override.mkdir(parents=True, exist_ok=True)
+    other_npc_scene_override.mkdir(parents=True, exist_ok=True)
+    (active_npc_scene_override / "scene.md").write_text("vika", encoding="utf-8")
+    (other_npc_scene_override / "scene.md").write_text("mira", encoding="utf-8")
+
+    calls: list[str] = []
+
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            calls.append("clear_pending_jobs")
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    payload = web_app_module.reset_active_dynamic_scene_with_npc_runtime_data()
+
+    assert calls == ["clear_pending_jobs"]
+    assert not dynamic_scene_dir.exists()
+    assert not active_runtime.exists()
+    assert other_runtime.exists()
+    assert not active_npc_scene_override.exists()
+    assert not other_npc_scene_override.exists()
+    assert storage.session.scene_id == config.DEFAULT_SCENE_ID
+    assert payload["scene_id"] == config.DEFAULT_SCENE_ID
+    assert payload["is_dynamic_scene"] is False
+
+
+def test_reset_active_dynamic_scene_rejects_default_scene(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    try:
+        web_app_module.reset_active_dynamic_scene_with_npc_runtime_data()
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Aktive Scene ist keine erstellte Scene."
 
 
 def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
@@ -966,4 +1023,119 @@ def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
     _run_async(run_lifespan())
     _run_async(run_lifespan())
     assert events == ["init", "start", "inside", "stop", "start", "inside", "stop"]
+
+
+def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    created_scenes = []
+
+    def fake_scene_create(self, short_description: str):
+        created_scenes.append(short_description)
+        scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        (scene_dir / "scene.md").write_text("# Test Scene\n", encoding="utf-8")
+        (scene_dir / "img.png").write_bytes(b"test-image-data")
+        return scene_dir
+
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "Ein neues Café",
+            }
+        )
+
+    assert response.status_code == 200
+    assert created_scenes == ["Ein neues Café"]
+    assert storage.session.scene_id == "test_scene"
+
+
+def test_create_scene_accepts_payload_without_npc_scene_description(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    created_scenes = []
+
+    def fake_scene_create(self, short_description: str):
+        created_scenes.append(short_description)
+        scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        (scene_dir / "scene.md").write_text("# Test Scene\n", encoding="utf-8")
+        (scene_dir / "img.png").write_bytes(b"test-image-data")
+        return scene_dir
+
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "Ein neues Café",
+            }
+        )
+
+    assert response.status_code == 200
+    assert created_scenes == ["Ein neues Café"]
+
+
+def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    import engine.web.app as web_app_module
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "   ",
+            }
+        )
+
+    assert response.status_code == 400
+    assert "darf nicht leer sein" in response.json()["detail"].lower()
 

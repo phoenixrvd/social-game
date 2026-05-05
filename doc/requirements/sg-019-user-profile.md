@@ -91,7 +91,7 @@ Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf
 **Typ:** Funktional  
 **Beschreibung:** Das System muss das User Profile im Bereich „Allgemein“ der Web-GUI editierbar bereitstellen.  
 **Akzeptanzkriterien:**
-- Der Bereich ist sichtbar mit der Überschrift `Dein Profile`.
+- Der Bereich ist sichtbar mit der Überschrift `Dein Profil`.
 - Das User Profile ist über ein Textarea-Feld editierbar.
 - Änderungen werden gespeichert, sobald das Feld den Fokus verliert.
 - Die Speicherung erfolgt unter `.data/npcs/<npc_id>/<scene_id>/user_profile.md`.

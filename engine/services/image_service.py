@@ -40,6 +40,7 @@ class ImageService:
         current_scene = scene or storage.scene
         return (
             storage.prompts.image_build.get().strip()
+            .replace("{{IMAGE_STYLE_RULES}}", storage.prompts.image_style_rules.get().strip())
             .replace("{{NPC_DESCRIPTION}}", current_npc.description.get())
             .replace("{{CURRENT_IMAGE_PROMPT}}", old_prompt or "(none)")
             .replace("{{CURRENT_STATE}}", current_npc.state)
@@ -133,6 +134,7 @@ class ImageService:
         return (
             storage.prompts.image_scene.get()
             .strip()
+            .replace("{{IMAGE_STYLE_RULES}}", storage.prompts.image_style_rules.get().strip())
             .replace("{{SCENE_DESCRIPTION}}", scene_description)
         )
 
@@ -145,6 +147,7 @@ class ImageService:
         return (
             storage.prompts.image_refresh.get()
             .strip()
+            .replace("{{IMAGE_STYLE_RULES}}", storage.prompts.image_style_rules.get().strip())
             .replace("{{BASE_PROMPT}}", base_prompt.strip())
         )
 

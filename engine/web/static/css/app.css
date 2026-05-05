@@ -375,6 +375,12 @@ sg-message.sg-message-enter {
   border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 78%, transparent);
 }
 
+.sg-options-tab-panels {
+  max-height: 60vh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .sg-options-tabs-list {
   display: flex;
   gap: 0.45rem;
@@ -408,11 +414,9 @@ sg-message.sg-message-enter {
   color: var(--text-main);
 }
 
-.sg-options-tab:focus {
-  outline: none;
-}
-
-.sg-options-tab:focus-visible {
+.sg-options-tab:focus-visible,
+.sg-context-gallery-item:focus-visible,
+.sg-settings-action:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
   outline-offset: 2px;
 }
@@ -428,10 +432,6 @@ sg-message.sg-message-enter {
   border-radius: 10px;
   padding: 0;
   background: transparent;
-}
-
-.sg-options-tab-panel::-webkit-scrollbar {
-  display: none;
 }
 
 .sg-options-tab-panel[hidden] {
@@ -458,7 +458,6 @@ sg-message.sg-message-enter {
   padding-top: 0.75rem;
   border-top: 1px solid color-mix(in srgb, var(--border-soft) 75%, transparent);
 }
-
 
 .sg-settings-heading {
   margin: 0 0 0.55rem;
@@ -509,7 +508,8 @@ sg-message.sg-message-enter {
 }
 
 .sg-session-select:focus,
-.sg-chat-textarea:focus {
+.sg-chat-textarea:focus,
+.sg-settings-textarea:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
   outline: none;
@@ -520,7 +520,6 @@ sg-message.sg-message-enter {
   padding: 0.6rem 0.72rem;
 }
 
-/* Context Gallery */
 sg-context-gallery {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -588,11 +587,6 @@ sg-context-gallery {
 .sg-context-gallery-item:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
   background: color-mix(in srgb, var(--primary) 6%, var(--bg-input));
-}
-
-.sg-context-gallery-item:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
-  outline-offset: 2px;
 }
 
 .sg-context-gallery-item--selected {
@@ -743,11 +737,6 @@ sg-context-gallery {
   outline: none;
 }
 
-.sg-settings-action:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
-  outline-offset: 2px;
-}
-
 .sg-settings-action-icon {
   display: inline-flex;
   flex: none;
@@ -780,6 +769,15 @@ sg-context-gallery {
 
 .sg-settings-action-danger .sg-settings-action-text {
   color: color-mix(in srgb, var(--text-error) 82%, var(--text-muted));
+}
+
+.sg-settings-action-inactive .sg-settings-action-icon {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.sg-settings-action-inactive .sg-settings-action-title {
+  color: var(--text-muted);
 }
 
 .sg-options-toggle {
@@ -1062,10 +1060,6 @@ sg-thumbnail .sg-image-overlay-main {
   background: var(--bg-panel-soft);
 }
 
-.sg-input-component .sg-chat-form.is-options-open .sg-composer-row {
-  display: none;
-}
-
 .sg-input-component .sg-chat-form.is-options-open .sg-options-panel {
   border-bottom: none;
   margin-bottom: 0;
@@ -1121,15 +1115,78 @@ sg-thumbnail .sg-image-overlay-main {
   resize: vertical;
 }
 
-.sg-settings-textarea:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
-  outline: none;
-}
-
 .sg-settings-textarea:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+sg-input-scene-creator .sg-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+sg-input-scene-creator .sg-form-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.sg-form-hint-small {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
+
+.sg-scene-creator-error {
+  padding: 0.5rem;
+  margin-bottom: 0.75rem;
+  background: color-mix(in srgb, var(--text-error) 12%, transparent);
+  border: 1px solid var(--text-error);
+  border-radius: 6px;
+  color: var(--text-error);
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.sg-scene-creator-error.sg-hidden {
+  display: none;
+}
+
+sg-input-scene-creator .sg-scene-create-action {
+  justify-content: center;
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.sg-context-gallery-create-scene {
+  border-color: color-mix(in srgb, var(--border-strong) 50%, transparent);
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-input));
+  flex-direction: column;
+}
+
+.sg-context-gallery-create-scene:hover:not(:disabled) {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, var(--bg-input));
+}
+
+.sg-context-gallery-create-scene-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  flex: 1;
+  min-height: 70px;
+  background: none;
+  color: var(--primary);
+}
+
+.sg-context-gallery-create-scene-image svg {
+  width: 24px;
+  height: 24px;
 }
 
 @media (min-width: 1024px) {
@@ -1203,9 +1260,6 @@ sg-thumbnail .sg-image-overlay-main {
     min-height: 2rem;
   }
 
-  .sg-session-row {
-    grid-template-columns: 1fr;
-  }
 
   .sg-composer-thumb {
     display: none;

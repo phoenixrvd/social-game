@@ -151,22 +151,7 @@ Wenn etwas nicht explizit beschrieben ist:
 - keine Erzählform
 - keine Wiederholungen
 
-## Perspective Constraint (strict)
-
-- first-person perspective
-- viewer is completely invisible
-
-STRICT:
-- no hands
-- no arms
-- no legs
-- no feet
-- no body parts
-- no shadow of the viewer
-- no reflection of the viewer (mirror, glass, water, metal, etc.)
-
-camera behaves like a floating camera
-framing excludes any part of the viewer completely
+{{IMAGE_STYLE_RULES}}
 
 ## Output Rules
 

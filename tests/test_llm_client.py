@@ -8,6 +8,12 @@ import engine.client as llm_client_module
 import openai
 from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
+from pydantic import BaseModel
+
+
+class SceneCreateDraft(BaseModel):
+    location_name: str
+    scene_description: str
 
 
 def _assert_jpeg_size(image_bytes: bytes, expected_size: tuple[int, int]) -> None:
@@ -112,6 +118,49 @@ def test_refresh_img_uses_compressed_named_files(monkeypatch):
     _assert_jpeg_size(images[1][1], (1280, 960))
 
 
+def test_generate_scene_img_delegates_to_scene_request(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeSceneImageClient:
+        @staticmethod
+        def _request_scene_image(prompt):
+            captured["prompt"] = prompt
+            return b"scene"
+
+    monkeypatch.setattr(llm_client_module.client, "_request_scene_image", FakeSceneImageClient()._request_scene_image)
+
+    result = llm_client_module.client.generate_scene_img("  scene prompt  ")
+    assert result == b"scene"
+    assert captured["prompt"] == "scene prompt"
+
+
+def test_generate_scene_img_rejects_blank_prompt():
+    try:
+        llm_client_module.client.generate_scene_img("   ")
+        assert False, "Should have raised ValueError"
+    except ValueError as exc:
+        assert "Bildprompt darf nicht leer sein." in str(exc)
+
+
+def test_request_scene_image_uses_portrait_size(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        class images:
+            @staticmethod
+            def generate(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(data=[SimpleNamespace(b64_json="aW1n")])
+
+    client = llm_client_module.Client()
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
+
+    result = client._request_scene_image("scene prompt")
+
+    assert result == b"img"
+    assert captured["size"] == "1024x1536"
+
+
 
 def test_run_prompt_small_uses_small_client(monkeypatch):
     captured: dict[str, object] = {}
@@ -128,6 +177,33 @@ def test_run_prompt_small_uses_small_client(monkeypatch):
     msg = cast(list[dict[str, str]], captured["messages"])[0]
     assert msg["role"] == "user"
     assert msg["content"] == "Hi"
+
+
+def test_run_prompt_small_model_uses_model_request(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeSmallModelClient:
+        @staticmethod
+        def _request_small_model(messages, response_model):
+            captured["messages"] = messages
+            captured["response_model"] = response_model
+            return SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
+
+    monkeypatch.setattr(llm_client_module.client, "_request_small_model", FakeSmallModelClient()._request_small_model)
+    result = llm_client_module.client.run_prompt_small_model("Hi", SceneCreateDraft)
+    assert result == SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
+    msg = cast(list[dict[str, str]], captured["messages"])[0]
+    assert msg["role"] == "user"
+    assert msg["content"] == "Hi"
+    assert captured["response_model"] == SceneCreateDraft
+
+
+def test_run_prompt_small_model_rejects_blank_prompt():
+    try:
+        llm_client_module.client.run_prompt_small_model("   ", SceneCreateDraft)
+        assert False, "Should have raised ValueError"
+    except ValueError as exc:
+        assert "Modell-Prompt darf nicht leer sein." in str(exc)
 
 
 def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
@@ -197,6 +273,57 @@ def test_openai_small_request_sends_no_tools(monkeypatch):
 
     assert client._request_small([]) == "ok"
     assert "tools" not in captured
+
+
+def test_openai_small_model_request_uses_parse_api(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        class beta:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def parse(**kwargs):
+                        captured.update(kwargs)
+                        return SimpleNamespace(
+                            choices=[
+                                SimpleNamespace(
+                                    message=SimpleNamespace(
+                                        parsed=SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
+                                    )
+                                )
+                            ]
+                        )
+
+    client = llm_client_module.Client()
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
+
+    result = client._request_small_model([], response_model=SceneCreateDraft)
+
+    assert result == SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
+    assert captured["response_format"] == SceneCreateDraft
+
+
+def test_openai_small_model_request_reports_refusal(monkeypatch):
+    class FakeClient:
+        class beta:
+            class chat:
+                class completions:
+                    @staticmethod
+                    def parse(**kwargs):
+                        _ = kwargs
+                        return SimpleNamespace(
+                            choices=[SimpleNamespace(message=SimpleNamespace(parsed=None, refusal="not allowed"))]
+                        )
+
+    client = llm_client_module.Client()
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
+
+    try:
+        client._request_small_model([], response_model=SceneCreateDraft)
+        assert False, "Should have raised RuntimeError"
+    except RuntimeError as exc:
+        assert str(exc) == "LLM-Antwort wurde abgelehnt: not allowed"
 
 
 def test_embed_texts_uses_configured_embedding_model(monkeypatch):

@@ -167,6 +167,7 @@ def test_sg_input_split_components_handle_actions_directly_without_parent_events
     assert "appActions.deleteImage()" in image_source
     assert "appActions.toggleTheme()" in general_source
     assert "appActions.resetNpc()" in general_source
+    assert "appActions.resetNpcAndDynamicScene()" in general_source
     assert "appActions.toggleSelectorPanel()" in composer_source
 
 
@@ -248,6 +249,7 @@ def test_confirm_actions_return_execution_status_for_cancel_safe_ui_flow():
     assert "async function revertImage()" in source
     assert "async function deleteImage()" in source
     assert "async function resetNpc()" in source
+    assert "async function resetNpcAndDynamicScene()" in source
     assert "return false" in source
     assert "return true" in source
 
@@ -261,7 +263,17 @@ def test_confirm_actions_close_selector_panel_only_when_action_executed():
     assert "if (hasExecuted && appStore.getState().isSelectorPanelOpen)" in image_source
 
     assert "const hasExecuted = await appActions.resetNpc()" in general_source
+    assert "const hasExecuted = await appActions.resetNpcAndDynamicScene()" in general_source
     assert "if (hasExecuted && appStore.getState().isSelectorPanelOpen)" in general_source
+
+
+def test_dynamic_scene_reset_button_is_wired_and_conditionally_visible():
+    source = _read("engine/web/static/js/sg-input-general.js")
+
+    assert 'data-action="reset-active-scene"' in source
+    assert '["isDynamicScene", this.onDynamicSceneChanged.bind(this)]' in source
+    assert "Standard-Scene kann nicht gelöscht werden" in source
+    assert "this.$.resetSceneButton.disabled = this._state.disabled || !this._state.isDynamicScene" in source
 
 
 def test_sg_input_subscribes_directly_to_store_keys():

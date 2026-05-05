@@ -5,8 +5,8 @@ state: implemented
 # SG-018: Neue NPCs und Scenes mit Default-Fallbacks
 
 ## Kontext
-Das Projekt verwaltet versionierte Standard-Datensätze unter `npcs/` und `scenes/` sowie lokale Ergänzungen unter `.overrides/`.
-SG-018 ergänzt `doc/requirements/sg-016-overrides-verzeichnis.md` um konfigurierbare Default-Fallbacks und das Anlegen neuer NPCs und Scenes im Override-Verzeichnis.
+Das Projekt verwaltet Standardinhalte für NPCs und Scenes sowie lokale Ergänzungen.
+SG-018 ergänzt `doc/requirements/sg-016-overrides-verzeichnis.md` um Regeln für neue NPCs und Scenes, NPC-szenenspezifische Ergänzungen und Default-Fallbacks.
 
 ## Annahmen
 - Keine
@@ -18,84 +18,155 @@ SG-018 ergänzt `doc/requirements/sg-016-overrides-verzeichnis.md` um konfigurie
 
 ### Weitere NPCs anlegen
 **Typ:** Funktional  
-**Beschreibung:** Das System muss weitere NPCs im Override-Verzeichnis anlegbar machen.  
+**Beschreibung:** Das System muss neue NPCs als lokale Ergänzungen anlegbar machen.  
 **Akzeptanzkriterien:**
-- Ein neuer NPC kann über ein CLI-Kommando angelegt werden.
-- Das CLI-Kommando legt einen neuen NPC unter `.overrides/npcs/<npc_id>/` an.
+- Ein neuer NPC kann über den vorgesehenen Befehl angelegt werden.
+- Für den neuen NPC wird ein eigener lokaler Bereich angelegt.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
 
 ### Initiale Dateien für neue NPCs
 **Typ:** Funktional  
-**Beschreibung:** Das System muss beim Anlegen eines NPC unter `.overrides/npcs/<npc_id>/` nur die initial erforderlichen Override-Inhalte erzeugen.  
+**Beschreibung:** Das System muss beim Anlegen eines NPC nur die initial erforderlichen Inhalte erzeugen.  
 **Akzeptanzkriterien:**
-- Nach dem Anlegen existiert `.overrides/npcs/<npc_id>/`.
-- `.overrides/npcs/<npc_id>/character.yaml` wird erzeugt.
-- Weitere NPC-Dateien werden beim Anlegen nicht erzeugt.
+- Nach dem Anlegen existiert ein eigener lokaler Bereich für den NPC.
+- Dabei wird nur die initial erforderliche Charakterbeschreibung erzeugt.
+- Weitere NPC-Inhalte werden dabei nicht automatisch erzeugt.
 **Referenzen:** `npcs/`, `doc/requirements/sg-016-overrides-verzeichnis.md`
 
 ### Weitere Scenes anlegen
 **Typ:** Funktional  
-**Beschreibung:** Das System muss weitere Scenes im Override-Verzeichnis anlegbar machen.  
+**Beschreibung:** Das System muss neue Scenes über `scene-create` als lokale Ergänzungen anlegbar machen.  
 **Akzeptanzkriterien:**
-- Eine neue Scene kann über ein CLI-Kommando angelegt werden.
-- Das CLI-Kommando legt eine neue Scene unter `.overrides/scenes/<scene_id>/` an.
+- Eine neue Scene kann über `scene-create` angelegt werden.
+- Für die neue Scene wird ein eigener lokaler Bereich angelegt.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
 
-### Initiale Dateien für neue Scenes
+### Kurzbeschreibung als einzige Eingabe für neue Scenes
 **Typ:** Funktional  
-**Beschreibung:** Das System muss beim Anlegen einer Scene unter `.overrides/scenes/<scene_id>/` keine zusätzlichen Scene-Dateien erzeugen.  
+**Beschreibung:** Das System muss `scene-create` auf eine Kurzbeschreibung als einzige Eingabe beschränken.  
 **Akzeptanzkriterien:**
-- Nach dem Anlegen existiert `.overrides/scenes/<scene_id>/`.
-- `scene.md` wird beim Anlegen nicht erzeugt.
-- `img.png` wird beim Anlegen nicht erzeugt.
-**Referenzen:** `scenes/`, `doc/requirements/sg-016-overrides-verzeichnis.md`
+- `scene-create` nimmt eine Kurzbeschreibung entgegen.
+- Für das Anlegen einer neuen Scene sind keine weiteren Eingaben erforderlich.
+**Referenzen:** Keine
+
+### LLM-basierte Ableitung des finalen Scene-Namens
+**Typ:** Funktional  
+**Beschreibung:** Das System muss den finalen Scene-Namen aus der Kurzbeschreibung ableiten.  
+**Akzeptanzkriterien:**
+- Der finale Scene-Name wird aus der Kurzbeschreibung abgeleitet.
+- Der finale Scene-Name wird nicht direkt als Eingabe übergeben.
+**Referenzen:** `prompts/scene_create_text.md`
+
+### LLM-Erzeugung der Szenenbeschreibung für neue Scenes
+**Typ:** Funktional  
+**Beschreibung:** Das System muss beim Anlegen einer neuen Scene eine Szenenbeschreibung erzeugen.  
+**Akzeptanzkriterien:**
+- Nach erfolgreichem Anlegen liegt für die neue Scene eine Szenenbeschreibung vor.
+- Die Szenenbeschreibung wird aus der Kurzbeschreibung erzeugt.
+**Referenzen:** `prompts/scene_create_text.md`
+
+### Automatische Erzeugung des Szenenbilds für neue Scenes
+**Typ:** Funktional  
+**Beschreibung:** Das System muss beim Anlegen einer neuen Scene ein Szenenbild automatisch bereitstellen.  
+**Akzeptanzkriterien:**
+- Nach erfolgreichem Anlegen liegt für die neue Scene ein Szenenbild vor.
+- Das Szenenbild wird ohne zusätzlichen manuellen Schritt bereitgestellt.
+**Referenzen:** `prompts/scene_create_image.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
+
+### Personenfreie Darstellung im automatisch erzeugten Szenenbild
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss das automatisch erzeugte Szenenbild auf die Location ohne Personen beschränken.  
+**Akzeptanzkriterien:**
+- Das erzeugte Bild zeigt die Location.
+- Das erzeugte Bild zeigt keine Personen.
+**Referenzen:** `prompts/scene_create_image.md`
+
+### Gleiches Hochkantformat für automatisch erzeugte Szenenbilder
+**Typ:** Nicht-funktional  
+**Beschreibung:** Das System muss automatisch erzeugte Szenenbilder im gleichen Hochkantformat und in der gleichen Auflösung wie die übrigen Bilder bereitstellen.  
+**Akzeptanzkriterien:**
+- Das erzeugte Bild verwendet dasselbe Hochkantformat wie die anderen Bilder.
+- Das erzeugte Bild verwendet dieselbe Auflösung wie die anderen Bilder.
+**Referenzen:** `prompts/scene_create_image.md`
+
+### Fortlaufendes Suffix bei bestehendem Scene-Zielverzeichnis
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss bei einer bereits verwendeten abgeleiteten Scene-ID automatisch eine freie Scene-ID bilden.  
+**Akzeptanzkriterien:**
+- Existiert der vorgesehene lokale Bereich bereits, wird dieser nicht überschrieben.
+- Stattdessen wird eine freie Scene-ID mit fortlaufendem numerischem Suffix verwendet.
+**Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
+
+### Weitere NPC-Scene-Ergänzungen anlegen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss über `npc-scene-create` für den aktiven NPC in der aktiven Scene eine NPC-szenenspezifische Ergänzung aus einer Kurzbeschreibung anlegen können.  
+**Akzeptanzkriterien:**
+- Eine NPC-szenenspezifische Ergänzung kann über `npc-scene-create` angelegt werden.
+- `npc-scene-create` bezieht sich auf den aktiven NPC und die aktive Scene.
+- `npc-scene-create` verwendet eine Kurzbeschreibung als einzige Eingabe.
+**Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
+
+### Ausgabe nach erfolgreichem `npc-scene-create`
+**Typ:** Funktional  
+**Beschreibung:** Das System muss nach erfolgreichem `npc-scene-create` den Zielort der erzeugten Ergänzung ausgeben.  
+**Akzeptanzkriterien:**
+- Nach erfolgreicher Ausführung enthält die Ausgabe den Zielort der erzeugten Ergänzung.
+**Referenzen:** Keine
+
+### Format und Ausschlüsse der generierten NPC-Scene-Beschreibung
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss die mit `npc-scene-create` erzeugte NPC-szenenspezifische Beschreibung grob gemäß den Prompt-Regeln zum Textformat und zu ausgeschlossenen Inhalten bereitstellen.  
+**Akzeptanzkriterien:**
+- Die erzeugte Beschreibung folgt dem vorgegebenen Textformat.
+- Die erzeugte Beschreibung enthält keine laut Prompt ausgeschlossenen Inhaltsarten.
+**Referenzen:** `prompts/npc_scene_create_text.md`
 
 ### Konfigurierbare Default-NPC-ID
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss in `engine/config.py` eine `DEFAULT_NPC_ID` als Konfigurationswert vorsehen, die über eine Umgebungsvariable gesetzt werden kann.  
+**Beschreibung:** Das System muss eine konfigurierbare Default-NPC-ID vorsehen.  
 **Akzeptanzkriterien:**
-- `DEFAULT_NPC_ID` ist in `engine/config.py` als Konfigurationswert vorhanden.
-- Der Wert von `DEFAULT_NPC_ID` kann über eine Umgebungsvariable gesetzt werden.
+- Eine Default-NPC-ID ist als Konfigurationswert vorhanden.
+- Der Konfigurationswert kann über die Umgebung gesetzt werden.
 **Referenzen:** `engine/config.py`
 
 ### Konfigurierbare Default-Scene-ID
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss in `engine/config.py` eine `DEFAULT_SCENE_ID` als Konfigurationswert vorsehen, die über eine Umgebungsvariable gesetzt werden kann.  
+**Beschreibung:** Das System muss eine konfigurierbare Default-Scene-ID vorsehen.  
 **Akzeptanzkriterien:**
-- `DEFAULT_SCENE_ID` ist in `engine/config.py` als Konfigurationswert vorhanden.
-- Der Wert von `DEFAULT_SCENE_ID` kann über eine Umgebungsvariable gesetzt werden.
+- Eine Default-Scene-ID ist als Konfigurationswert vorhanden.
+- Der Konfigurationswert kann über die Umgebung gesetzt werden.
 **Referenzen:** `engine/config.py`
 
 ### Default-Fallback für fehlende NPC-Dateien
 **Typ:** Funktional  
-**Beschreibung:** Das System muss fehlende NPC-Dateien beim Laden über die bestehende Prioritätskette bis zum Default-NPC-Fallback bereitstellen.  
+**Beschreibung:** Das System muss fehlende NPC-Inhalte beim Laden bis zum Default-NPC-Fallback auflösen.  
 **Akzeptanzkriterien:**
-- Fehlt beim Laden eines NPC eine Datei unter `.overrides/npcs/<npc_id>/`, wird die Datei nicht beim Anlegen erzeugt.
-- Fehlt beim Laden eines NPC eine Datei in den vorherigen Ebenen der Prioritätskette, wird zuerst der statische Default des Ziel-NPC verwendet.
-- Fehlt die Datei auch dort, wird die entsprechende Datei des durch `DEFAULT_NPC_ID` bezeichneten NPC verwendet.
+- Fehlende lokale NPC-Inhalte werden nicht automatisch beim Anlegen erzeugt.
+- Fehlt ein NPC-Inhalt in den vorherigen Ebenen der Prioritätskette, wird zuerst der Standardinhalt des Ziel-NPC verwendet.
+- Fehlt der Inhalt auch dort, wird der entsprechende Inhalt des konfigurierten Default-NPC verwendet.
 **Referenzen:** `engine/config.py`, `engine/storage.py`
 
 ### Default-Fallback für fehlende Scene-Dateien
 **Typ:** Funktional  
-**Beschreibung:** Das System muss fehlende Scene-Dateien beim Laden über die bestehende Prioritätskette bis zum Default-Scene-Fallback bereitstellen.  
+**Beschreibung:** Das System muss fehlende Scene-Inhalte beim Laden bis zum Default-Scene-Fallback auflösen.  
 **Akzeptanzkriterien:**
-- Fehlt beim Laden einer Scene eine Datei unter `.overrides/scenes/<scene_id>/`, wird die Datei nicht beim Anlegen erzeugt.
-- Fehlt beim Laden einer Scene eine Datei in den vorherigen Ebenen der Prioritätskette, wird zuerst der statische Default der Ziel-Scene verwendet.
-- Fehlt die Datei auch dort, wird die entsprechende Datei der durch `DEFAULT_SCENE_ID` bezeichneten Default-Scene verwendet.
+- Fehlende lokale Scene-Inhalte werden nicht automatisch beim Anlegen erzeugt.
+- Fehlt ein Scene-Inhalt in den vorherigen Ebenen der Prioritätskette, wird zuerst der Standardinhalt der Ziel-Scene verwendet.
+- Fehlt der Inhalt auch dort, wird der entsprechende Inhalt der konfigurierten Default-Scene verwendet.
 **Referenzen:** `engine/config.py`, `scenes/`, `doc/requirements/sg-016-overrides-verzeichnis.md`
 
 ### Priorität des Default-NPC-Fallbacks
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss den Default-NPC als zusätzliche letzte Ebene in die bestehende Prioritätskette für NPC-Dateien einordnen.  
+**Beschreibung:** Das System muss den Default-NPC als zusätzliche letzte Ebene in die bestehende Prioritätskette für NPC-Inhalte einordnen.  
 **Akzeptanzkriterien:**
-- Für NPC-Dateien gilt die Reihenfolge Laufzeitdatei vor `.overrides/npcs/<npc_id>/` vor szenenspezifischem NPC-Asset vor statischem Default des Ziel-NPC vor Default-NPC.
+- Für NPC-Inhalte gilt die Reihenfolge Laufzeitdaten vor lokaler Ergänzung vor szenenspezifischem NPC-Inhalt vor Standardinhalt des Ziel-NPC vor Default-NPC.
 - Der Default-NPC wird nur verwendet, wenn in allen vorherigen Ebenen kein Wert vorhanden ist.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
 
 ### Priorität des Default-Scene-Fallbacks
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss die Default-Scene als zusätzliche letzte Ebene in die bestehende Prioritätskette für Scene-Dateien einordnen.  
+**Beschreibung:** Das System muss die Default-Scene als zusätzliche letzte Ebene in die bestehende Prioritätskette für Scene-Inhalte einordnen.  
 **Akzeptanzkriterien:**
-- Für Scene-Dateien gilt die Reihenfolge Laufzeitdatei vor `.overrides/scenes/<scene_id>/` vor statischem Default der Ziel-Scene vor Default-Scene.
+- Für Scene-Inhalte gilt die Reihenfolge Laufzeitdaten vor lokaler Ergänzung vor Standardinhalt der Ziel-Scene vor Default-Scene.
 - Die Default-Scene wird nur verwendet, wenn in allen vorherigen Ebenen kein Wert vorhanden ist.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`

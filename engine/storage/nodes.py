@@ -144,8 +144,7 @@ class SessionNode:
 
     @npc_id.setter
     def npc_id(self, value: str) -> None:
-        current = self._state
-        self._save(SessionState(npc_id=value, scene_id=current.scene_id))
+        self._save(self._state.model_copy(update={"npc_id": value}))
 
     @property
     def scene_id(self) -> str:
@@ -153,12 +152,39 @@ class SessionNode:
 
     @scene_id.setter
     def scene_id(self, value: str) -> None:
-        current = self._state
-        self._save(SessionState(npc_id=current.npc_id, scene_id=value))
+        self._save(self._state.model_copy(update={"scene_id": value}))
+
+    @property
+    def image_autogenerate(self) -> bool:
+        return self._state.image_autogenerate
+
+    @image_autogenerate.setter
+    def image_autogenerate(self, value: bool) -> None:
+        self._save(self._state.model_copy(update={"image_autogenerate": value}))
+
+    @property
+    def scene(self) -> SceneNode:
+        return SceneNode(npc_id=self.npc_id, scene_id=self.scene_id)
 
 
 @dataclass(frozen=True)
 class PromptsNode:
+    @property
+    def image_style_rules(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("image_style_rules.md"))
+
+    @property
+    def scene_create_image(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("scene_create_image.md"))
+
+    @property
+    def scene_create_text(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("scene_create_text.md"))
+
+    @property
+    def npc_scene_create_text(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_scene_create_text.md"))
+
     @property
     def image_build(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("image_build_prompt.md"))
@@ -344,3 +370,10 @@ class SceneNode(_StorageNodeBase):
     @property
     def img(self) -> Path:
         return self.img_original.get()
+
+    @property
+    def is_dynamic_scene(self) -> bool:
+        is_default_scene = (config.SCENE_DIR / self.scene_id).is_dir()
+        is_override_scene = (config.OVERRIDES_SCENE_DIR / self.scene_id).is_dir()
+        return is_override_scene and not is_default_scene
+

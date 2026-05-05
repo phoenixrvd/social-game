@@ -10,12 +10,14 @@ import requests
 from openai import OpenAI
 from openai.types.chat import ChatCompletionMessageParam
 from PIL import Image
+from pydantic import BaseModel
 
 from engine.config import config
 from engine.logger import logger
 
 NamedImage = tuple[str, bytes]
 T = TypeVar("T")
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def _extract_provider_object_segment(text: str) -> str | None:
@@ -140,6 +142,19 @@ class Client:
         user_message = cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": cleaned}))
         return self._request_small([user_message])
 
+    def run_prompt_small_model(self, prompt: str, response_model: type[ModelT]) -> ModelT:
+        cleaned = prompt.strip()
+        if not cleaned:
+            raise ValueError("Modell-Prompt darf nicht leer sein.")
+        user_message = cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": cleaned}))
+        return self._request_small_model([user_message], response_model=response_model)
+
+    def generate_scene_img(self, prompt: str) -> bytes:
+        cleaned = prompt.strip()
+        if not cleaned:
+            raise ValueError("Bildprompt darf nicht leer sein.")
+        return self._request_scene_image(cleaned)
+
     def refresh_img(self, prompt: str, reference_img_bytes: bytes, identity_img_bytes: bytes | None = None) -> bytes:
         images = [CompressedImage("current.jpg", reference_img_bytes).compress(scale_factor=0.8, quality=82)]
         if identity_img_bytes is not None:
@@ -159,6 +174,17 @@ class Client:
 
     def _request_small(self, messages: list[ChatCompletionMessageParam]) -> str:
         return "".join(self._chat_request(config.MODEL_LLM_SMALL, messages))
+
+    def _request_small_model(self, messages: list[ChatCompletionMessageParam], *, response_model: type[ModelT]) -> ModelT:
+        response = self._request(
+            lambda openai_client: openai_client.beta.chat.completions.parse(
+                model=config.MODEL_LLM_SMALL,
+                store=False,
+                messages=messages,
+                response_format=response_model,
+            )
+        )
+        return self._response_message_parsed(response, response_model)
 
     def _request_embedding(self, text: str) -> list[float]:
         response = self._request(
@@ -192,6 +218,23 @@ class Client:
             raise RuntimeError("OpenAI-Bildantwort enthaelt kein Bildpayload.")
         return base64.b64decode(encoded_image)
 
+    def _request_scene_image(self, prompt: str) -> bytes:
+        result = self._request(
+            lambda openai_client: openai_client.images.generate(
+                model=config.MODEL_IMAGE,
+                prompt=prompt,
+                n=1,
+                size="1024x1536",
+                quality="low",
+                background="auto",
+                moderation="low",
+            )
+        )
+        encoded_image = result.data[0].b64_json
+        if encoded_image is None:
+            raise RuntimeError("OpenAI-Bildantwort enthaelt kein Bildpayload.")
+        return base64.b64decode(encoded_image)
+
     @staticmethod
     def _image_payload(images: list[NamedImage]) -> list[BytesIO]:
         payload: list[BytesIO] = []
@@ -205,6 +248,20 @@ class Client:
         payload: dict[str, object] = {"model": model, "store": False, "messages": messages, "stream": True}
         response = self._request(lambda openai_client: openai_client.chat.completions.create(**payload))
         return self._stream_chunks(response)
+
+    @staticmethod
+    def _response_message_parsed(response: Any, response_model: type[ModelT]) -> ModelT:
+        choices = getattr(response, "choices", None)
+        if not choices:
+            raise RuntimeError("LLM-Antwort enthaelt keine Auswahl.")
+        message = getattr(choices[0], "message", None)
+        parsed = getattr(message, "parsed", None) if message is not None else None
+        if isinstance(parsed, response_model):
+            return parsed
+        refusal = getattr(message, "refusal", "") if message is not None else ""
+        if isinstance(refusal, str) and refusal.strip():
+            raise RuntimeError(f"LLM-Antwort wurde abgelehnt: {refusal.strip()}")
+        raise RuntimeError(f"LLM-Antwort enthaelt kein parsebares {response_model.__name__}-Objekt.")
 
     def _request(self, action: Callable[[OpenAI], T]) -> T:
         try:

@@ -107,24 +107,33 @@ class SocialGameContextGallery extends HTMLElement {
     }
   }
 
-  render() {
-    this.$.scroll.innerHTML = this._state.items
-      .map((item) => this._renderItem(item))
-      .join("")
+   render() {
+     this.$.scroll.innerHTML = this._state.items
+       .map((item) => this._renderItem(item))
+       .join("") + this._renderCreateSceneButton()
 
-    this.$.scroll.querySelectorAll(".sg-context-gallery-item").forEach((item) => {
-      item.addEventListener("click", (e) => {
-        const itemId = e.currentTarget.getAttribute("data-item-id")
-        this.handleItemClick(itemId)
-      })
-    })
+     this.$.scroll.querySelectorAll(".sg-context-gallery-item:not(.sg-context-gallery-create-scene)").forEach((item) => {
+       item.addEventListener("click", (e) => {
+         const itemId = e.currentTarget.getAttribute("data-item-id")
+         this.handleItemClick(itemId)
+       })
+     })
 
-    this.$.fieldset.disabled = this._state.disabled
+     const createSceneButton = this.$.scroll.querySelector(".sg-context-gallery-create-scene")
+     if (createSceneButton) {
+       createSceneButton.addEventListener("click", () => {
+         if (!this._state.disabled) {
+           this.dispatchEvent(new CustomEvent("createSceneRequested"))
+         }
+       })
+     }
 
-    if (this._state.isOpen && !this._hasInitialOpenScrollRun) {
-      this.scrollSelectedIntoViewOnFirstOpen()
-    }
-  }
+     this.$.fieldset.disabled = this._state.disabled
+
+     if (this._state.isOpen && !this._hasInitialOpenScrollRun) {
+       this.scrollSelectedIntoViewOnFirstOpen()
+     }
+   }
 
   scrollSelectedIntoViewOnFirstOpen(attempt = 0) {
     if (this._hasInitialOpenScrollRun) return
@@ -168,30 +177,53 @@ class SocialGameContextGallery extends HTMLElement {
     return contextType === "scene" ? "SZENE" : "NPC"
   }
 
-  _renderItem(item) {
-    const isSelected = item.id === this._state.selectedId
-    const selectedClass = isSelected ? " sg-context-gallery-item--selected" : ""
-    const ariaPressed = isSelected ? "true" : "false"
+   _renderItem(item) {
+     const isSelected = item.id === this._state.selectedId
+     const selectedClass = isSelected ? " sg-context-gallery-item--selected" : ""
+     const ariaPressed = isSelected ? "true" : "false"
 
-    return /*html*/ `
-      <button
-        type="button"
-        class="sg-context-gallery-item${selectedClass}"
-        data-item-id="${item.id}"
-        aria-pressed="${ariaPressed}"
-        title="${item.label}"
-      >
-        <img
-          class="sg-context-gallery-image"
-          src="${item.image_url}"
-          alt="${item.label}"
-          loading="lazy"
-        />
-        <span class="sg-context-gallery-label">${item.label}</span>
-      </button>
-    `
-  }
-}
+     return /*html*/ `
+       <button
+         type="button"
+         class="sg-context-gallery-item${selectedClass}"
+         data-item-id="${item.id}"
+         aria-pressed="${ariaPressed}"
+         title="${item.label}"
+       >
+         <img
+           class="sg-context-gallery-image"
+           src="${item.image_url}"
+           alt="${item.label}"
+           loading="lazy"
+         />
+         <span class="sg-context-gallery-label">${item.label}</span>
+       </button>
+     `
+   }
 
-customElements.get("sg-context-gallery") || customElements.define("sg-context-gallery", SocialGameContextGallery)
+   _renderCreateSceneButton() {
+     if (this._contextType !== "scene") {
+       return ""
+     }
+
+     return /*html*/ `
+       <button
+         type="button"
+         class="sg-context-gallery-item sg-context-gallery-create-scene"
+         title="Scene erstellen"
+         aria-label="Neue Szene erstellen"
+       >
+         <div class="sg-context-gallery-image sg-context-gallery-create-scene-image">
+           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+             <line x1="12" y1="5" x2="12" y2="19"></line>
+             <line x1="5" y1="12" x2="19" y2="12"></line>
+           </svg>
+         </div>
+         <span class="sg-context-gallery-label">Scene erstellen</span>
+       </button>
+     `
+   }
+ }
+
+ customElements.get("sg-context-gallery") || customElements.define("sg-context-gallery", SocialGameContextGallery)
 

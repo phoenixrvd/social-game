@@ -27,6 +27,19 @@ const DELETE_ICON = /*html*/ `
   </svg>
 `
 
+const CHECKBOX_CHECKED_ICON = /*html*/ `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+    <path d="M7 12l4 4 6-6"></path>
+  </svg>
+`
+
+const CHECKBOX_UNCHECKED_ICON = /*html*/ `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+    <rect x="3" y="3" width="18" height="18" rx="3"></rect>
+  </svg>
+`
+
 function renderActionContent(icon, title, description = "") {
   const descriptionMarkup = description ? `<span class="sg-settings-action-text">${description}</span>` : ""
   return /*html*/ `
@@ -43,6 +56,7 @@ class SocialGameInputImage extends HTMLElement {
     super()
     this._state = {
       disabled: false,
+      imageAutogenerate: true,
     }
 
     this.$ = {}
@@ -53,6 +67,9 @@ class SocialGameInputImage extends HTMLElement {
       <section class="sg-settings-section">
         <h3 class="sg-settings-heading">Bild</h3>
         <div class="sg-settings-actions">
+          <button type="button" data-action="toggle-autogenerate" class="sg-settings-action" aria-pressed="true" aria-label="Automatische Bildgenerierung">
+            ${renderActionContent(CHECKBOX_CHECKED_ICON, "Automatische Bildgenerierung", "Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten")}
+          </button>
           <button type="button" data-action="refresh-image" class="sg-settings-action" aria-label="Neues Bild generieren">
             ${renderActionContent(REFRESH_ICON, "Neues Bild generieren", "Erzeugt eine neues Bild aus dem aktuellen Chat-Kontext")}
           </button>
@@ -67,11 +84,13 @@ class SocialGameInputImage extends HTMLElement {
     `
 
     this.$ = {
+      autogenerateButton: this.querySelector('[data-action="toggle-autogenerate"]'),
       refreshButton: this.querySelector('[data-action="refresh-image"]'),
       revertButton: this.querySelector('[data-action="revert-image"]'),
       deleteButton: this.querySelector('[data-action="delete-image"]'),
     }
 
+    this.$.autogenerateButton.addEventListener("click", this.handleAutogenerateClick.bind(this))
     this.$.refreshButton.addEventListener("click", this.handleRefreshClick.bind(this))
     this.$.revertButton.addEventListener("click", this.handleRevertClick.bind(this))
     this.$.deleteButton.addEventListener("click", this.handleDeleteClick.bind(this))
@@ -83,6 +102,7 @@ class SocialGameInputImage extends HTMLElement {
   syncFromStore() {
     const state = appStore.getState()
     this._state.disabled = Boolean(state.isSending) || Boolean(state.isSessionLoading) || Boolean(state.isImageRefreshLoading)
+    this._state.imageAutogenerate = state.imageAutogenerate !== false
   }
 
   registerSubscriptions() {
@@ -90,6 +110,7 @@ class SocialGameInputImage extends HTMLElement {
       ["isSending", this.onDisabledTriggerChanged.bind(this)],
       ["isSessionLoading", this.onDisabledTriggerChanged.bind(this)],
       ["isImageRefreshLoading", this.onDisabledTriggerChanged.bind(this)],
+      ["imageAutogenerate", this.onAutogenerateChanged.bind(this)],
     ]
 
     for (const [key, listener] of subscriptions) {
@@ -101,6 +122,15 @@ class SocialGameInputImage extends HTMLElement {
     const state = appStore.getState()
     this._state.disabled = Boolean(state.isSending) || Boolean(state.isSessionLoading) || Boolean(state.isImageRefreshLoading)
     this.render()
+  }
+
+  onAutogenerateChanged() {
+    this._state.imageAutogenerate = appStore.getState().imageAutogenerate !== false
+    this.render()
+  }
+
+  handleAutogenerateClick() {
+    appActions.toggleImageAutogenerate()
   }
 
   handleRefreshClick() {
@@ -124,7 +154,17 @@ class SocialGameInputImage extends HTMLElement {
     }
   }
 
+  _renderAutogenerateButton() {
+    const checked = this._state.imageAutogenerate
+    const icon = checked ? CHECKBOX_CHECKED_ICON : CHECKBOX_UNCHECKED_ICON
+    this.$.autogenerateButton.innerHTML = renderActionContent(icon, "Automatische Bildgenerierung", "Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten")
+    this.$.autogenerateButton.setAttribute("aria-pressed", String(checked))
+    this.$.autogenerateButton.classList.toggle("sg-settings-action-inactive", !checked)
+  }
+
   render() {
+    this._renderAutogenerateButton()
+    this.$.autogenerateButton.disabled = this._state.disabled
     this.$.refreshButton.disabled = this._state.disabled
     this.$.revertButton.disabled = this._state.disabled
     this.$.deleteButton.disabled = this._state.disabled
@@ -132,8 +172,3 @@ class SocialGameInputImage extends HTMLElement {
 }
 
 customElements.get("sg-input-image") || customElements.define("sg-input-image", SocialGameInputImage)
-
-
-
-
-

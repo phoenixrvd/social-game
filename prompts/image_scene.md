@@ -30,15 +30,13 @@ Generate one coherent image where:
 - If the Scene Description includes people in the background, depict them as out of focus (blurred/unscharf).
 - Keep the main character sharp and visually dominant.
 
+{{IMAGE_STYLE_RULES}}
+
 ## Rules
 
-- Keep the character identity stable (face, hair, body proportions — from `character.png`).
 - Clothing and pose from Scene Description override `character.png` — always.
 - Use `character.png` for identity only, not as a clothing source when Scene Description includes clothing details.
 - Do not invent extra people or objects unless clearly implied by scene context.
-- Respect scene lighting and perspective.
-- Keep output photorealistic and consistent.
-- Avoid text overlays, logos, watermarks, or UI elements.
 - Background people should remain visually secondary and not steal focus from the main character.
 
 ## Self-check before output
@@ -46,10 +44,6 @@ Generate one coherent image where:
 - Verify outfit in the final image matches Scene Description clothing.
 - Verify no conflicting clothing item from `character.png` remains.
 
-## Perspective constraint
-
-- First-person perspective is allowed only if it is clearly implied by `scene.png`.
-- Otherwise use the perspective suggested by `scene.png`.
 
 ## Framing constraint
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from contextlib import asynccontextmanager
 from html import escape
 from io import BytesIO
@@ -21,7 +20,9 @@ import uvicorn
 from engine.config import config
 from engine.client import client, user_visible_provider_error_detail
 from engine.services.image_service import ImageService
+from engine.services.npc_service import NpcService
 from engine.services.npc_turn_service import NpcTurnService
+from engine.services.scene_service import SceneService
 from engine.storage import storage
 from engine.storage.models import Message
 from engine.tools.scheduler import Scheduler
@@ -175,10 +176,15 @@ class ChatRequest(BaseModel):
 class SessionRequest(BaseModel):
     npc_id: str | None = None
     scene_id: str | None = None
+    image_autogenerate: bool | None = None
 
 
 class UserProfileRequest(BaseModel):
     content: str
+
+
+class SceneCreateRequest(BaseModel):
+    scene_description: str
 
 
 def _render_markdown_to_html(text: str) -> str:
@@ -322,11 +328,12 @@ def _state_payload() -> dict[str, Any]:
     npc = storage.npc
     scene = storage.scene
     character = npc.character_original.get()
+    scene_id = scene.scene_id
     return {
         "npc_id": npc.npc_id,
         "npc_name": str(character.get("name", npc.npc_id)).strip() or npc.npc_id,
         "character_description": npc.description.get(),
-        "scene_id": scene.scene_id,
+        "scene_id": scene_id,
         "scene_description": scene.description,
         "character_data": character,
         "messages": _visible_messages(npc, scene),
@@ -336,6 +343,9 @@ def _state_payload() -> dict[str, Any]:
         "npcs": _list_npcs(),
         "scenes": _list_scenes(),
         "user_profile": npc.user_profile,
+        "image_autogenerate": storage.session.image_autogenerate,
+        "default_scene_id": config.DEFAULT_SCENE_ID,
+        "is_dynamic_scene": scene.is_dynamic_scene,
     }
 
 
@@ -346,12 +356,14 @@ def get_state() -> dict[str, Any]:
 
 @app.put("/api/session")
 def update_session(request: SessionRequest) -> dict[str, Any]:
-    if request.npc_id is None and request.scene_id is None:
-        raise HTTPException(status_code=422, detail="Mindestens npc_id oder scene_id muss gesetzt sein.")
+    if request.npc_id is None and request.scene_id is None and request.image_autogenerate is None:
+        raise HTTPException(status_code=422, detail="Mindestens npc_id, scene_id oder image_autogenerate muss gesetzt sein.")
     if request.npc_id is not None:
         storage.session.npc_id = request.npc_id
     if request.scene_id is not None:
         storage.session.scene_id = request.scene_id
+    if request.image_autogenerate is not None:
+        storage.session.image_autogenerate = request.image_autogenerate
     return _state_payload()
 
 
@@ -361,16 +373,36 @@ def update_user_profile(request: UserProfileRequest) -> dict[str, Any]:
     return _state_payload()
 
 
+@app.post("/api/scenes/create")
+def create_scene(request: SceneCreateRequest) -> dict[str, Any]:
+    scene_description = request.scene_description.strip()
+
+    scene_service = SceneService()
+    scene_dir = scene_service.create_override(scene_description)
+    scene_id = scene_dir.name
+
+    storage.session.scene_id = scene_id
+    return _state_payload()
+
+
 @app.delete("/api/npc/reset-active")
 def reset_active_npc_runtime_data() -> dict[str, Any]:
     _get_scheduler().clear_pending_jobs()
+    NpcService.reset_active_runtime()
+    return _state_payload()
+
+
+@app.delete("/api/scene/reset-active")
+def reset_active_dynamic_scene_with_npc_runtime_data() -> dict[str, Any]:
     session = storage.session
-    scene_data_dir = storage.npc_view(
-        npc_id=session.npc_id,
-        scene_id=session.scene_id,
-    ).base_runtime
-    if scene_data_dir.exists():
-        shutil.rmtree(scene_data_dir)
+    scene_id = session.scene_id
+    if not session.scene.is_dynamic_scene:
+        raise HTTPException(status_code=400, detail="Aktive Scene ist keine erstellte Scene.")
+
+    _get_scheduler().clear_pending_jobs()
+    NpcService.reset_active_runtime()
+    session.scene_id = config.DEFAULT_SCENE_ID
+    SceneService.delete_dynamic_scene_artifacts(scene_id)
     return _state_payload()
 
 

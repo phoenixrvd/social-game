@@ -64,7 +64,8 @@ SG-016 beschreibt ausschließlich die fachliche Rolle des lokalen Verzeichnisses
 **Akzeptanzkriterien:**
 - Jedes Prompt-Template unter `prompts/` kann durch eine gleichnamige Datei unter `.overrides/prompts/` vollständig ersetzt werden.
 - Ohne lokale Überschreibung bleibt das versionierte Template unter `prompts/` wirksam.
-**Referenzen:** `engine/storage.py`, `engine/config.py`
+- Dies gilt auch für ein separates Prompt-Template mit gemeinsamen Bild-Style-Regeln, das von `Build`, `Refresh` und `Scene-Merge` verwendet wird.
+**Referenzen:** `engine/storage.py`, `engine/config.py`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
 
 ### Lokale Persistenz außerhalb von Git
 **Typ:** Nicht-funktional  

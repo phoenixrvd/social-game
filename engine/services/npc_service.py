@@ -1,9 +1,11 @@
 from pathlib import Path
+import shutil
 
 import yaml
 
 from engine.config import config
 from engine.services.id_normalizer import normalize_to_snake_id
+from engine.storage import storage
 
 
 class NpcService:
@@ -26,4 +28,14 @@ class NpcService:
         payload = yaml.safe_dump({"name": cleaned_name}, allow_unicode=True, sort_keys=False)
         (target_dir / "character.yaml").write_text(payload, encoding="utf-8")
         return target_dir
+
+    @staticmethod
+    def reset_active_runtime() -> None:
+        session = storage.session
+        scene_data_dir = storage.npc_view(
+            npc_id=session.npc_id,
+            scene_id=session.scene_id,
+        ).base_runtime
+        if scene_data_dir.exists():
+            shutil.rmtree(scene_data_dir)
 

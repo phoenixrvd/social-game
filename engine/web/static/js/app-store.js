@@ -13,10 +13,15 @@ function createInitialState() {
     scenes: [],
     npcId: null,
     sceneId: null,
+    defaultSceneId: null,
+    isDynamicScene: false,
     isImageExpanded: false,
     isSelectorPanelOpen: false,
+    isSceneCreatorLoading: false,
+    sceneCreatorError: "",
     focusRequestedAt: null,
     theme: localStorage.getItem("theme") === "light" ? "light" : "dark",
+    imageAutogenerate: true,
   }
 }
 

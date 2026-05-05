@@ -46,6 +46,19 @@ function renderActionContent(icon, title, description = "") {
   `
 }
 
+function getResetSceneButtonCopy(isDynamicScene) {
+  if (isDynamicScene) {
+    return {
+      label: "Verlauf und Scene löschen",
+      description: "Entfernt Verlauf sowie Inhalte erstellter Scenes",
+    }
+  }
+  return {
+    label: "Verlauf und Scene löschen",
+    description: "Standard-Scene kann nicht gelöscht werden",
+  }
+}
+
 class SocialGameInputGeneral extends HTMLElement {
   constructor() {
     super()
@@ -53,6 +66,7 @@ class SocialGameInputGeneral extends HTMLElement {
       disabled: false,
       theme: "dark",
       userProfile: "",
+      isDynamicScene: false,
     }
 
     this.$ = {}
@@ -67,10 +81,13 @@ class SocialGameInputGeneral extends HTMLElement {
           <button type="button" data-action="reset-active-npc" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf löschen">
             ${renderActionContent(DELETE_ICON, "Verlauf löschen", "Entfernt Nachrichten und Bilder der aktiven Konversation")}
           </button>
+          <button type="button" data-action="reset-active-scene" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf und Scene löschen">
+            ${renderActionContent(DELETE_ICON, "Verlauf und Scene löschen", "Entfernt Verlauf sowie Inhalte erstellter Scenes")}
+          </button>
         </div>
       </section>
       <section class="sg-settings-section">
-        <h3 class="sg-selector-legend">Dein Profile</h3>
+        <h3 class="sg-selector-legend">Dein Profil</h3>
         <textarea
           data-element="user-profile-textarea"
           class="sg-settings-textarea chat-scrollbar"
@@ -82,11 +99,13 @@ class SocialGameInputGeneral extends HTMLElement {
     this.$ = {
       themeButton: this.querySelector('[data-action="toggle-theme"]'),
       resetButton: this.querySelector('[data-action="reset-active-npc"]'),
+      resetSceneButton: this.querySelector('[data-action="reset-active-scene"]'),
       userProfileTextarea: this.querySelector('[data-element="user-profile-textarea"]'),
     }
 
     this.$.themeButton.addEventListener("click", this.handleThemeClick.bind(this))
     this.$.resetButton.addEventListener("click", this.handleResetClick.bind(this))
+    this.$.resetSceneButton.addEventListener("click", this.handleResetSceneClick.bind(this))
     this.$.userProfileTextarea.addEventListener("blur", this.handleUserProfileBlur.bind(this))
     this.registerSubscriptions()
     this.syncFromStore()
@@ -98,6 +117,7 @@ class SocialGameInputGeneral extends HTMLElement {
     this._state.theme = state.theme === "light" ? "light" : "dark"
     this._state.disabled = Boolean(state.isSending) || Boolean(state.isSessionLoading)
     this._state.userProfile = state.user_profile || ""
+    this._state.isDynamicScene = Boolean(state.isDynamicScene)
   }
 
   registerSubscriptions() {
@@ -106,6 +126,7 @@ class SocialGameInputGeneral extends HTMLElement {
       ["isSending", this.onDisabledTriggerChanged.bind(this)],
       ["isSessionLoading", this.onDisabledTriggerChanged.bind(this)],
       ["user_profile", this.onUserProfileChanged.bind(this)],
+      ["isDynamicScene", this.onDynamicSceneChanged.bind(this)],
     ]
 
     for (const [key, listener] of subscriptions) {
@@ -124,6 +145,11 @@ class SocialGameInputGeneral extends HTMLElement {
     this.render()
   }
 
+  onDynamicSceneChanged(value) {
+    this._state.isDynamicScene = Boolean(value)
+    this.render()
+  }
+
   handleThemeClick() {
     appActions.toggleTheme()
     if (appStore.getState().isSelectorPanelOpen) {
@@ -133,6 +159,16 @@ class SocialGameInputGeneral extends HTMLElement {
 
   async handleResetClick() {
     const hasExecuted = await appActions.resetNpc()
+    if (hasExecuted && appStore.getState().isSelectorPanelOpen) {
+      appActions.toggleSelectorPanel()
+    }
+  }
+
+  async handleResetSceneClick() {
+    if (!this._state.isDynamicScene) {
+      return
+    }
+    const hasExecuted = await appActions.resetNpcAndDynamicScene()
     if (hasExecuted && appStore.getState().isSelectorPanelOpen) {
       appActions.toggleSelectorPanel()
     }
@@ -156,6 +192,10 @@ class SocialGameInputGeneral extends HTMLElement {
     )
     this.$.themeButton.disabled = this._state.disabled
     this.$.resetButton.disabled = this._state.disabled
+    const resetSceneCopy = getResetSceneButtonCopy(this._state.isDynamicScene)
+    this.$.resetSceneButton.innerHTML = renderActionContent(DELETE_ICON, resetSceneCopy.label, resetSceneCopy.description)
+    this.$.resetSceneButton.disabled = this._state.disabled || !this._state.isDynamicScene
+    this.$.resetSceneButton.setAttribute("aria-label", resetSceneCopy.label)
     this.$.userProfileTextarea.value = this._state.userProfile
     this.$.userProfileTextarea.disabled = this._state.disabled
   }

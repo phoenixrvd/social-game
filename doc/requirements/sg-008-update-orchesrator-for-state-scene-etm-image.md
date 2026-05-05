@@ -74,3 +74,12 @@ Ziel ist ein gemeinsames, fachlich stimmiges Ergebnis über diese Bereiche hinwe
 - Andere Bereiche werden dabei nicht einbezogen.
 
 **Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-015-episodic-term-memory.md`
+
+### Sitzungsgesteuerte Unterdrückung der automatischen Bildgenerierung
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die automatische Bildgenerierung im zeitgesteuerten Gesamtvorgang anhand der aktiven Sitzung unterdrücken können.  
+**Akzeptanzkriterien:**
+- Vor der automatischen Bildgenerierung wird die Einstellung der aktiven Sitzung geprüft.
+- Ist die automatische Bildgenerierung für die aktive Sitzung deaktiviert, wird keine automatische Bildgenerierung ausgelöst.
+
+**Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/adr/003-synchroner-update-orchestrator.md`

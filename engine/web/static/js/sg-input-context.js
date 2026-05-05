@@ -10,6 +10,13 @@ class SocialGameInputContext extends HTMLElement {
         </div>
       </section>
     `
+
+    const sceneGallery = this.querySelector('sg-context-gallery[data-context-type="scene"]')
+    if (sceneGallery) {
+      sceneGallery.addEventListener("createSceneRequested", () => {
+        this.dispatchEvent(new CustomEvent("createSceneRequested", { bubbles: true, composed: true }))
+      })
+    }
   }
 }
 

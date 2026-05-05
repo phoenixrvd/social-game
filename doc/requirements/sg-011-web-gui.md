@@ -34,8 +34,6 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 - Nutzereingaben und Systemantworten sind visuell unterscheidbar.
 - Die Anzeige bleibt innerhalb einer Sitzung konsistent.
 
-**Technische Anmerkung:** Beim initialen Laden eines Nachrichtenverlaufs (leere Nachrichtenliste vor dem Render) wird ohne Scroll-Animation direkt ans Ende gescrollt (`scrollBehavior: instant`), um unnötige Animationen beim Bulk-Insert zu vermeiden. Inkrementelle Updates (z. B. gestreamte Chunks) verwenden weiche Scroll-Animation (`scrollBehavior: smooth`).
-
 **Referenzen:** Keine
 
 ### Zugriff über Browserkontext
@@ -66,15 +64,13 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 - Die Darstellung priorisiert auf mobilen Geräten den verfügbaren vertikalen Raum für Chat-Inhalte.
 - Die Desktop-Nutzung bleibt funktional vollständig nutzbar.
 
-**Technische Anmerkung:** Die Desktop-Nutzung adressiert insbesondere technisch affine Nutzer (aus der aktuellen Zielgruppe) mit lokaler Installation (z. B. Docker/Python-basiertes Setup).
-
 **Referenzen:** Keine
 
 ### Debug-Auslieferung statischer Assets
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss bei aktiviertem `WEB_DEBUG` statische Assets ohne Caching ausliefern.  
+**Beschreibung:** Das System muss im Debug-Betrieb statische Web-Ressourcen ohne Zwischenspeicherung bereitstellen.  
 **Akzeptanzkriterien:**
-- Bei aktiviertem `WEB_DEBUG` werden statische Assets ohne Caching ausgeliefert.
+- Im Debug-Betrieb werden statische Web-Ressourcen ohne Zwischenspeicherung bereitgestellt.
 
 **Referenzen:** Keine
 
@@ -91,11 +87,10 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 ### Bild-Rücksetzung über die Werkzeugleiste
 **Typ:** Funktional  
-**Beschreibung:** Das System muss in der Web-GUI für das aktive Sitzungsbild eine Rücksetzungsaktion über die Werkzeugleiste bereitstellen.  
+**Beschreibung:** Das System muss in der Web-GUI für das aktive Sitzungsbild eine Rücksetzungsaktion bereitstellen.  
 **Akzeptanzkriterien:**
-- In der Werkzeugleiste der Web-GUI ist eine Aktion zur Rücksetzung des aktiven Sitzungsbildes vorhanden.
-- Die Rücksetzungsaktion ist links von `refresh-image` angeordnet.
-- Beim Klick auf die Rücksetzungsaktion erscheint vor der Ausführung ein Bestätigungsdialog.
+- In der Web-GUI ist für das aktive Sitzungsbild eine Rücksetzungsaktion vorhanden.
+- Beim Auslösen der Rücksetzungsaktion erscheint vor der Ausführung ein Bestätigungsdialog.
 - Wird die Bestätigung erteilt, wird die Rücksetzung des aktiven Sitzungsbildes gemäß SG-005 ausgelöst.
 - Wird die Bestätigung abgebrochen, bleibt das aktive Sitzungsbild unverändert.
 
@@ -103,11 +98,11 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 ### Bild-Löschung über die Werkzeugleiste
 **Typ:** Funktional  
-**Beschreibung:** Das System muss in der Web-GUI zusätzlich zur Bild-Rücksetzung eine separate Werkzeugleisten-Aktion bereitstellen, die nur das aktive Sitzungsbild löscht.  
+**Beschreibung:** Das System muss in der Web-GUI zusätzlich zur Bild-Rücksetzung eine separate Aktion bereitstellen, die nur das aktive Sitzungsbild löscht.  
 **Akzeptanzkriterien:**
-- In der Werkzeugleiste der Web-GUI ist zusätzlich zur Rücksetzungsaktion eine separate Aktion zum Löschen des aktiven Sitzungsbildes vorhanden.
+- In der Web-GUI ist zusätzlich zur Rücksetzungsaktion eine separate Aktion zum Löschen des aktiven Sitzungsbildes vorhanden.
 - Die Löschaktion ist fachlich von der Rücksetzungsaktion getrennt und stellt kein Backup wieder her.
-- Beim Klick auf die Löschaktion erscheint vor der Ausführung ein Bestätigungsdialog.
+- Beim Auslösen der Löschaktion erscheint vor der Ausführung ein Bestätigungsdialog.
 - Wird die Bestätigung erteilt, wird die Löschung des aktiven Sitzungsbildes gemäß SG-005 ausgelöst.
 - Wird die Bestätigung abgebrochen, bleibt das aktive Sitzungsbild unverändert.
 
@@ -115,10 +110,58 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 ### Vergrößerbare Overlay-Ansicht des Szenenbilds auf mobilen Geräten
 **Typ:** Funktional  
-**Beschreibung:** Das System muss auf mobilen Geräten für das angezeigte Szenenbild eine vergrößerte Overlay-Ansicht ohne Beschneidung bereitstellen.  
+**Beschreibung:** Das System muss auf mobilen Geräten für das angezeigte Szenenbild eine vergrößerte Overlay-Ansicht bereitstellen.  
 **Akzeptanzkriterien:**
 - Nutzer können das in der Web-GUI angezeigte Szenenbild auf mobilen Geräten durch Antippen in einer Overlay-Ansicht öffnen.
 - In der Overlay-Ansicht ist das Szenenbild vollständig sichtbar und wird nicht abgeschnitten.
-- Die Overlay-Ansicht zeigt das Szenenbild zentriert und unabhängig vom Seitenverhältnis ohne Beschneidung an.
 
 **Referenzen:** `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
+
+### Steuerung der automatischen Bildgenerierung in der Web-GUI
+**Typ:** Funktional  
+**Beschreibung:** Das System muss in der Web-GUI für die aktive Sitzung eine steuerbare Einstellung zur automatischen Bildgenerierung bereitstellen.  
+**Akzeptanzkriterien:**
+- Für die aktive Sitzung ist im Kontext der Bildgenerierung eine Einstellung zur automatischen Bildgenerierung sichtbar.
+- Wenn für die aktive Sitzung kein gespeicherter Wert vorliegt, ist die Einstellung standardmäßig aktiviert.
+- Wird die automatische Bildgenerierung deaktiviert, zeigt die Web-GUI den deaktivierten Zustand eindeutig an.
+
+**Referenzen:** `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
+
+### Sitzungspersistenz der automatischen Bildgenerierung
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die Einstellung zur automatischen Bildgenerierung sitzungsbezogen persistieren.  
+**Akzeptanzkriterien:**
+- Änderungen der Einstellung werden der aktiven Sitzung zugeordnet gespeichert.
+- Beim erneuten Laden der aktiven Sitzung entspricht der angezeigte Zustand der gespeicherten Einstellung.
+
+**Referenzen:** Keine
+
+### Manuelle Bildgenerierung trotz deaktivierter Automatik
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die manuelle Bildgenerierung unabhängig von der Einstellung zur automatischen Bildgenerierung bereitstellen.  
+**Akzeptanzkriterien:**
+- `Neues Bild generieren` bleibt auch bei deaktivierter automatischer Bildgenerierung ausführbar.
+- Eine manuell ausgelöste Bildgenerierung wird durch die deaktivierte automatische Bildgenerierung nicht unterdrückt.
+
+**Referenzen:** `doc/requirements/sg-005-npc-bilder.md`, `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`
+
+### Anlegen von Scenes in der Web-GUI
+**Typ:** Funktional  
+**Beschreibung:** Das System muss das Anlegen neuer Scenes in der Web-GUI ermöglichen.  
+**Akzeptanzkriterien:**
+- Eine neue Scene kann in der Web-GUI angelegt werden.
+- Nach erfolgreichem Anlegen steht die neue Scene für die Nutzung in der Sitzung zur Verfügung.
+
+**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
+
+### Steuerung der Löschung erstellter Szenen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss in der Web-GUI eine kontrollierte Löschaktion für in der Session erstellte Szenen bereitstellen.  
+**Akzeptanzkriterien:**
+- Eine Löschaktion für Szenen ist in den Einstellungen vorhanden.
+- Die Aktion ist nur bei erstellten Szenen ausführbar; bei Standard-Szenen ist sie deaktiviert.
+- Das System zeigt den Zustand der Aktion eindeutig an (aktiv/inaktiv mit entsprechender Beschriftung).
+- Vor der Ausführung wird ein Bestätigungsdialog angezeigt.
+- Nach erfolgreichem Löschen wird die Session zur Standard-Szene zurückgesetzt und der Einstellungs-Panel geschlossen.
+
+**Referenzen:** `doc/requirements/sg-020-verwaltung-dynamischer-szenen.md`
