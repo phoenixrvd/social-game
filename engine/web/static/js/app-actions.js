@@ -532,14 +532,14 @@ async function createScene(payload = {}) {
     })
     const responsePayload = await readJsonResponse(response)
     if (!response.ok) {
-      appStore.setState({ sceneCreatorError: getErrorMessage(responsePayload, "Szene konnte nicht erstellt werden.") })
+      appStore.setState({ sceneCreatorError: getErrorMessage(responsePayload, "Szene und NPC-Kontext konnten nicht erstellt werden.") })
       return
     }
 
     appStore.setState({ ...mapStatePayload(responsePayload), errorMessage: "" })
   } catch (error) {
     appStore.setState({
-      sceneCreatorError: error instanceof Error ? error.message : "Szene konnte nicht erstellt werden.",
+      sceneCreatorError: error instanceof Error ? error.message : "Szene und NPC-Kontext konnten nicht erstellt werden.",
     })
   } finally {
     appStore.setState({ isSceneCreatorLoading: false })
@@ -547,6 +547,7 @@ async function createScene(payload = {}) {
 }
 
  async function updateUserProfile(content = "") {
+   const state = appStore.getState()
    if (state.isSending || state.isSessionLoading) {
      return
    }

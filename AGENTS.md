@@ -72,11 +72,16 @@ Bei Konflikten gelten spezifischere Guidelines vor allgemeinen Mustern in dieser
 Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC_DESCRIPTION}}", "<npc description>")
 ```
 
-**Konfiguration** – alle Werte über `engine/config.py` (pydantic-settings), `.env` mit `SG_MODEL_API_KEY`, `SG_MODEL_BASE_URL`, `SG_MODEL_LLM_BIG`, `SG_MODEL_LLM_SMALL`, `SG_MODEL_IMAGE`, `SG_MODEL_EMBEDDING` (allgemein: `SG_`-Prefix fuer alle Config-Werte). Kein Direktzugriff auf `os.environ`.
+**Konfiguration** – alle Werte über `engine/config.py` (pydantic-settings), `.env` mit `SG_MODEL_API_KEY`, `SG_MODEL_BASE_URL`, `SG_MODEL_LLM_BIG`, `SG_MODEL_LLM_SMALL`, `SG_MODEL_IMAGE`, `SG_MODEL_EMBEDDING` (allgemein: `SG_`-Prefix für alle Config-Werte). Kein Direktzugriff auf `os.environ`.
 
 **Fehlerbehandlung** – Provider-Fehler werden in `RuntimeError` mit lesbarer Meldung gewrappt; user-sichtbare Details werden über `user_visible_provider_error_detail(...)` normalisiert. Keine stillen Catches.
 
 **Web-Frontend** – Vanilla-JS Web Components in `engine/web/static/js/`. Komponentenkommunikation ausschließlich via `CustomEvent`, kein direkter DOM-Zugriff auf Kind-Komponenten.
+
+**Requirements-Dokumentation** – Anforderungen primär fachlich, nicht technisch formulieren:
+- Technische Implementierungsdetails nur aufnehmen, wenn sie fachlich zwingend sind oder ohne sie die Anforderung nicht eindeutig/prüfbar wäre.
+- Wenn technische Details unvermeidbar sind, diese bevorzugt als `Randbedingung` oder als separaten weiterführenden Hinweis dokumentieren, nicht als Kern der funktionalen Anforderung.
+- Akzeptanzkriterien stets beobachtbares Verhalten beschreiben; interne Flags, Jobnamen, Klassen oder Endpunkte nur in begründeten Ausnahmefällen nennen.
 
 ## Coding-Regeln (BLOCKER)
 
@@ -102,4 +107,4 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 - **pydantic-settings** – Konfiguration
 - **rapidfuzz** – Prompt-Ähnlichkeitsprüfung im `ImageService`
 - **Pillow** – Bildkomprimierung vor LLM-Upload (PNG → JPEG)
-- **LiteLLM (optional)** – kann fuer eigene Embedding-Modelle oder weitere OpenAI-kompatible Modellanbieter genutzt werden
+- **LiteLLM (optional)** – kann für eigene Embedding-Modelle oder weitere OpenAI-kompatible Modellanbieter genutzt werden

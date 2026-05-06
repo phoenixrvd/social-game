@@ -283,6 +283,10 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
     assert state_message["content"] == ""
     assert "Charakterbeschreibung vika" in character_message["html"]
     assert "Office" in scene_message["html"]
+    assert 'class="sg-initial-context-image"' in character_message["html"]
+    assert 'src="/api/npcs/vika/image?v=' in character_message["html"]
+    assert 'class="sg-initial-context-image"' in scene_message["html"]
+    assert 'src="/api/scenes/office/image?v=' in scene_message["html"]
     assert "kennt den Spieler" in state_message["html"]
     assert "<pre>" in state_message["html"]
     assert "mood: neutral" in state_message["html"]
@@ -317,6 +321,8 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
     assert payload["messages"][2]["id"] == "context-state"
     assert "Charakterbeschreibung vika" in payload["messages"][0]["html"]
     assert "Office" in payload["messages"][1]["html"]
+    assert 'src="/api/npcs/vika/image?v=' in payload["messages"][0]["html"]
+    assert 'src="/api/scenes/office/image?v=' in payload["messages"][1]["html"]
     assert "kennt den Spieler" in payload["messages"][2]["html"]
     assert "<pre>" in payload["messages"][2]["html"]
     assert "<li>kennt den Spieler</li>" in payload["messages"][2]["html"]
@@ -1027,6 +1033,7 @@ def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
 
 def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
     monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
@@ -1036,7 +1043,8 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
 
     (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
 
-    created_scenes = []
+    created_scenes: list[str] = []
+    created_npc_scenes: list[tuple[str, str]] = []
 
     def fake_scene_create(self, short_description: str):
         created_scenes.append(short_description)
@@ -1046,9 +1054,19 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
         (scene_dir / "img.png").write_bytes(b"test-image-data")
         return scene_dir
 
+    def fake_npc_scene_create(self, short_description: str):
+        created_npc_scenes.append((short_description, storage.session.scene_id))
+        return tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / storage.session.scene_id / "scene.md"
+
     monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
+
+    scheduler_calls: list[tuple[str, str]] = []
 
     class FakeScheduler:
+        def enqueue(self, job_name: str) -> None:
+            scheduler_calls.append((job_name, storage.session.scene_id))
+
         def start(self) -> None:
             pass
 
@@ -1067,11 +1085,14 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     assert created_scenes == ["Ein neues Café"]
+    assert created_npc_scenes == [("Ein neues Café", "test_scene")]
+    assert scheduler_calls == [("image", "test_scene")]
     assert storage.session.scene_id == "test_scene"
 
 
-def test_create_scene_accepts_payload_without_npc_scene_description(tmp_path, monkeypatch):
+def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
     monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
@@ -1081,7 +1102,8 @@ def test_create_scene_accepts_payload_without_npc_scene_description(tmp_path, mo
 
     (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
 
-    created_scenes = []
+    created_scenes: list[str] = []
+    created_npc_scenes: list[str] = []
 
     def fake_scene_create(self, short_description: str):
         created_scenes.append(short_description)
@@ -1091,9 +1113,17 @@ def test_create_scene_accepts_payload_without_npc_scene_description(tmp_path, mo
         (scene_dir / "img.png").write_bytes(b"test-image-data")
         return scene_dir
 
+    def fake_npc_scene_create(self, short_description: str):
+        created_npc_scenes.append(short_description)
+        return tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "test_scene" / "scene.md"
+
     monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
 
     class FakeScheduler:
+        def enqueue(self, _job_name: str) -> None:
+            pass
+
         def start(self) -> None:
             pass
 
@@ -1112,6 +1142,59 @@ def test_create_scene_accepts_payload_without_npc_scene_description(tmp_path, mo
 
     assert response.status_code == 200
     assert created_scenes == ["Ein neues Café"]
+    assert created_npc_scenes == ["Ein neues Café"]
+
+
+def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+    storage.session.image_autogenerate = False
+
+    def fake_scene_create(self, _short_description: str):
+        scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        (scene_dir / "scene.md").write_text("# Test Scene\n", encoding="utf-8")
+        (scene_dir / "img.png").write_bytes(b"test-image-data")
+        return scene_dir
+
+    def fake_npc_scene_create(self, _short_description: str):
+        return tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "test_scene" / "scene.md"
+
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
+
+    scheduler_calls: list[str] = []
+
+    class FakeScheduler:
+        def enqueue(self, job_name: str) -> None:
+            scheduler_calls.append(job_name)
+
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "Ein neues Café",
+            }
+        )
+
+    assert response.status_code == 200
+    assert scheduler_calls == []
 
 
 def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):

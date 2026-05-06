@@ -1,0 +1,125 @@
+.sg-image-pane {
+  position: relative;
+  flex: 1;
+  min-height: 240px;
+  margin: 0.9rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--bg-panel-soft);
+  overflow: hidden;
+}
+
+.sg-image-empty {
+  display: grid;
+  place-items: center;
+  min-height: 240px;
+  color: var(--text-muted);
+}
+
+.sg-image-frame,
+.sg-image-content {
+  position: absolute;
+  inset: 0;
+}
+
+.sg-composer-thumb .sg-image-frame.is-loading,
+.sg-scene-image-slot.is-loading {
+  overflow: hidden;
+}
+
+.sg-composer-thumb .sg-image-frame.is-loading::after,
+.sg-scene-image-slot.is-loading::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  --sg-image-loading-angle: 0deg;
+  background: conic-gradient(
+    from var(--sg-image-loading-angle),
+    transparent 0deg 300deg,
+    color-mix(in srgb, var(--primary) 36%, transparent) 320deg,
+    var(--primary) 340deg,
+    color-mix(in srgb, var(--primary) 36%, transparent) 356deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  animation: sg-image-loading-border 2.2s linear infinite;
+}
+
+.sg-image-content {
+  display: grid;
+  place-items: center;
+}
+
+.sg-image-bg,
+.sg-image-overlay-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(20px);
+  opacity: 0.32;
+  transform: scale(1.08);
+}
+
+.sg-image-main {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: zoom-in;
+}
+
+.sg-image-main.is-updated,
+.sg-image-overlay-main.is-updated {
+  animation: sg-image-in 0.5s ease;
+}
+
+.sg-image-overlay,
+sg-thumbnail .sg-image-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--bg-overlay);
+  padding: 0.7rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.sg-image-overlay.is-open,
+sg-thumbnail .sg-image-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sg-image-overlay-frame,
+sg-thumbnail .sg-image-overlay-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--bg-panel);
+}
+
+.sg-image-overlay-main,
+sg-thumbnail .sg-image-overlay-main {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

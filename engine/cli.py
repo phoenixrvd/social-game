@@ -4,7 +4,6 @@ import typer
 from PIL import Image
 
 from engine.config import config
-from engine.services.npc_scene_service import NpcSceneService
 from engine.services.npc_service import NpcService
 
 app = typer.Typer(
@@ -36,26 +35,6 @@ def create_npc(
     typer.echo(f"NPC angelegt: {target_dir}")
     typer.echo(f"id={target_dir.name}")
 
-
-@app.command("npc-scene-create")
-def create_npc_scene(
-    short_description: str = typer.Argument(
-        ...,
-        help="Kurze Orientierung fuer die LLM-Erstellung einer kreativen NPC-Scene-Beschreibung.",
-    ),
-) -> None:
-    """Erzeugt scene.md fuer aktiven NPC + aktive Scene unter .overrides/npcs/<npc_id>/scenes/<scene_id>/."""
-    if not short_description.strip():
-        typer.echo("Kurzbeschreibung darf nicht leer sein.")
-        raise typer.Exit(code=1)
-
-    try:
-        target_file = NpcSceneService().create_override(short_description)
-    except (ValueError, RuntimeError) as error:
-        typer.echo(str(error))
-        raise typer.Exit(code=1)
-
-    typer.echo(f"NPC-Scene angelegt: {target_file}")
 
 
 @app.command()

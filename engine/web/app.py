@@ -21,6 +21,7 @@ from engine.config import config
 from engine.client import client, user_visible_provider_error_detail
 from engine.services.history_service import HistoryService
 from engine.services.image_service import ImageService
+from engine.services.npc_scene_service import NpcSceneService
 from engine.services.npc_service import NpcService
 from engine.services.npc_turn_service import NpcTurnService
 from engine.services.scene_service import SceneService
@@ -387,6 +388,8 @@ def create_scene(request: SceneCreateRequest) -> dict[str, Any]:
     scene_id = scene_dir.name
 
     storage.session.scene_id = scene_id
+    NpcSceneService().create_override(scene_description)
+    _get_scheduler().enqueue("image")
     return _state_payload()
 
 

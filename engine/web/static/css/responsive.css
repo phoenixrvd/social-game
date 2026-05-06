@@ -1,0 +1,143 @@
+@media (min-width: 1024px) {
+  .app-viewport {
+    position: static;
+    min-height: 100vh;
+    height: 100vh;
+    padding: 1rem;
+  }
+
+  .sg-layout-root {
+    grid-template-columns: 1.4fr 1fr;
+    grid-template-rows: none;
+    height: 100%;
+    min-height: 0;
+    gap: 0.85rem;
+  }
+
+  .sg-chat-pane,
+  .sg-scene-image-slot {
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    background: var(--bg-panel);
+    box-shadow: var(--shadow-panel);
+    min-height: 0;
+    height: 100%;
+  }
+
+  .sg-scene-image-slot {
+    display: flex;
+  }
+
+  .sg-chat-pane {
+    --sg-chat-pane-fade-color: var(--bg-panel);
+  }
+
+  .sg-chat-component {
+    height: 100%;
+  }
+
+  .sg-keyboard-hint {
+    display: inline;
+  }
+
+  .sg-input-component {
+    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg-panel) 98%, transparent));
+    padding: 0 0.9rem 0.9rem;
+  }
+
+  .sg-input-component .sg-chat-form {
+    padding: 0.85rem 0 0;
+  }
+
+  .sg-input-component .sg-chat-form.is-options-open {
+    margin-right: -0.9rem;
+    margin-left: -0.9rem;
+    margin-bottom: -0.9rem;
+    box-shadow: var(--shadow-soft);
+    padding: 0.85rem;
+  }
+
+  .sg-input-component .sg-chat-form.is-options-open .sg-options-panel {
+    padding-bottom: 0;
+  }
+
+  .sg-input-component .sg-chat-textarea {
+    background: color-mix(in srgb, var(--bg-panel) 62%, transparent);
+  }
+
+  .sg-input-component .sg-composer-footer {
+    min-height: 2rem;
+  }
+
+
+  .sg-composer-thumb {
+    display: none;
+  }
+
+  .sg-composer-layout {
+    grid-template-columns: minmax(0, 1fr);
+    column-gap: 0;
+  }
+
+  .sg-scene-image-slot .sg-scene-thumbnail {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .sg-scene-image-slot .sg-image-pane {
+    position: relative;
+    top: auto;
+    right: auto;
+    display: block;
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .sg-scene-image-slot .sg-image-main {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .sg-image-overlay {
+    display: none;
+  }
+}
+
+
+
+@media (max-width: 1023px) and (orientation: landscape) {
+  .app-viewport {
+    width: min(100vw, var(--portrait-shell-width));
+    max-width: min(100vw, var(--portrait-shell-width));
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .sg-layout-root {
+    min-height: calc(var(--app-vh) + 1px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

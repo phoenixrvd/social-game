@@ -20,16 +20,16 @@ class SocialGameInputScene extends HTMLElement {
    connectedCallback() {
      this.innerHTML = /*html*/ `
        <section class="sg-settings-section">
-         <h3 class="sg-settings-heading">Neue Szene</h3>
+         <h3 class="sg-settings-heading">Neue Szene für aktive Figur</h3>
          <div class="sg-form-group">
            <label for="scene-description-input" class="sg-form-label">
              Szenenbeschreibung <span class="sg-form-required">*</span>
            </label>
-           <p class="sg-form-hint-small">Beschreiben Sie die Szene, die Sie erstellen möchten</p>
+           <p class="sg-form-hint-small">Die Beschreibung wird für die neue Szene und für den aktiven NPC-Kontext verwendet (z. B. inkl. NPC-Position).</p>
            <textarea
              id="scene-description-input"
              class="sg-settings-textarea"
-             placeholder="z.B. Ein gemütliches Café mit warmem Licht..."
+             placeholder="z. B. Ein gemütliches Café mit warmem Licht, der NPC sitzt links am Fenster..."
              required
              aria-required="true"
            ></textarea>
@@ -45,7 +45,7 @@ class SocialGameInputScene extends HTMLElement {
          >
            <span class="sg-settings-action-icon" aria-hidden="true">${CREATE_ICON}</span>
            <span class="sg-settings-action-copy">
-             <span class="sg-settings-action-title">Szene erstellen</span>
+             <span class="sg-settings-action-title">Szene + NPC-Kontext erstellen</span>
            </span>
          </button>
        </section>

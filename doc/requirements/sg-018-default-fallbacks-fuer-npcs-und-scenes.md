@@ -65,12 +65,21 @@ SG-018 ergänzt `doc/requirements/sg-016-overrides-verzeichnis.md` um Regeln fü
 - Die Szenenbeschreibung wird aus der Kurzbeschreibung erzeugt.
 **Referenzen:** `prompts/scene_create_text.md`
 
-### Automatische Erzeugung des Szenenbilds für neue Scenes
+### Automatische Erzeugung der NPC-Scene-Ergänzung für neue Scenes
 **Typ:** Funktional  
-**Beschreibung:** Das System muss beim Anlegen einer neuen Scene ein Szenenbild automatisch bereitstellen.  
+**Beschreibung:** Das System muss beim Anlegen einer neuen Scene zusätzlich eine NPC-szenenspezifische Ergänzung erzeugen.  
 **Akzeptanzkriterien:**
-- Nach erfolgreichem Anlegen liegt für die neue Scene ein Szenenbild vor.
-- Das Szenenbild wird ohne zusätzlichen manuellen Schritt bereitgestellt.
+- Nach erfolgreichem Anlegen der neuen Scene liegt eine NPC-szenenspezifische Ergänzung vor.
+- Für die Ergänzung wird dieselbe Kurzbeschreibung wie für das Anlegen der Scene verwendet.
+- Die Ergänzung bezieht sich auf den aktiven NPC und die neu angelegte aktive Scene.
+**Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
+
+### Automatischer Anstoß der Szenenbildgenerierung für neue Scenes
+**Typ:** Funktional  
+**Beschreibung:** Das System muss beim erfolgreichen Anlegen einer neuen Scene die Bildgenerierung automatisch anstoßen, wenn die automatische Bildgenerierung aktiviert ist.  
+**Akzeptanzkriterien:**
+- Nach erfolgreichem Anlegen einer neuen Scene wird die Bildgenerierung ohne zusätzlichen manuellen Schritt angestoßen, wenn die automatische Bildgenerierung aktiviert ist.
+- Ist die automatische Bildgenerierung nicht aktiviert, wird beim Anlegen der neuen Scene kein automatischer Anstoß der Bildgenerierung ausgelöst.
 **Referenzen:** `prompts/scene_create_image.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
 
 ### Personenfreie Darstellung im automatisch erzeugten Szenenbild
@@ -97,25 +106,9 @@ SG-018 ergänzt `doc/requirements/sg-016-overrides-verzeichnis.md` um Regeln fü
 - Stattdessen wird eine freie Scene-ID mit fortlaufendem numerischem Suffix verwendet.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
 
-### Weitere NPC-Scene-Ergänzungen anlegen
-**Typ:** Funktional  
-**Beschreibung:** Das System muss über `npc-scene-create` für den aktiven NPC in der aktiven Scene eine NPC-szenenspezifische Ergänzung aus einer Kurzbeschreibung anlegen können.  
-**Akzeptanzkriterien:**
-- Eine NPC-szenenspezifische Ergänzung kann über `npc-scene-create` angelegt werden.
-- `npc-scene-create` bezieht sich auf den aktiven NPC und die aktive Scene.
-- `npc-scene-create` verwendet eine Kurzbeschreibung als einzige Eingabe.
-**Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
-
-### Ausgabe nach erfolgreichem `npc-scene-create`
-**Typ:** Funktional  
-**Beschreibung:** Das System muss nach erfolgreichem `npc-scene-create` den Zielort der erzeugten Ergänzung ausgeben.  
-**Akzeptanzkriterien:**
-- Nach erfolgreicher Ausführung enthält die Ausgabe den Zielort der erzeugten Ergänzung.
-**Referenzen:** Keine
-
 ### Format und Ausschlüsse der generierten NPC-Scene-Beschreibung
 **Typ:** Randbedingung  
-**Beschreibung:** Das System muss die mit `npc-scene-create` erzeugte NPC-szenenspezifische Beschreibung grob gemäß den Prompt-Regeln zum Textformat und zu ausgeschlossenen Inhalten bereitstellen.  
+**Beschreibung:** Das System muss die beim Anlegen einer neuen Scene zusätzlich erzeugte NPC-szenenspezifische Beschreibung grob gemäß den Prompt-Regeln zum Textformat und zu ausgeschlossenen Inhalten bereitstellen.  
 **Akzeptanzkriterien:**
 - Die erzeugte Beschreibung folgt dem vorgegebenen Textformat.
 - Die erzeugte Beschreibung enthält keine laut Prompt ausgeschlossenen Inhaltsarten.

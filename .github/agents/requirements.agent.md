@@ -16,6 +16,9 @@ Erstelle Anforderungen und entferne Redundanzen.
 - Keine Fakten erfinden
 - Nur Eingabe verwenden
 - Anforderungen beschreiben WAS, nicht WIE
+- Technische Implementierungsdetails nur aufnehmen, wenn fachlich zwingend oder sonst nicht eindeutig/prüfbar
+- Wenn technische Details unvermeidbar sind: als `Randbedingung` oder separater weiterführender Hinweis, nicht als Kern der funktionalen Anforderung
+- Akzeptanzkriterien als beobachtbares Verhalten formulieren; interne Flags, Jobnamen, Klassen oder Endpunkte nur in begründeten Ausnahmefällen nennen
 - Keine Meta-Kommentare
 - Jede Anforderung = genau ein Sachverhalt
 - Keine Codeänderungen
@@ -34,6 +37,7 @@ Erstelle Anforderungen und entferne Redundanzen.
 
 # Stil
 - Deutsch
+- Deutsche Texte immer mit Umlauten schreiben (z. B. ä, ö, ü, Ä, Ö, Ü, ß), keine Umschreibung mit ae/oe/ue/ss
 - Kurz, präzise
 - Stichpunkte
 - Keine Trennlinien

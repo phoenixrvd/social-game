@@ -13,10 +13,6 @@ def override_npc_service(monkeypatch, fake_service_class):
     monkeypatch.setattr(cli_module, "NpcService", fake_service_class)
 
 
-def override_npc_scene_service(monkeypatch, fake_service_class):
-    monkeypatch.setattr(cli_module, "NpcSceneService", fake_service_class)
-
-
 def test_hello():
     result = runner.invoke(app, ["hello"])
     assert result.exit_code == 0
@@ -277,28 +273,11 @@ def test_scene_create_command_removed():
     assert "No such command" in result.output
 
 
-def test_npc_scene_create_calls_npc_scene_service(monkeypatch, tmp_path):
-    calls: list[str] = []
-
-    class FakeNpcSceneService:
-        def create_override(self, short_description: str):
-            calls.append(short_description)
-            return tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "cafe" / "scene.md"
-
-    override_npc_scene_service(monkeypatch, FakeNpcSceneService)
-
+def test_npc_scene_create_command_removed():
     result = runner.invoke(app, ["npc-scene-create", "stimmungsvolle details fuer vika im cafe"])
 
-    assert result.exit_code == 0
-    assert calls == ["stimmungsvolle details fuer vika im cafe"]
-    assert "NPC-Scene angelegt" in result.output
-
-
-def test_npc_scene_create_rejects_blank_short_description():
-    result = runner.invoke(app, ["npc-scene-create", "   "])
-
-    assert result.exit_code == 1
-    assert "Kurzbeschreibung darf nicht leer sein." in result.output
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_icons_command_runs_pipeline(monkeypatch, tmp_path):
