@@ -236,10 +236,9 @@ class SocialGameInputComposer extends HTMLElement {
 
   render() {
     const controlsDisabled = this._state.isSending || this._state.isSessionLoading
-    const composerReadOnly = this._state.isSessionLoading
 
-    this.$.textarea.readOnly = composerReadOnly
-    this.$.textarea.setAttribute("aria-readonly", composerReadOnly ? "true" : "false")
+    this.$.textarea.readOnly = this._state.isSessionLoading
+    this.$.textarea.setAttribute("aria-readonly", this._state.isSessionLoading ? "true" : "false")
     this.$.textarea.value = this._state.input
     this.$.sendButton.className = this._state.isSending ? "sg-send-button is-loading" : "sg-send-button"
     this.$.sendButton.disabled = controlsDisabled

@@ -438,6 +438,12 @@ sg-message.sg-message-enter {
   display: none;
 }
 
+.sg-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .sg-options-panel .sg-options-tab-panel .sg-settings-section {
   margin: 0;
   padding: 0;
@@ -1120,14 +1126,14 @@ sg-thumbnail .sg-image-overlay-main {
   cursor: not-allowed;
 }
 
-sg-input-scene-creator .sg-form-group {
+sg-input-scene .sg-form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
   margin-bottom: 1rem;
 }
 
-sg-input-scene-creator .sg-form-label {
+sg-input-scene .sg-form-label {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-main);
@@ -1140,7 +1146,7 @@ sg-input-scene-creator .sg-form-label {
   line-height: 1.3;
 }
 
-.sg-scene-creator-error {
+.sg-scene-error {
   padding: 0.5rem;
   margin-bottom: 0.75rem;
   background: color-mix(in srgb, var(--text-error) 12%, transparent);
@@ -1151,11 +1157,11 @@ sg-input-scene-creator .sg-form-label {
   line-height: 1.3;
 }
 
-.sg-scene-creator-error.sg-hidden {
+.sg-scene-error.sg-hidden {
   display: none;
 }
 
-sg-input-scene-creator .sg-scene-create-action {
+sg-input-scene .sg-scene-create-action {
   justify-content: center;
   background: var(--primary);
   color: white;
@@ -1307,6 +1313,101 @@ sg-input-scene-creator .sg-scene-create-action {
   }
 }
 
+
+/* Checkpoint/History Panel Styles */
+.sg-checkpoint-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.sg-checkpoint-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sg-checkpoint-item {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
+  border-radius: 10px;
+  background: var(--bg-input);
+  color: var(--text-main);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease, border-color 120ms ease, transform 120ms ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.sg-checkpoint-item:hover {
+  filter: brightness(1.08);
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+}
+
+.sg-checkpoint-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 24%, transparent);
+}
+
+.sg-checkpoint-item--auto-backup {
+  border-color: color-mix(in srgb, var(--primary) 30%, var(--border-soft));
+  background: color-mix(in srgb, var(--primary) 6%, var(--bg-input));
+}
+
+.sg-checkpoint-item-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  padding-top: 0.05rem;
+  color: var(--text-muted);
+}
+
+.sg-checkpoint-item--auto-backup .sg-checkpoint-item-icon {
+  color: var(--primary);
+}
+
+.sg-checkpoint-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.sg-checkpoint-title {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.sg-checkpoint-date {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.sg-checkpoint-empty {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.sg-checkpoint-error {
+  padding: 0.7rem 0.8rem;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-error) 12%, var(--bg-input));
+  color: var(--text-error);
+  font-size: 0.85rem;
+  word-break: break-word;
+}
 
 @media (max-width: 1023px) and (orientation: landscape) {
   .app-viewport {

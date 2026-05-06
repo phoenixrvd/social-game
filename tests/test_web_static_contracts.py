@@ -272,7 +272,7 @@ def test_dynamic_scene_reset_button_is_wired_and_conditionally_visible():
 
     assert 'data-action="reset-active-scene"' in source
     assert '["isDynamicScene", this.onDynamicSceneChanged.bind(this)]' in source
-    assert "Standard-Scene kann nicht gelöscht werden" in source
+    assert "Standard-Szene kann nicht gelöscht werden" in source
     assert "this.$.resetSceneButton.disabled = this._state.disabled || !this._state.isDynamicScene" in source
 
 

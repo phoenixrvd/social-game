@@ -328,7 +328,7 @@ async function resetNpcAndDynamicScene() {
     return false
   }
 
-  if (!window.confirm("Soll der Verlauf und die erstellte Scene wirklich gelöscht werden?")) {
+  if (!window.confirm("Soll der Verlauf und die erstellte Szene wirklich gelöscht werden?")) {
     return false
   }
 
@@ -337,13 +337,13 @@ async function resetNpcAndDynamicScene() {
     const response = await fetch("/api/scene/reset-active", { method: "DELETE" })
     const payload = await readJsonResponse(response)
     if (!response.ok) {
-      appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf und Scene konnten nicht gelöscht werden.") })
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf und Szene konnten nicht gelöscht werden.") })
       return false
     }
     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
     return true
   } catch (error) {
-    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf und Scene konnten nicht gelöscht werden." })
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf und Szene konnten nicht gelöscht werden." })
     return false
   } finally {
     appStore.setState({ isSessionLoading: false })
@@ -473,7 +473,7 @@ function setInput(value = "") {
 }
 
 function toggleSelectorPanel() {
-  appStore.setState({ isSelectorPanelOpen: !appStore.getState().isSelectorPanelOpen })
+   appStore.setState({ isSelectorPanelOpen: !appStore.getState().isSelectorPanelOpen })
 }
 
 function toggleImageExpand(expanded = false) {
@@ -547,42 +547,135 @@ async function createScene(payload = {}) {
 }
 
  async function updateUserProfile(content = "") {
-  if (state.isSending || state.isSessionLoading) {
-    return
-  }
+   if (state.isSending || state.isSessionLoading) {
+     return
+   }
 
-  try {
-    const response = await fetch("/api/user-profile", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
-    })
-    const payload = await readJsonResponse(response)
-    if (!response.ok) {
-      appStore.setState({ errorMessage: getErrorMessage(payload, "User Profile konnte nicht aktualisiert werden.") })
-      return
-    }
-    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
-  } catch (error) {
-    appStore.setState({ errorMessage: error instanceof Error ? error.message : "User Profile konnte nicht aktualisiert werden." })
-  }
+   try {
+     const response = await fetch("/api/user-profile", {
+       method: "PUT",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ content }),
+     })
+     const payload = await readJsonResponse(response)
+     if (!response.ok) {
+       appStore.setState({ errorMessage: getErrorMessage(payload, "User Profile konnte nicht aktualisiert werden.") })
+       return
+     }
+     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+   } catch (error) {
+     appStore.setState({ errorMessage: error instanceof Error ? error.message : "User Profile konnte nicht aktualisiert werden." })
+   }
 }
 
-export const appActions = {
-   loadInitialState,
-   submitMessage,
-   updateSession,
-   refreshImage,
-   revertImage,
-   deleteImage,
-   resetNpc,
-   resetNpcAndDynamicScene,
-   setInput,
-   toggleTheme,
-   toggleSelectorPanel,
-   toggleImageExpand,
-   setImageError,
-   updateUserProfile,
-   toggleImageAutogenerate,
-   createScene,
+async function loadCheckpoints() {
+   const state = appStore.getState()
+   if (state.isHistoryLoading) {
+     return
+   }
+
+   appStore.setState({ isHistoryLoading: true, historyError: "" })
+   try {
+     const response = await fetch("/api/history/list", { cache: "no-store" })
+     const payload = await readJsonResponse(response)
+     if (!response.ok) {
+       appStore.setState({ historyError: getErrorMessage(payload, "Checkpoints konnten nicht geladen werden.") })
+       return
+     }
+
+     appStore.setState({ checkpoints: Array.isArray(payload.checkpoints) ? payload.checkpoints : [] })
+   } catch (error) {
+     appStore.setState({ historyError: error instanceof Error ? error.message : "Checkpoints konnten nicht geladen werden." })
+   } finally {
+     appStore.setState({ isHistoryLoading: false })
+   }
  }
+
+ async function saveCheckpoint() {
+   const state = appStore.getState()
+   if (state.isSending || state.isSessionLoading || state.isHistoryLoading) {
+     return false
+   }
+
+   let shouldReloadCheckpoints = false
+   appStore.setState({ isHistoryLoading: true, historyError: "" })
+   await waitForNextPaint()
+
+   try {
+     const response = await fetch("/api/history/save", { method: "POST" })
+     const payload = await readJsonResponse(response)
+     if (!response.ok) {
+       appStore.setState({ historyError: getErrorMessage(payload, "Checkpoint konnte nicht erstellt werden.") })
+       return false
+     }
+
+     shouldReloadCheckpoints = true
+     return true
+   } catch (error) {
+     appStore.setState({ historyError: error instanceof Error ? error.message : "Checkpoint konnte nicht erstellt werden." })
+     return false
+   } finally {
+     appStore.setState({ isHistoryLoading: false })
+     if (shouldReloadCheckpoints) {
+       await loadCheckpoints()
+     }
+   }
+ }
+
+ async function restoreCheckpoint(commitHash) {
+   const state = appStore.getState()
+   if (state.isSending || state.isSessionLoading || !commitHash) {
+     return false
+   }
+
+   if (!window.confirm("Soll dieser Spielstand wirklich wiederhergestellt werden?")) {
+     return false
+   }
+
+   appStore.setState({ isSessionLoading: true, historyError: "" })
+   await waitForNextPaint()
+
+   try {
+     const response = await fetch("/api/history/restore", {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ commit_hash: commitHash }),
+     })
+     const payload = await readJsonResponse(response)
+     if (!response.ok) {
+       appStore.setState({ historyError: getErrorMessage(payload, "Spielstand konnte nicht wiederhergestellt werden.") })
+       return false
+     }
+
+     // Neu laden nach erfolgreicher Wiederherstellung
+     window.location.reload()
+     return true
+   } catch (error) {
+     appStore.setState({ historyError: error instanceof Error ? error.message : "Spielstand konnte nicht wiederhergestellt werden." })
+     return false
+   } finally {
+     appStore.setState({ isSessionLoading: false })
+   }
+ }
+
+export const appActions = {
+    loadInitialState,
+    submitMessage,
+    updateSession,
+    refreshImage,
+    revertImage,
+    deleteImage,
+    resetNpc,
+    resetNpcAndDynamicScene,
+    setInput,
+    toggleTheme,
+    toggleSelectorPanel,
+    toggleImageExpand,
+    setImageError,
+    updateUserProfile,
+    toggleImageAutogenerate,
+    createScene,
+    loadCheckpoints,
+    saveCheckpoint,
+    restoreCheckpoint,
+  }

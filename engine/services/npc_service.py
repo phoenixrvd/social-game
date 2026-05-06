@@ -38,4 +38,3 @@ class NpcService:
         ).base_runtime
         if scene_data_dir.exists():
             shutil.rmtree(scene_data_dir)
-

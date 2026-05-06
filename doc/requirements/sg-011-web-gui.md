@@ -80,7 +80,7 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 **Akzeptanzkriterien:**
 - Das zur aktiven Sitzung gehörende Szenenbild wird in der Web-GUI angezeigt.
 - Die Character-Beschreibung wird in der Web-GUI angezeigt.
-- Die Scene-Beschreibung wird in der Web-GUI angezeigt.
+- Die Szenenbeschreibung wird in der Web-GUI angezeigt.
 - Änderungen durch Interaktionen aktualisieren Szenenbild und sichtbare Zustandsinformationen innerhalb derselben aktiven Sitzung.
 
 **Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
@@ -145,12 +145,12 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** `doc/requirements/sg-005-npc-bilder.md`, `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`
 
-### Anlegen von Scenes in der Web-GUI
+### Anlegen von Szenen in der Web-GUI
 **Typ:** Funktional  
-**Beschreibung:** Das System muss das Anlegen neuer Scenes in der Web-GUI ermöglichen.  
+**Beschreibung:** Das System muss das Anlegen neuer Szenen in der Web-GUI ermöglichen.  
 **Akzeptanzkriterien:**
-- Eine neue Scene kann in der Web-GUI angelegt werden.
-- Nach erfolgreichem Anlegen steht die neue Scene für die Nutzung in der Sitzung zur Verfügung.
+- Eine neue Szene kann in der Web-GUI angelegt werden.
+- Nach erfolgreichem Anlegen steht die neue Szene für die Nutzung in der Sitzung zur Verfügung.
 
 **Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
 

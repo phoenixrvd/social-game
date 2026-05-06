@@ -2,48 +2,51 @@
 
 Führe und aktualisiere ein kompaktes User Profile des Spielers aus Sicht des aktiven NPC.
 
-Das Profil enthält nur langfristig nutzbare Informationen für konsistente soziale Interaktionen.
+Das Profil speichert ausschließlich langfristig nutzbare Fakten, die der Nutzer dem NPC über sich selbst mitteilt.
 
 # Ziel
 
-Extrahiere, prüfe und aktualisiere stabile Informationen über den Spieler basierend auf:
+Extrahiere und aktualisiere stabile Nutzer-Fakten basierend auf:
 
 * Short-Term-Memory (STM) → höchste Priorität
 * bestehendem User Profile
 
-# Erlaubte Inhalte
+# Erlaubte Fakten
 
-Nur aufnehmen, wenn direkt erkennbar und langfristig relevant:
+Nur aufnehmen, wenn der Nutzer die Information direkt über sich selbst mitteilt und sie langfristig relevant ist:
 
 * stabile Fakten
-* direkt erkennbare Fähigkeiten und Kenntnisse
+* selbst genannte Fähigkeiten und Kenntnisse
 * Präferenzen
 * Grenzen
-* wiederkehrende Verhaltensmuster
-* Eindrücke (nur bei expliziter Unsicherheit im Dialog)
+
+# Nicht speichern
+
+* Aussagen des NPC
+* Fakten über andere Personen
+* Verhalten, Tonfall oder Schreibstil des Nutzers
+* Vermutungen, Eindrücke oder Stimmungen
+* einmalige, kurzfristige oder rein situative Informationen
 
 # Harte Regeln
 
 * Keine Spekulation
-* Keine Interpretation ohne klare Grundlage
 * Keine externen Annahmen
 * Nur STM und bestehendes Profil verwenden
 * Keine Prosa, keine Sätze, keine Erklärungen
 * Keine Duplikate
-* Keine einmaligen oder kurzfristigen Informationen
 
 # NPC-Perspektive
 
 * Alle Einträge aus Sicht des aktiven NPC formulieren
-* Nur Wissen oder plausible Annahmen des NPC abbilden
-* Unsicherheit nur als Eindruck formulieren
+* Nur Wissen abbilden, das der Nutzer dem NPC gegeben hat
+* Keine plausiblen Annahmen oder Eindrücke speichern
 
 # Priorisierung
 
 1. Explizite Aussagen im STM
-2. Direkt beobachtbares Verhalten im STM
-3. Wiederholt bestätigte Informationen
-4. Bestehende Profileinträge
+2. Wiederholt bestätigte Informationen
+3. Bestehende Profileinträge
 
 # Update-Logik
 
@@ -51,25 +54,32 @@ Bestehendes Profil konservativ prüfen und anpassen:
 
 * Bestehende Einträge grundsätzlich behalten
 * Fehlende Erwähnung im aktuellen STM ist kein Löschgrund
-* Neue klare Information → bestehenden Eintrag ersetzen
-* Präzisere Information → unpräzisen Eintrag ersetzen
-* Expliziter Widerspruch im STM → bestehenden Eintrag ersetzen oder entfernen
-* Eindeutig falscher oder überholter Eintrag → entfernen
+* Neue Fakten ergänzen, wenn sie keinem bestehenden Eintrag widersprechen
+* Präzisere Fakten ersetzen unpräzise Einträge nur zum selben Fakt
+* Widersprüche ersetzen oder entfernen nur den betroffenen Eintrag
 * Duplikate → zusammenführen
 * Unklare Lage → bestehenden Eintrag unverändert behalten
 
-STM hat Vorrang vor bestehenden Profileinträgen, aber nur bei klarer neuer Information oder eindeutigem Widerspruch.
+STM hat Vorrang vor bestehenden Profileinträgen, aber nur bei eindeutigem Widerspruch zum selben Fakt.
+
+Ein Widerspruch liegt nur vor, wenn neuer und bestehender Eintrag nicht gleichzeitig wahr sein können.
+
+Beispiele:
+
+* Widerspruch: Der Nutzer sagt zuerst, er sei ein Mann, und später, er sei eine Frau.
+* Kein Widerspruch: Der Nutzer nennt zusätzlich einen Beruf, eine Fähigkeit, eine Präferenz oder eine Grenze.
+* Kein Widerspruch: Der Nutzer formuliert denselben Fakt später allgemeiner oder ohne neue Präzision.
 
 # Aufnahme-Kriterien
 
 Information nur aufnehmen, wenn:
 
-* direkt aus STM ableitbar
-* stabil oder wiederkehrend
+* direkt aus einer Nutzer-Aussage im STM ableitbar
+* stabil, dauerhaft oder wiederkehrend
 * für zukünftige Interaktionen relevant
 * mit hoher Sicherheit erkennbar
 
-Einmalige, irrelevante oder unsichere neue Informationen ignorieren.
+Irrelevante, unsichere oder rein situative neue Informationen ignorieren.
 
 Bestehende Profileinträge dürfen nicht gelöscht werden, nur weil sie im aktuellen STM nicht erneut bestätigt werden.
 
@@ -88,8 +98,6 @@ Bestehende Profileinträge dürfen nicht gelöscht werden, nur weil sie im aktue
 * faehigkeit
 * praferenz
 * grenze
-* verhaltensmuster
-* eindruck
 
 Keine neuen Schlüssel erfinden.
 

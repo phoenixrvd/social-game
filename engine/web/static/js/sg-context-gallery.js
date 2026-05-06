@@ -210,7 +210,7 @@ class SocialGameContextGallery extends HTMLElement {
        <button
          type="button"
          class="sg-context-gallery-item sg-context-gallery-create-scene"
-         title="Scene erstellen"
+          title="Szene erstellen"
          aria-label="Neue Szene erstellen"
        >
          <div class="sg-context-gallery-image sg-context-gallery-create-scene-image">
@@ -219,7 +219,7 @@ class SocialGameContextGallery extends HTMLElement {
              <line x1="5" y1="12" x2="19" y2="12"></line>
            </svg>
          </div>
-         <span class="sg-context-gallery-label">Scene erstellen</span>
+          <span class="sg-context-gallery-label">Szene erstellen</span>
        </button>
      `
    }

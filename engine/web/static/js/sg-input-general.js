@@ -49,13 +49,13 @@ function renderActionContent(icon, title, description = "") {
 function getResetSceneButtonCopy(isDynamicScene) {
   if (isDynamicScene) {
     return {
-      label: "Verlauf und Scene löschen",
-      description: "Entfernt Verlauf sowie Inhalte erstellter Scenes",
+      label: "Verlauf und Szene löschen",
+      description: "Entfernt Verlauf sowie Inhalte erstellter Szenen",
     }
   }
   return {
-    label: "Verlauf und Scene löschen",
-    description: "Standard-Scene kann nicht gelöscht werden",
+    label: "Verlauf und Szene löschen",
+    description: "Standard-Szene kann nicht gelöscht werden",
   }
 }
 
@@ -81,8 +81,8 @@ class SocialGameInputGeneral extends HTMLElement {
           <button type="button" data-action="reset-active-npc" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf löschen">
             ${renderActionContent(DELETE_ICON, "Verlauf löschen", "Entfernt Nachrichten und Bilder der aktiven Konversation")}
           </button>
-          <button type="button" data-action="reset-active-scene" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf und Scene löschen">
-            ${renderActionContent(DELETE_ICON, "Verlauf und Scene löschen", "Entfernt Verlauf sowie Inhalte erstellter Scenes")}
+          <button type="button" data-action="reset-active-scene" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf und Szene löschen">
+            ${renderActionContent(DELETE_ICON, "Verlauf und Szene löschen", "Entfernt Verlauf sowie Inhalte erstellter Szenen")}
           </button>
         </div>
       </section>

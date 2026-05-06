@@ -19,6 +19,7 @@ import uvicorn
 
 from engine.config import config
 from engine.client import client, user_visible_provider_error_detail
+from engine.services.history_service import HistoryService
 from engine.services.image_service import ImageService
 from engine.services.npc_service import NpcService
 from engine.services.npc_turn_service import NpcTurnService
@@ -39,7 +40,7 @@ def _get_scheduler() -> Scheduler:
     global _scheduler
     if _scheduler is None:
         _scheduler = Scheduler()
-    return _scheduler
+    return _scheduler  # type: ignore
 
 
 def _problem_response(status_code: int, detail: Any) -> Response:
@@ -185,6 +186,10 @@ class UserProfileRequest(BaseModel):
 
 class SceneCreateRequest(BaseModel):
     scene_description: str
+
+
+class RestoreCheckpointRequest(BaseModel):
+    commit_hash: str
 
 
 def _render_markdown_to_html(text: str) -> str:
@@ -404,6 +409,45 @@ def reset_active_dynamic_scene_with_npc_runtime_data() -> dict[str, Any]:
     session.scene_id = config.DEFAULT_SCENE_ID
     SceneService.delete_dynamic_scene_artifacts(scene_id)
     return _state_payload()
+
+
+@app.post("/api/history/save")
+def save_checkpoint() -> dict[str, Any]:
+    """Speichert einen Checkpoint des aktiven Spielstands."""
+    try:
+        history_service = HistoryService()
+        history_service.save_checkpoint()
+        return {"success": True}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/history/list")
+def list_checkpoints() -> dict[str, Any]:
+    """Listet alle verfügbaren Checkpoints für den aktiven NPC/Scene auf."""
+    history_service = HistoryService()
+    checkpoints = history_service.list_checkpoints()
+    return {
+        "checkpoints": [
+            {
+                "commit_hash": cp.commit_hash,
+                "commit_date": cp.commit_date,
+                "commit_message": cp.commit_message,
+            }
+            for cp in checkpoints
+        ]
+    }
+
+
+@app.post("/api/history/restore")
+def restore_checkpoint(request: RestoreCheckpointRequest) -> dict[str, Any]:
+    """Stellt einen älteren Spielstand wieder her."""
+    try:
+        history_service = HistoryService()
+        history_service.restore_checkpoint(request.commit_hash)
+        return {"success": True}
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/chat/stream")
