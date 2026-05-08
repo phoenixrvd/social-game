@@ -65,7 +65,6 @@ Bei Konflikten gelten spezifischere Guidelines vor allgemeinen Mustern in dieser
 - Der Scheduler hält pending Jobs intern und führt sie synchron sowie rate-limitiert aus; Scheduler-Zyklen allein erzeugen keine neuen Job-Läufe
 - LLM-Antworten und fachliche Updates sind bewusst getrennt; es gibt keine LLM-Tool-/Function-Calls mehr
 - Hintergrund: Tool-/Function-Calling verhindert oft die normale Antwort. Ein Twice-Call-Pattern würde für dasselbe Ergebnis unnötige Kosten und Komplexität erzeugen
-- `force=True` bei Bildupdates deaktiviert die Prompt-Skip-Logik
 
 **Prompt-Templates** – Platzhalter per `.replace("{{KEY}}", value)`, kein Template-Engine:
 ```text
@@ -83,21 +82,19 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 - Wenn technische Details unvermeidbar sind, diese bevorzugt als `Randbedingung` oder als separaten weiterführenden Hinweis dokumentieren, nicht als Kern der funktionalen Anforderung.
 - Akzeptanzkriterien stets beobachtbares Verhalten beschreiben; interne Flags, Jobnamen, Klassen oder Endpunkte nur in begründeten Ausnahmefällen nennen.
 
-## Coding-Regeln (BLOCKER)
-
-- Vollständige Regeln stehen in `doc/guidelines/coding-rules.md` und sind verbindlich.
-- Methoden max. ~30 Zeilen, Verschachtelung max. 2–3 Ebenen
-- Konstruktoren nutzen kein keyword-only `*`-Pattern
-- Klassen instanziieren benötigte Stores und Services selbst; keine Store-/Service-Übergabe über Konstruktorparameter
-- Keine Proxy-/Delegationsmethoden ohne eigene Logik
-- Keine globalen Konstanten ohne echte Wiederverwendung (>2x im Modul)
-- Unbenutzten Code sofort entfernen
-
 ## Git-Workflow
 
 - Arbeit in `v1.x`-Branches, kein direkter Push auf `main`
-- Squash-Merge auf `main` beim Release: `git merge --squash --ff v1.x`
-- Commit-Format: `<type>: <beschreibung>` – Typen: `feature:`, `fix:`, `refactor:`, `add:`
+- Manueller Release-Workflow: `git checkout main`, `git merge --squash --ff v1.x`, `git commit`, `git push origin main`
+- Vor jedem Commit `doc/guidelines/git-workflow.md` beachten
+- Commit-Format: `<type>: <description>`
+- Erlaubte Commit-Typen: `refactor:`, `feature:`, `fix:`, `add:`
+- Commit-Typen klein schreiben; Beschreibung kurz, klar und beschreibend formulieren
+- Ausnahme: Release-Commits auf `main` nutzen das Format `v1.x: <release summary>`
+
+## OpenCode-Agenten
+
+Projekt-Agenten sind in `.opencode/agents/` definiert. `AGENTS.md` enthält nur globale Projektanweisungen; agentenspezifische Aktivierung, Regeln, Modelle und Berechtigungen stehen ausschließlich in den jeweiligen Agent-Dateien.
 
 ## Externe Abhängigkeiten
 

@@ -58,14 +58,16 @@ function renderTabPanel(optionId, contentMarkup, isHidden = false, withAriaLabel
 }
 
 function renderOptionsTabs() {
+   const CONTEXT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0z"></path><path d="M8 10h8"></path><path d="M8 14h5"></path></svg>`
    const SAVE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`
+   const GENERAL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8z"></path></svg>`
    const IMAGE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M3 3h18v18H3z"></path><path d="M8 15l3-3 2 2 3-3 5 5"></path><circle cx="9" cy="9" r="1.5"></circle></svg>`
 
    const tabs = [
-     { optionId: "context", title: "Kontext", contentMarkup: "<sg-input-context></sg-input-context>", isSelected: true },
-     { optionId: "general", title: "Allgemein", contentMarkup: "<sg-input-general></sg-input-general>" },
-     { optionId: "history", title: SAVE_ICON, ariaLabel: "Zwischenstände", contentMarkup: "<sg-input-history></sg-input-history>" },
-     { optionId: "image", title: IMAGE_ICON, ariaLabel: "Bild", contentMarkup: "<sg-input-image></sg-input-image>" },
+      { optionId: "context", title: CONTEXT_ICON, ariaLabel: "Kontext", contentMarkup: "<sg-input-context></sg-input-context>", isSelected: true },
+      { optionId: "image", title: IMAGE_ICON, ariaLabel: "Bild", contentMarkup: "<sg-input-image></sg-input-image>" },
+      { optionId: "history", title: SAVE_ICON, ariaLabel: "Zwischenstände", contentMarkup: "<sg-input-history></sg-input-history>" },
+      { optionId: "general", title: GENERAL_ICON, ariaLabel: "Allgemein", contentMarkup: "<sg-input-general></sg-input-general>" },
    ]
    const tabsMarkup = tabs
      .map((tab) => renderTab(tab.optionId, tab.title, Boolean(tab.isSelected), tab.ariaLabel || ""))

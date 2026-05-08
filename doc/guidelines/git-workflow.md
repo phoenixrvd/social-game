@@ -30,7 +30,6 @@
 * `feature:` → new functionality
 * `fix:` → bug fixes
 * `add:` → new files or setup (e.g. LICENSE, SECURITY)
-* `feature:` → new files or setup (e.g. LICENSE, SECURITY)
 
 ### Rules
 
