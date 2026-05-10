@@ -1,25 +1,44 @@
 .sg-chat-form {
-  border-top: 1px solid var(--border-soft);
-  background: var(--bg-panel-soft);
-  padding: 0.85rem;
+  position: relative;
+  isolation: isolate;
+  border: 1px solid color-mix(in srgb, var(--border-strong) 78%, transparent);
+  border-radius: 22px;
+  background: transparent;
+  box-shadow: var(--shadow-soft);
+  padding: 0.45rem;
+}
+
+.sg-chat-form::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  backdrop-filter: blur(28px) saturate(125%);
+  background: color-mix(in srgb, var(--bg-panel) 58%, transparent);
+}
+
+.sg-chat-form > * {
+  position: relative;
 }
 
 .sg-options-panel {
-  margin-bottom: 0.65rem;
-  padding-bottom: 0.65rem;
+  margin-bottom: 0.7rem;
+  padding: 0.3rem 0.2rem 0.15rem;
   border-bottom: 1px solid color-mix(in srgb, var(--border-soft) 78%, transparent);
 }
 
 .sg-options-tab-panels {
-  max-height: 60vh;
+  max-height: min(58vh, 520px);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .sg-options-tabs-list {
   display: flex;
-  gap: 0.45rem;
-  margin-top: 0.55rem;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
 }
 
 .sg-options-tab {
@@ -27,11 +46,11 @@
   align-items: center;
   justify-content: center;
   flex: 1;
-  min-height: 40px;
-  padding: 0.55rem 0.7rem;
+  min-height: 48px;
+  padding: 0.65rem 0.8rem;
   border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
-  border-radius: 10px;
-  background: transparent;
+  border-radius: 13px;
+  background: var(--bg-input);
   text-align: center;
   cursor: pointer;
   user-select: none;
@@ -59,13 +78,12 @@
 
 .sg-options-tab[aria-selected="true"] {
   color: var(--text-main);
-  border-color: color-mix(in srgb, var(--primary) 38%, var(--border-strong));
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
 .sg-options-tab-panel {
   border: none;
-  border-radius: 10px;
+  border-radius: 14px;
   padding: 0;
   background: transparent;
 }
@@ -118,7 +136,7 @@
 .sg-session-row {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 0.6rem;
+  gap: 1rem;
 }
 
 .sg-session-row[hidden] {
@@ -163,47 +181,55 @@
 }
 
 
-.sg-composer-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0;
-  align-items: end;
-}
-
-.sg-chat-form.is-options-open .sg-composer-row {
-  display: none;
-}
-
 .sg-composer-layout {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  column-gap: 0.65rem;
+  column-gap: 0;
   align-items: stretch;
 }
 
 .sg-chat-form.is-options-open .sg-composer-layout {
   grid-template-columns: minmax(0, 1fr);
-  column-gap: 0;
 }
 
 .sg-composer-main {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
   min-width: 0;
+  padding: 0.9rem 0.9rem 0.65rem 0.85rem;
+}
+
+.sg-composer-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  align-items: start;
 }
 
 .sg-chat-form.is-options-open .sg-composer-main {
   min-height: 0;
+  padding: 0 0.9rem 0.65rem 0.85rem;
+}
+
+.sg-chat-form.is-options-open .sg-composer-row,
+.sg-chat-form.is-options-open .sg-send-button {
+  display: none;
 }
 
 .sg-composer-thumb {
+  --sg-composer-thumb-border-width: 1px;
+  --sg-composer-thumb-radius: 22px;
   display: inline-flex;
   align-items: stretch;
   justify-content: center;
-  width: auto;
-  height: 76px;
+  flex: none;
+  width: 76.8px;
+  height: auto;
+  min-height: 105.6px;
+  max-height: 100%;
   aspect-ratio: 2 / 3;
-  border: 0;
   padding: 0;
-  border-radius: 12px;
   background: transparent;
   overflow: hidden;
 }
@@ -213,7 +239,7 @@
   inset: auto;
   width: 100%;
   height: 100%;
-  border-radius: inherit;
+  border-radius: calc(var(--sg-composer-thumb-radius) - var(--sg-composer-thumb-border-width));
   overflow: hidden;
   background: var(--bg-panel-soft);
 }
@@ -225,16 +251,32 @@
   height: 100%;
 }
 
-.sg-input-shell {
+.sg-composer-thumb .sg-image-bg {
+  display: block;
+  filter: blur(12px);
+  opacity: 0.58;
+  object-fit: cover;
+  transform: scale(1.12);
+}
+
+.sg-composer-thumb .sg-image-main {
   position: relative;
+  z-index: 1;
+  object-fit: contain;
+  cursor: zoom-in;
 }
 
 .sg-chat-textarea {
+  display: block;
   resize: none;
-  min-height: 46px;
+  min-height: 52px;
   max-height: none;
   overflow-y: hidden;
-  padding: 0.68rem 3rem 0.68rem 0.8rem;
+  padding: 0.15rem 3.2rem 0.15rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  line-height: 1.35;
 }
 
 .sg-send-button,
@@ -250,14 +292,15 @@
 
 .sg-send-button {
   position: absolute;
-  right: 0.4rem;
-  bottom: 0.4rem;
-  width: 38px;
-  height: 38px;
-  border-radius: 11px;
+  top: 0;
+  right: 0;
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
   background: transparent;
   color: var(--primary);
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--border-soft) 78%, transparent);
   box-shadow: none;
 }
 
@@ -354,14 +397,14 @@
   padding: 0;
   border: 0;
   background: transparent;
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
   cursor: pointer;
   transition: color 120ms ease, opacity 120ms ease;
 }
 
 .sg-composer-footer {
-  margin-top: 0.5rem;
+  margin-top: 0.45rem;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -369,7 +412,8 @@
 
 .sg-composer-tools {
   display: flex;
-  gap: 0.38rem;
+  align-items: center;
+  gap: 0.5rem;
   justify-content: flex-end;
   margin-left: auto;
   position: relative;
@@ -379,14 +423,14 @@
 .sg-send-button:hover {
   filter: brightness(1.08);
   transform: translateY(-1px);
-  border-color: transparent;
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
 }
 
 .sg-send-button:focus,
 .sg-send-button:focus-visible {
   outline: none;
-  border-color: transparent;
-  box-shadow: none;
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
 .sg-settings-action:hover {
@@ -437,8 +481,8 @@
 
 .sg-composer-meta {
   margin-top: 0;
-  min-height: 1.2rem;
-  font-size: 0.78rem;
+  min-height: 1.3rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
   flex: 1 1 auto;
   min-width: 0;
@@ -458,55 +502,40 @@
   display: none;
 }
 
-
 .sg-input-component .sg-chat-form {
-  border: none;
-  background: none;
-  box-shadow: none;
+  padding: 0;
 }
 
-.sg-input-component .sg-chat-form.is-options-open {
-  border-radius: 1rem 1rem 0 0;
-  background: var(--bg-panel-soft);
+.sg-input-component .sg-chat-form:focus-within {
+  border-color: color-mix(in srgb, var(--primary) 45%, var(--border-strong));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent), var(--shadow-soft);
+}
+
+.sg-input-component .sg-chat-form.is-options-open:focus-within {
+  border-color: color-mix(in srgb, var(--border-strong) 78%, transparent);
+  box-shadow: var(--shadow-soft);
 }
 
 .sg-input-component .sg-chat-form.is-options-open .sg-options-panel {
+  background: transparent;
   border-bottom: none;
   margin-bottom: 0;
+  padding: 0.85rem 0.85rem 0.15rem;
 }
 
 .sg-input-component .sg-chat-textarea {
-  height: 46px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(12px);
+  background: transparent;
+  box-shadow: none;
 }
 
 .sg-input-component {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  right: 0.75rem;
+  bottom: 0.75rem;
+  left: 0.75rem;
   z-index: 45;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 0.0) 0%,
-    rgba(255, 255, 255, 0.5) 40%,
-    rgba(255, 255, 255, 0.85) 100%
-  );
+  background: transparent;
   box-shadow: none;
-}
-
-[data-theme="dark"] .sg-input-component {
-  background: linear-gradient(
-    to bottom,
-    rgba(0, 0, 0, 0.0) 0%,
-    rgba(0, 0, 0, 0.5) 40%,
-    rgba(0, 0, 0, 0.85) 100%
-  );
-}
-
-[data-theme="dark"] .sg-input-component .sg-chat-textarea {
-  background: rgba(0, 0, 0, 0.4);
 }
 
 .sg-settings-textarea {
@@ -530,13 +559,13 @@
   cursor: not-allowed;
 }
 
-sg-input-scene .sg-form-group {
+.sg-form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-sg-input-scene .sg-form-label {
+.sg-form-label {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-main);

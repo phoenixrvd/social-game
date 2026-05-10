@@ -3,6 +3,8 @@ function createInitialState() {
     messages: [],
     input: "",
     imageUrl: null,
+    imageOriginalUrl: null,
+    imageBackups: [],
     imageSignature: null,
     errorMessage: null,
     isSending: false,

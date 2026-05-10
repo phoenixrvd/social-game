@@ -41,28 +41,27 @@
   }
 
   .sg-input-component {
-    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--bg-panel) 98%, transparent));
-    padding: 0 0.9rem 0.9rem;
+    background: transparent;
+    right: 1rem;
+    bottom: 1rem;
+    left: 1rem;
+    padding: 0;
   }
 
   .sg-input-component .sg-chat-form {
-    padding: 0.85rem 0 0;
+    padding: 0.45rem;
   }
 
   .sg-input-component .sg-chat-form.is-options-open {
-    margin-right: -0.9rem;
-    margin-left: -0.9rem;
-    margin-bottom: -0.9rem;
+    margin-right: -0.1rem;
+    margin-left: -0.1rem;
+    margin-bottom: -0.1rem;
     box-shadow: var(--shadow-soft);
-    padding: 0.85rem;
+    padding: 0;
   }
 
   .sg-input-component .sg-chat-form.is-options-open .sg-options-panel {
     padding-bottom: 0;
-  }
-
-  .sg-input-component .sg-chat-textarea {
-    background: color-mix(in srgb, var(--bg-panel) 62%, transparent);
   }
 
   .sg-input-component .sg-composer-footer {
@@ -77,6 +76,10 @@
   .sg-composer-layout {
     grid-template-columns: minmax(0, 1fr);
     column-gap: 0;
+  }
+
+  .sg-send-button {
+    width: 42px;
   }
 
   .sg-scene-image-slot .sg-scene-thumbnail {
@@ -119,10 +122,6 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
-  }
-
-  .sg-image-overlay {
-    display: none;
   }
 }
 

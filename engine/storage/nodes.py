@@ -328,6 +328,14 @@ class NpcNode(_StorageNodeBase):
         return self.base_runtime / "img_backup"
 
     @property
+    def img_backup(self) -> list[ImageFile]:
+        if not self.backup_dir.exists():
+            return []
+
+        backups = sorted(self.backup_dir.glob("img-*.png"), key=lambda path: path.name, reverse=True)
+        return [ImageFile(path) for path in backups]
+
+    @property
     def orchestrator_dir(self) -> Path:
         return self.base_runtime / "orchestrator"
 

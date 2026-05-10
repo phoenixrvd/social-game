@@ -215,3 +215,23 @@ def test_storage_npc_video_prefers_override_over_default(tmp_path, monkeypatch):
 
     assert storage.npc.video.path == override_video
     assert storage.npc.video.get() == override_video
+
+
+def test_storage_npc_img_backup_returns_image_files_newest_first(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    _set_session(tmp_path, "vika", "office")
+
+    backup_dir = tmp_path / ".data" / "npcs" / "vika" / "office" / "img_backup"
+    backup_dir.mkdir(parents=True)
+    (backup_dir / "img-20260510-100000.png").write_bytes(b"older")
+    (backup_dir / "img-20260510-110000.png").write_bytes(b"newer")
+    (backup_dir / "note.txt").write_text("ignored", encoding="utf-8")
+
+    backups = storage.npc.img_backup
+
+    assert [image.name for image in backups] == ["img-20260510-110000.png", "img-20260510-100000.png"]
+    assert [image.get() for image in backups] == [
+        backup_dir / "img-20260510-110000.png",
+        backup_dir / "img-20260510-100000.png",
+    ]

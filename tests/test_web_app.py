@@ -246,6 +246,9 @@ def test_static_assets_disable_cache_in_web_debug_mode(tmp_path, monkeypatch):
 def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")
+    storage.npc.backup_dir.mkdir(parents=True)
+    _make_test_png(storage.npc.backup_dir / "img-20260510-100000.png")
+    _make_test_png(storage.npc.backup_dir / "img-20260510-110000.png")
 
     payload = web_app_module.get_state()
     assert payload["npc_id"] == "vika"
@@ -258,6 +261,12 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert payload["is_dynamic_npc"] is False
     assert payload["is_dynamic_scene"] is False
     assert payload["image_url"] == "/api/image/current"
+    assert payload["image_original_url"].startswith("/api/image/original?v=")
+    assert [backup["name"] for backup in payload["image_backups"]] == [
+        "img-20260510-110000.png",
+        "img-20260510-100000.png",
+    ]
+    assert payload["image_backups"][0]["url"].startswith("/api/image/backups/img-20260510-110000.png?v=")
     assert payload["messages"][0]["content"] == "Hi"
     npc_options = {(entry["id"], entry["label"]) for entry in payload["npcs"]}
     assert {("mira", "Mira"), ("vika", "Vika")}.issubset(npc_options)
@@ -525,6 +534,53 @@ def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
         raise AssertionError("Expected FileNotFoundError")
     except FileNotFoundError as exc:
         assert exc.filename == str(storage.npc.img.get())
+
+
+def test_image_backup_endpoint_serves_active_npc_backup(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    storage.npc.backup_dir.mkdir(parents=True)
+    _make_test_png(storage.npc.backup_dir / "img-20260510-110000.png")
+
+    response = web_app_module.image_backup("img-20260510-110000.png")
+
+    assert response.status_code == 200
+    assert response.media_type == "image/webp"
+    assert len(response.body) > 0
+
+
+def test_original_image_endpoint_serves_active_npc_original(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    response = web_app_module.original_image()
+
+    assert response.status_code == 200
+    assert response.media_type == "image/webp"
+    assert len(response.body) > 0
+
+
+def test_image_backup_endpoint_rejects_unknown_name(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    try:
+        web_app_module.image_backup("state.md")
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 404
+        assert exc.detail == "Backup-Bild nicht gefunden."
+
+
+def test_image_backup_endpoint_rejects_path_traversal(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    storage.npc.backup_dir.mkdir(parents=True)
+    _make_test_png(storage.npc.backup_dir / "img-20260510-110000.png")
+
+    for backup_name in ("img-../session.yaml.png", "img-20260510-110000/../../session.yaml.png"):
+        try:
+            web_app_module.image_backup(backup_name)
+            raise AssertionError("Expected HTTPException")
+        except HTTPException as exc:
+            assert exc.status_code == 404
+            assert exc.detail == "Backup-Bild nicht gefunden."
 
 
 def test_npc_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):

@@ -76,21 +76,25 @@ sg-context-gallery-item:hover {
 
 .sg-context-gallery-item--selected,
 sg-context-gallery-item.sg-context-gallery-item--selected {
-  border-color: color-mix(in srgb, var(--primary) 55%, var(--border-strong));
   background: color-mix(in srgb, var(--primary) 18%, var(--bg-input));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
 }
 
 .sg-context-gallery-media {
   position: relative;
   display: block;
   width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.sg-context-gallery-item--selected .sg-context-gallery-media,
+sg-context-gallery-item.sg-context-gallery-item--selected .sg-context-gallery-media {
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 72%, var(--border-strong));
 }
 
 .sg-context-gallery-image {
   display: block;
   width: 100%;
-  border-radius: 6px;
 }
 
 .sg-context-gallery-video {
@@ -99,7 +103,6 @@ sg-context-gallery-item.sg-context-gallery-item--selected {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 6px;
   opacity: 0;
   pointer-events: none;
 }

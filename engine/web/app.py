@@ -348,6 +348,13 @@ def _image_url(npc) -> str | None:
     return "/api/image/current" if npc.img.is_file() else None
 
 
+def _image_original_url(npc) -> str | None:
+    original = npc.img_original
+    if not original.is_file():
+        return None
+    return f"/api/image/original?v={_url_version(original.get())}"
+
+
 def _image_signature(npc) -> str:
     return _file_signature(npc.img.get())
 
@@ -358,6 +365,26 @@ def _video_url(npc) -> str | None:
         return None
     version = _url_version(video.get())
     return f"/api/npcs/{npc.npc_id}/video?v={version}"
+
+
+def _image_backup_items(npc) -> list[dict[str, str]]:
+    return [
+        {
+            "name": image.name,
+            "url": f"/api/image/backups/{image.name}?v={_url_version(image.get())}",
+            "signature": _file_signature(image.get()),
+        }
+        for image in npc.img_backup
+    ]
+
+
+def _is_image_backup_name(value: str) -> bool:
+    if len(value) != len("img-20260510-123456.png"):
+        return False
+    if not value.startswith("img-") or not value.endswith(".png"):
+        return False
+    timestamp = value.removeprefix("img-").removesuffix(".png")
+    return len(timestamp) == 15 and timestamp[8] == "-" and timestamp.replace("-", "").isdigit()
 
 
 def _state_payload() -> dict[str, Any]:
@@ -375,7 +402,9 @@ def _state_payload() -> dict[str, Any]:
         "messages": _visible_messages(npc, scene),
         "messages_signature": _messages_signature(npc),
         "image_url": _image_url(npc),
+        "image_original_url": _image_original_url(npc),
         "image_signature": _image_signature(npc),
+        "image_backups": _image_backup_items(npc),
         "image_is_original": npc.is_image_original,
         "video_url": _video_url(npc),
         "npcs": _list_npcs(),
@@ -544,6 +573,25 @@ def current_image() -> Any:
     return _image_response(storage.npc.img.get())
 
 
+@app.get("/api/image/original")
+def original_image() -> Any:
+    original = storage.npc.img_original
+    if not original.is_file():
+        raise HTTPException(status_code=404, detail="Originalbild nicht gefunden.")
+    return _image_response(original.get())
+
+
+@app.get("/api/image/backups/{backup_name}")
+def image_backup(backup_name: str) -> Any:
+    if not _is_image_backup_name(backup_name):
+        raise HTTPException(status_code=404, detail="Backup-Bild nicht gefunden.")
+
+    backup = next((image for image in storage.npc.img_backup if image.name == backup_name), None)
+    if backup is None:
+        raise HTTPException(status_code=404, detail="Backup-Bild nicht gefunden.")
+    return _image_response(backup.get())
+
+
 @app.get("/api/npcs/{npc_id}/image")
 def npc_option_image(npc_id: str) -> Any:
     return _image_response(_npc_option_image_path(npc_id=npc_id), max_width=256)
@@ -568,6 +616,8 @@ def image_signature() -> dict[str, Any]:
     return {
         "signature": _image_signature(npc),
         "image_url": _image_url(npc),
+        "image_original_url": _image_original_url(npc),
+        "image_backups": _image_backup_items(npc),
         "image_is_original": npc.is_image_original,
         "video_url": _video_url(npc),
     }

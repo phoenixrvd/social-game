@@ -48,18 +48,15 @@ class SocialGameInputComposer extends HTMLElement {
         <div class="sg-composer-main">
           <div class="sg-composer-row">
             <label for="sg-chat-input" class="sg-visually-hidden">Nachricht eingeben</label>
-            <div class="sg-input-shell">
-              <textarea
-                id="sg-chat-input"
-                class="sg-chat-input sg-chat-textarea"
-                rows="1"
-                placeholder="Nachricht eingeben..."
-              ></textarea>
-
-              <button type="button" class="sg-send-button" aria-label="Senden">
-                ${SEND_ICON}
-              </button>
-            </div>
+            <textarea
+              id="sg-chat-input"
+              class="sg-chat-input sg-chat-textarea"
+              rows="1"
+              placeholder="Nachricht eingeben..."
+            ></textarea>
+            <button type="button" class="sg-send-button" aria-label="Senden">
+              ${SEND_ICON}
+            </button>
           </div>
 
           <div class="sg-composer-footer">
@@ -250,7 +247,4 @@ class SocialGameInputComposer extends HTMLElement {
 }
 
 customElements.get("sg-input-composer") || customElements.define("sg-input-composer", SocialGameInputComposer)
-
-
-
 

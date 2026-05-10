@@ -108,14 +108,47 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** `doc/requirements/sg-005-npc-bilder.md`
 
-### Vergrößerbare Overlay-Ansicht des Szenenbilds auf mobilen Geräten
+### Vergrößerbare Overlay-Ansicht des Szenenbilds
 **Typ:** Funktional  
-**Beschreibung:** Das System muss auf mobilen Geräten für das angezeigte Szenenbild eine vergrößerte Overlay-Ansicht bereitstellen.  
+**Beschreibung:** Das System muss für das angezeigte Szenenbild eine vergrößerte Overlay-Ansicht bereitstellen.  
 **Akzeptanzkriterien:**
-- Nutzer können das in der Web-GUI angezeigte Szenenbild auf mobilen Geräten durch Antippen in einer Overlay-Ansicht öffnen.
+- Nutzer können das in der Web-GUI angezeigte Szenenbild durch Antippen oder Anklicken in einer Overlay-Ansicht öffnen.
 - In der Overlay-Ansicht ist das Szenenbild vollständig sichtbar und wird nicht abgeschnitten.
 
 **Referenzen:** `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
+
+### Durchsicht des Bildverlaufs in der Overlay-Ansicht
+**Typ:** Funktional  
+**Beschreibung:** Das System muss in der Overlay-Ansicht den verfügbaren Bildverlauf der aktiven Sitzung rein betrachtend durchsuchbar machen.  
+**Akzeptanzkriterien:**
+- Wenn für das aktive Sitzungsbild frühere Bildstände vorhanden sind, können Nutzer in der Overlay-Ansicht zwischen aktuellem Bild, früheren Bildständen und dem Originalbild wechseln.
+- Die Bildreihenfolge beginnt immer mit dem aktuellen Bild, zeigt danach frühere Bildstände von neu nach alt und endet mit dem Originalbild.
+- Beim erneuten Öffnen der Overlay-Ansicht wird wieder das aktuelle Bild angezeigt.
+- Das Wechseln im Bildverlauf verändert weder das aktive Sitzungsbild noch gespeicherte Bildstände.
+- Am Anfang und am Ende des Bildverlaufs ist jeweils erkennbar, dass in diese Richtung kein weiteres Bild vorhanden ist.
+
+**Referenzen:** `doc/requirements/sg-005-npc-bilder.md`, `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`
+
+### Bedienung des Bildverlaufs
+**Typ:** Funktional  
+**Beschreibung:** Das System muss den Bildverlauf in der Overlay-Ansicht über unaufdringliche Bedienelemente und Wischgesten bedienbar machen.  
+**Akzeptanzkriterien:**
+- In der Overlay-Ansicht stehen links und rechts halbtransparente Navigationspfeile zur Verfügung, sofern in der jeweiligen Richtung ein weiteres Bild vorhanden ist.
+- Auf Desktop-Geräten werden die Navigationspfeile erst bei Hover oder Fokus sichtbar.
+- Auf mobilen Geräten bleiben die Navigationspfeile sichtbar.
+- Nutzer können den Bildverlauf zusätzlich durch horizontales Wischen bedienen.
+- Beim Bildwechsel wird das vorherige Bild weich unscharf ausgeblendet und das neue Bild parallel scharf eingeblendet.
+
+**Referenzen:** Keine
+
+### Originalbild-Verhalten im Bildverlauf
+**Typ:** Funktional  
+**Beschreibung:** Das System muss das Originalbild im Bildverlauf so darstellen, wie es initial fachlich bereitgestellt wird.  
+**Akzeptanzkriterien:**
+- Ist für das Originalbild ein Video vorhanden, kann dieses beim Anzeigen des Originalbilds in der Overlay-Ansicht wiedergegeben werden.
+- Bei früheren Bildständen, die nicht dem Originalbild entsprechen, wird das Originalvideo nicht anstelle des Bildes angezeigt.
+
+**Referenzen:** `doc/requirements/sg-021-npc-videos-in-der-kontextgalerie.md`
 
 ### Steuerung der automatischen Bildgenerierung in der Web-GUI
 **Typ:** Funktional  

@@ -71,6 +71,8 @@ function mapStatePayload(payload = {}) {
   return {
     messages: Array.isArray(payload.messages) ? payload.messages : [],
     imageUrl: payload.image_url ? appendCacheBuster(payload.image_url) : null,
+    imageOriginalUrl: typeof payload.image_original_url === "string" ? payload.image_original_url : null,
+    imageBackups: mapImageBackups(payload.image_backups),
     imageSignature: typeof payload.image_signature === "string" ? payload.image_signature : null,
     npcs: Array.isArray(payload.npcs) ? payload.npcs : [],
     scenes: Array.isArray(payload.scenes) ? payload.scenes : [],
@@ -85,6 +87,20 @@ function mapStatePayload(payload = {}) {
     videoUrl: typeof payload.video_url === "string" ? payload.video_url : null,
     imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : true,
   }
+}
+
+function mapImageBackups(backups) {
+  if (!Array.isArray(backups)) {
+    return []
+  }
+
+  return backups
+    .map((backup) => ({
+      name: typeof backup?.name === "string" ? backup.name : "",
+      url: typeof backup?.url === "string" ? backup.url : "",
+      signature: typeof backup?.signature === "string" ? backup.signature : "",
+    }))
+    .filter((backup) => backup.name && backup.url)
 }
 
 function hasSeenFirstOpenSelector() {
@@ -158,6 +174,8 @@ async function pollImageSignature(force = false) {
   appStore.setState({
     imageSignature: signature,
     imageUrl: appendCacheBuster(typeof payload.image_url === "string" ? payload.image_url : latestState.imageUrl),
+    imageOriginalUrl: typeof payload.image_original_url === "string" ? payload.image_original_url : latestState.imageOriginalUrl,
+    imageBackups: mapImageBackups(payload.image_backups),
     imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : latestState.imageIsOriginal,
     videoUrl: typeof payload.video_url === "string" ? payload.video_url : null,
   })
