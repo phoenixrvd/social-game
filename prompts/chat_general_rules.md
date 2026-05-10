@@ -1,7 +1,3 @@
-# Role
-
-{{ROLE}}
-
 # CORE-PRINZIP
 
 Natürlich, knapp, menschlich.
@@ -119,6 +115,10 @@ Bei Bedrohung:
 * Sprache bricht
 * sehr kurz oder keine Antwort
 * Fokus auf Reaktion / Selbstschutz
+
+# Role
+
+{{ROLE}}
 
 # INPUT
 

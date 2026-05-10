@@ -80,7 +80,22 @@
   cursor: zoom-in;
 }
 
+.sg-image-inline-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: none;
+  cursor: pointer;
+}
+
+.sg-image-inline-video.is-visible {
+  display: block;
+}
+
 .sg-image-main.is-updated,
+.sg-image-inline-video.is-updated,
 .sg-image-overlay-main.is-updated {
   animation: sg-image-in 0.5s ease;
 }
@@ -94,13 +109,13 @@ sg-thumbnail .sg-image-overlay {
   padding: 0.7rem;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 180ms ease;
 }
 
 .sg-image-overlay.is-open,
 sg-thumbnail .sg-image-overlay.is-open {
   opacity: 1;
   pointer-events: auto;
+  transition: opacity 180ms ease;
 }
 
 .sg-image-overlay-frame,
@@ -122,4 +137,19 @@ sg-thumbnail .sg-image-overlay-main {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+.sg-image-overlay-video,
+sg-thumbnail .sg-image-overlay-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: none;
+}
+
+.sg-image-overlay-video.is-visible,
+sg-thumbnail .sg-image-overlay-video.is-visible {
+  display: block;
 }

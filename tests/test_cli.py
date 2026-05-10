@@ -1,16 +1,11 @@
 from pathlib import Path
 
 from typer.testing import CliRunner
-import yaml
 
 import engine.cli as cli_module
 from engine.cli import app
 
 runner = CliRunner()
-
-
-def override_npc_service(monkeypatch, fake_service_class):
-    monkeypatch.setattr(cli_module, "NpcService", fake_service_class)
 
 
 def test_hello():
@@ -74,7 +69,7 @@ def test_root_help_uses_normal_descriptions():
 
 def test_group_help_uses_normal_descriptions():
     checks = [
-        (["npc-create", "--help"], "Legt einen neuen NPC unter .overrides/npcs/<npc_id>/ an."),
+        (["web", "--help"], "Startet die browserbasierte GUI."),
     ]
 
     for command, expected_text in checks:
@@ -204,66 +199,11 @@ def test_removed_top_level_aliases_fail():
         assert "No such command" in result.output
 
 
+def test_npc_create_command_removed():
+    result = runner.invoke(app, ["npc-create", "Alex, 28, arbeitet als Koch."])
 
-
-def test_npc_create_calls_npc_service(monkeypatch, tmp_path):
-    calls: list[str] = []
-
-    class FakeNpcService:
-        def create_override(self, npc_id: str):
-            calls.append(npc_id)
-            return tmp_path / ".overrides" / "npcs" / npc_id
-
-    override_npc_service(monkeypatch, FakeNpcService)
-
-    result = runner.invoke(app, ["npc-create", " alex "])
-
-    assert result.exit_code == 0
-    assert calls == [" alex "]
-    assert "NPC angelegt" in result.output
-
-
-def test_npc_create_allows_existing_target_without_error(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
-    target = tmp_path / ".overrides" / "npcs" / "alex"
-    target.mkdir(parents=True)
-    (target / "character.yaml").write_text("name: Bestehend\n", encoding="utf-8")
-
-    result = runner.invoke(app, ["npc-create", "alex"])
-
-    assert result.exit_code == 0
-    assert (target / "character.yaml").read_text(encoding="utf-8") == "name: Bestehend\n"
-
-
-def test_npc_create_creates_override_dataset_with_character_yaml(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
-
-    result = runner.invoke(app, ["npc-create", "alex"])
-
-    assert result.exit_code == 0
-    target = tmp_path / ".overrides" / "npcs" / "alex"
-    assert (target / "character.yaml").is_file()
-    assert yaml.safe_load((target / "character.yaml").read_text(encoding="utf-8")) == {"name": "alex"}
-    assert not (target / "description.md").exists()
-    assert "id=alex" in result.output
-
-
-def test_npc_create_normalizes_name_to_snake_case(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
-
-    result = runner.invoke(app, ["npc-create", "Anna Maria!!!"])
-
-    assert result.exit_code == 0
-    target = tmp_path / ".overrides" / "npcs" / "anna_maria"
-    assert (target / "character.yaml").is_file()
-    assert "id=anna_maria" in result.output
-
-
-def test_npc_create_rejects_invalid_normalized_name():
-    result = runner.invoke(app, ["npc-create", "!!!"])
-
-    assert result.exit_code == 1
-    assert "NPC-Name ergibt keine gueltige ID." in result.output
+    assert result.exit_code != 0
+    assert "No such command" in result.output
 
 
 def test_scene_create_command_removed():
@@ -353,3 +293,90 @@ def test_icons_command_reports_generation_failure(monkeypatch, tmp_path):
     assert result.exit_code == 1
     assert isinstance(result.exception, RuntimeError)
     assert "kaputt" in str(result.exception)
+
+
+def test_npc_videos_strip_audio_processes_videos_from_storage(monkeypatch, tmp_path):
+    default_video = tmp_path / "npcs" / "vika" / "video.mp4"
+    override_video = tmp_path / ".overrides" / "npcs" / "blacky" / "video.mp4"
+    default_video.parent.mkdir(parents=True)
+    override_video.parent.mkdir(parents=True)
+    default_video.write_bytes(b"default")
+    override_video.write_bytes(b"override")
+
+    class FakeVideo:
+        def __init__(self, path: Path):
+            self.path = path
+
+        def is_file(self):
+            return self.path.is_file()
+
+        def get(self):
+            return self.path
+
+    class FakeNpc:
+        def __init__(self, video_path: Path):
+            self.video = FakeVideo(video_path)
+
+    class FakeStorage:
+        list_npcs = [FakeNpc(override_video), FakeNpc(default_video)]
+
+    processed: list[Path] = []
+
+    monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(cli_module, "storage", FakeStorage())
+    monkeypatch.setattr(cli_module, "_remove_audio_track", lambda path: processed.append(path))
+
+    result = runner.invoke(app, ["npc-videos-strip-audio"])
+
+    assert result.exit_code == 0
+    assert processed == [override_video, default_video]
+    assert "Audiospuren aus 2 NPC-Video(s) entfernt." in result.output
+
+
+def test_npc_videos_strip_audio_reports_missing_ffmpeg(monkeypatch, tmp_path):
+    video_path = tmp_path / "npcs" / "vika" / "video.mp4"
+    video_path.parent.mkdir(parents=True)
+    video_path.write_bytes(b"video")
+
+    class FakeVideo:
+        def is_file(self):
+            return True
+
+        def get(self):
+            return video_path
+
+    class FakeNpc:
+        video = FakeVideo()
+
+    class FakeStorage:
+        list_npcs = [FakeNpc()]
+
+    def fail_remove_audio(_path):
+        raise FileNotFoundError("ffmpeg")
+
+    monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(cli_module, "storage", FakeStorage())
+    monkeypatch.setattr(cli_module, "_remove_audio_track", fail_remove_audio)
+
+    result = runner.invoke(app, ["npc-videos-strip-audio"])
+
+    assert result.exit_code == 1
+    assert "ffmpeg nicht gefunden" in result.output
+
+
+def test_remove_audio_track_uses_ffmpeg_and_replaces_video(monkeypatch, tmp_path):
+    video_path = tmp_path / "video.mp4"
+    video_path.write_bytes(b"with-audio")
+    commands: list[list[str]] = []
+
+    def fake_run(command, check):
+        commands.append(command)
+        Path(command[-1]).write_bytes(b"without-audio")
+        assert check is True
+
+    monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+    cli_module._remove_audio_track(video_path)
+
+    assert video_path.read_bytes() == b"without-audio"
+    assert commands[0][:7] == ["ffmpeg", "-y", "-i", str(video_path), "-an", "-c:v", "copy"]

@@ -8,17 +8,17 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 import markdown
+import uvicorn
 import yaml
+from PIL import Image
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import Response, StreamingResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
 from pydantic import BaseModel
-import uvicorn
 
-from engine.config import config
 from engine.client import client, user_visible_provider_error_detail
+from engine.config import config
 from engine.services.history_service import HistoryService
 from engine.services.image_service import ImageService
 from engine.services.npc_scene_service import NpcSceneService
@@ -115,6 +115,7 @@ _CSP = (
     "script-src 'self'; "
     "style-src 'self'; "
     "img-src 'self' data: blob:; "
+    "media-src 'self'; "
     "connect-src 'self'; "
     "font-src 'self'; "
     "object-src 'none'; "
@@ -187,6 +188,12 @@ class UserProfileRequest(BaseModel):
 
 class SceneCreateRequest(BaseModel):
     scene_description: str
+    create_scene: bool = True
+    create_npc_context: bool = True
+
+
+class NpcCreateRequest(BaseModel):
+    character_description: str
 
 
 class RestoreCheckpointRequest(BaseModel):
@@ -295,17 +302,32 @@ def _npc_option_image_url(npc_id: str) -> str:
     return f"/api/npcs/{npc_id}/image?v={version}"
 
 
+def _npc_option_video(npc_id: str):
+    scene_id = storage.session.scene_id
+    return storage.npc_view(npc_id=npc_id, scene_id=scene_id).video
+
+
+def _npc_option_video_url(npc_id: str) -> str | None:
+    video = _npc_option_video(npc_id=npc_id)
+    if not video.is_file():
+        return None
+    video_path = video.get()
+    version = _url_version(video_path)
+    return f"/api/npcs/{npc_id}/video?v={version}"
+
+
 def _scene_option_image_url(scene_id: str) -> str:
     version = _url_version(_scene_option_image_path(scene_id=scene_id))
     return f"/api/scenes/{scene_id}/image?v={version}"
 
 
-def _list_npcs() -> list[dict[str, str]]:
+def _list_npcs() -> list[dict[str, str | None]]:
     return [
         {
             "id": npc_view.npc_id,
             "label": str(npc_view.character_original.get().get("name", npc_view.npc_id)).strip() or npc_view.npc_id,
             "image_url": _npc_option_image_url(npc_id=npc_view.npc_id),
+            "video_url": _npc_option_video_url(npc_id=npc_view.npc_id),
         }
         for npc_view in storage.list_npcs
     ]
@@ -330,6 +352,14 @@ def _image_signature(npc) -> str:
     return _file_signature(npc.img.get())
 
 
+def _video_url(npc) -> str | None:
+    video = npc.video
+    if not video.is_file():
+        return None
+    version = _url_version(video.get())
+    return f"/api/npcs/{npc.npc_id}/video?v={version}"
+
+
 def _state_payload() -> dict[str, Any]:
     npc = storage.npc
     scene = storage.scene
@@ -346,11 +376,15 @@ def _state_payload() -> dict[str, Any]:
         "messages_signature": _messages_signature(npc),
         "image_url": _image_url(npc),
         "image_signature": _image_signature(npc),
+        "image_is_original": npc.is_image_original,
+        "video_url": _video_url(npc),
         "npcs": _list_npcs(),
         "scenes": _list_scenes(),
         "user_profile": npc.user_profile,
         "image_autogenerate": storage.session.image_autogenerate,
+        "default_npc_id": config.DEFAULT_NPC_ID,
         "default_scene_id": config.DEFAULT_SCENE_ID,
+        "is_dynamic_npc": npc.is_dynamic_npc,
         "is_dynamic_scene": scene.is_dynamic_scene,
     }
 
@@ -382,35 +416,56 @@ def update_user_profile(request: UserProfileRequest) -> dict[str, Any]:
 @app.post("/api/scenes/create")
 def create_scene(request: SceneCreateRequest) -> dict[str, Any]:
     scene_description = request.scene_description.strip()
+    if not scene_description:
+        raise HTTPException(status_code=400, detail="Szenenbeschreibung darf nicht leer sein.")
+    if not request.create_scene and not request.create_npc_context:
+        raise HTTPException(status_code=400, detail="Mindestens eine Erstellungsoption muss aktiv sein.")
 
-    scene_service = SceneService()
-    scene_dir = scene_service.create_override(scene_description)
-    scene_id = scene_dir.name
+    if request.create_scene:
+        scene_dir = SceneService().create_override(scene_description)
+        storage.session.scene_id = scene_dir.name
 
-    storage.session.scene_id = scene_id
-    NpcSceneService().create_override(scene_description)
-    _get_scheduler().enqueue("image")
+    if request.create_npc_context:
+        NpcSceneService().create_override(scene_description)
+    if storage.session.image_autogenerate:
+        _get_scheduler().enqueue("image")
+    return _state_payload()
+
+
+@app.post("/api/npcs/create")
+def create_npc(request: NpcCreateRequest) -> dict[str, Any]:
+    character_description = request.character_description.strip()
+    if not character_description:
+        raise HTTPException(status_code=400, detail="Charakterbeschreibung darf nicht leer sein.")
+    target_dir = NpcService().create_override(character_description)
+    storage.session.npc_id = target_dir.name
     return _state_payload()
 
 
 @app.delete("/api/npc/reset-active")
-def reset_active_npc_runtime_data() -> dict[str, Any]:
-    _get_scheduler().clear_pending_jobs()
-    NpcService.reset_active_runtime()
-    return _state_payload()
-
-
-@app.delete("/api/scene/reset-active")
-def reset_active_dynamic_scene_with_npc_runtime_data() -> dict[str, Any]:
+def reset_active_npc_runtime_data(
+    delete_npc: bool = False,
+    delete_scene: bool = False,
+    delete_npc_context: bool = False,
+) -> dict[str, Any]:
     session = storage.session
+    npc_id = session.npc_id
     scene_id = session.scene_id
-    if not session.scene.is_dynamic_scene:
-        raise HTTPException(status_code=400, detail="Aktive Scene ist keine erstellte Scene.")
+    if delete_npc and not storage.npc.is_dynamic_npc:
+        raise HTTPException(status_code=400, detail="Aktiver NPC ist kein erstellter NPC.")
+    if delete_scene and not session.scene.is_dynamic_scene:
+        raise HTTPException(status_code=400, detail="Aktive Szene ist keine erstellte Szene.")
 
     _get_scheduler().clear_pending_jobs()
     NpcService.reset_active_runtime()
-    session.scene_id = config.DEFAULT_SCENE_ID
-    SceneService.delete_dynamic_scene_artifacts(scene_id)
+    if delete_npc_context:
+        NpcSceneService.delete_override(npc_id, scene_id)
+    if delete_scene:
+        session.scene_id = config.DEFAULT_SCENE_ID
+        SceneService.delete_dynamic_scene_artifacts(scene_id)
+    if delete_npc:
+        session.npc_id = config.DEFAULT_NPC_ID
+        NpcService.delete_dynamic_npc_artifacts(npc_id)
     return _state_payload()
 
 
@@ -491,12 +546,20 @@ def current_image() -> Any:
 
 @app.get("/api/npcs/{npc_id}/image")
 def npc_option_image(npc_id: str) -> Any:
-    return _image_response(_npc_option_image_path(npc_id=npc_id), max_width=100)
+    return _image_response(_npc_option_image_path(npc_id=npc_id), max_width=256)
+
+
+@app.get("/api/npcs/{npc_id}/video")
+def npc_option_video(npc_id: str) -> Any:
+    video = _npc_option_video(npc_id=npc_id)
+    if not video.is_file():
+        raise HTTPException(status_code=404, detail="NPC-Video nicht gefunden.")
+    return FileResponse(video.get(), media_type="video/mp4")
 
 
 @app.get("/api/scenes/{scene_id}/image")
 def scene_option_image(scene_id: str) -> Any:
-    return _image_response(_scene_option_image_path(scene_id=scene_id), max_width=100)
+    return _image_response(_scene_option_image_path(scene_id=scene_id), max_width=256)
 
 
 @app.get("/api/image/signature")
@@ -505,6 +568,8 @@ def image_signature() -> dict[str, Any]:
     return {
         "signature": _image_signature(npc),
         "image_url": _image_url(npc),
+        "image_is_original": npc.is_image_original,
+        "video_url": _video_url(npc),
     }
 
 

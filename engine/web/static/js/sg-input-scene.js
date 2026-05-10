@@ -17,45 +17,56 @@ class SocialGameInputScene extends HTMLElement {
     this.$ = {}
   }
 
-   connectedCallback() {
-     this.innerHTML = /*html*/ `
-       <section class="sg-settings-section">
-         <h3 class="sg-settings-heading">Neue Szene für aktive Figur</h3>
-         <div class="sg-form-group">
-           <label for="scene-description-input" class="sg-form-label">
-             Szenenbeschreibung <span class="sg-form-required">*</span>
-           </label>
-           <p class="sg-form-hint-small">Die Beschreibung wird für die neue Szene und für den aktiven NPC-Kontext verwendet (z. B. inkl. NPC-Position).</p>
-           <textarea
-             id="scene-description-input"
-             class="sg-settings-textarea"
-             placeholder="z. B. Ein gemütliches Café mit warmem Licht, der NPC sitzt links am Fenster..."
-             required
-             aria-required="true"
-           ></textarea>
-         </div>
+  connectedCallback() {
+    this.innerHTML = /*html*/ `
+      <section class="sg-settings-section">
+        <h3 class="sg-settings-heading">Neue Szene für aktive Figur</h3>
+        <div class="sg-form-group">
+          <label for="scene-description-input" class="sg-form-label">
+            Szenenbeschreibung <span class="sg-form-required">*</span>
+          </label>
+          <p class="sg-form-hint-small">Die Beschreibung wird für die aktivierten Inhalte verwendet.</p>
+          <textarea
+            id="scene-description-input"
+            class="sg-settings-textarea"
+            placeholder="z. B. Ein gemütliches Café mit warmem Licht, der NPC sitzt links am Fenster..."
+            required
+            aria-required="true"
+          ></textarea>
+        </div>
 
-         <div class="sg-scene-error sg-hidden"></div>
+        <label class="sg-settings-checkbox">
+          <input type="checkbox" data-option="create-scene" checked />
+          <span>Scene Erstellen</span>
+        </label>
+        <label class="sg-settings-checkbox">
+          <input type="checkbox" data-option="create-npc-context" checked />
+          <span>NPC Kontext erstellen</span>
+        </label>
 
-         <button
-           type="button"
-           class="sg-settings-action"
-           data-action="create-scene"
-           aria-label="Szene erstellen"
-         >
-           <span class="sg-settings-action-icon" aria-hidden="true">${CREATE_ICON}</span>
-           <span class="sg-settings-action-copy">
-             <span class="sg-settings-action-title">Szene + NPC-Kontext erstellen</span>
-           </span>
-         </button>
-       </section>
-     `
+        <div class="sg-scene-error sg-hidden"></div>
 
-     this.$ = {
-       sceneDescriptionInput: this.querySelector("#scene-description-input"),
-       submitButton: this.querySelector('[data-action="create-scene"]'),
-       errorElement: this.querySelector(".sg-scene-error"),
-     }
+        <button
+          type="button"
+          class="sg-settings-action"
+          data-action="create-scene"
+          aria-label="Szene erstellen"
+        >
+          <span class="sg-settings-action-icon" aria-hidden="true">${CREATE_ICON}</span>
+          <span class="sg-settings-action-copy">
+            <span class="sg-settings-action-title">Erstellen</span>
+          </span>
+        </button>
+      </section>
+    `
+
+    this.$ = {
+      sceneDescriptionInput: this.querySelector("#scene-description-input"),
+      createSceneCheckbox: this.querySelector('[data-option="create-scene"]'),
+      createNpcContextCheckbox: this.querySelector('[data-option="create-npc-context"]'),
+      submitButton: this.querySelector('[data-action="create-scene"]'),
+      errorElement: this.querySelector(".sg-scene-error"),
+    }
 
     this.registerEventListeners()
     this.registerSubscriptions()
@@ -64,6 +75,9 @@ class SocialGameInputScene extends HTMLElement {
   }
 
   registerEventListeners() {
+    this.$.sceneDescriptionInput.addEventListener("input", this.render.bind(this))
+    this.$.createSceneCheckbox.addEventListener("change", this.render.bind(this))
+    this.$.createNpcContextCheckbox.addEventListener("change", this.render.bind(this))
     this.$.submitButton.addEventListener("click", this.handleSubmit.bind(this))
   }
 
@@ -86,6 +100,7 @@ class SocialGameInputScene extends HTMLElement {
     const isSuccessfulCompletion = wasLoading && !this._state.isLoading && !this._state.errorMessage
     if (isSuccessfulCompletion) {
       this.$.sceneDescriptionInput.value = ""
+      this.render()
       this.dispatchEvent(new CustomEvent("sceneCreateFinished", { bubbles: true, composed: true }))
     }
   }
@@ -103,20 +118,31 @@ class SocialGameInputScene extends HTMLElement {
     }
 
     const sceneDescription = this.$.sceneDescriptionInput.value.trim()
+    const createScene = this.$.createSceneCheckbox.checked
+    const createNpcContext = this.$.createNpcContextCheckbox.checked
 
     if (!sceneDescription) {
       appStore.setState({ sceneCreatorError: "Szenenbeschreibung ist erforderlich." })
+      return
+    }
+    if (!createScene && !createNpcContext) {
+      appStore.setState({ sceneCreatorError: "Mindestens eine Erstellungsoption muss aktiv sein." })
       return
     }
 
     appStore.setState({ sceneCreatorError: "" })
     appActions.createScene({
       scene_description: sceneDescription,
+      create_scene: createScene,
+      create_npc_context: createNpcContext,
     })
   }
 
   render() {
-    this.$.submitButton.disabled = this._state.isLoading
+    const hasDescription = Boolean(this.$.sceneDescriptionInput.value.trim())
+    const hasCreateOption = this.$.createSceneCheckbox.checked || this.$.createNpcContextCheckbox.checked
+
+    this.$.submitButton.disabled = this._state.isLoading || !hasDescription || !hasCreateOption
 
     const errorVisible = Boolean(this._state.errorMessage)
     this.$.errorElement.classList.toggle("sg-hidden", !errorVisible)
@@ -125,8 +151,9 @@ class SocialGameInputScene extends HTMLElement {
     }
 
     this.$.sceneDescriptionInput.disabled = this._state.isLoading
+    this.$.createSceneCheckbox.disabled = this._state.isLoading
+    this.$.createNpcContextCheckbox.disabled = this._state.isLoading
   }
-
 }
 
 customElements.get("sg-input-scene") || customElements.define("sg-input-scene", SocialGameInputScene)

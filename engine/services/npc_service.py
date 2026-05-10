@@ -1,33 +1,135 @@
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 import yaml
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from engine.client import client
 from engine.config import config
 from engine.services.id_normalizer import normalize_to_snake_id
 from engine.storage import storage
 
 
+class NpcDescriptionDraft(BaseModel):
+    character_name: str = Field(min_length=1, max_length=48)
+    description_markdown: str = Field(min_length=1)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("description_markdown")
+    @classmethod
+    def validate_description_markdown(cls, value: str) -> str:
+        required_lines = ("# Charakter", "Außen:", "Innen:", "Kerndynamik:", "# Verhalten", "# Subtext")
+        missing_lines = [line for line in required_lines if line not in value.splitlines()]
+        if missing_lines:
+            raise ValueError("NPC-Beschreibung hat nicht das erwartete Markdown-Format.")
+        if "�" in value or "1??" in value:
+            raise ValueError("NPC-Beschreibung enthaelt ungueltige Zeichen.")
+        return value
+
+
+class NpcStateDraft(BaseModel):
+    state_markdown: str = Field(min_length=1)
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    @field_validator("state_markdown")
+    @classmethod
+    def validate_state_markdown(cls, value: str) -> str:
+        lines = value.splitlines()
+        if len(lines) < 8 or lines[0] != "---" or "---" not in lines[1:]:
+            raise ValueError("NPC-State hat nicht das erwartete Markdown-Format.")
+        yaml_lines = lines[1:lines[1:].index("---") + 1]
+        required_keys = {"trust", "comfort", "interest", "mood", "relationship_stage"}
+        actual_keys = {line.split(":", 1)[0].strip() for line in yaml_lines if ":" in line}
+        if actual_keys != required_keys or "trusted" in actual_keys:
+            raise ValueError("NPC-State hat nicht die erwarteten YAML-Keys.")
+        if "�" in value:
+            raise ValueError("NPC-State enthaelt ungueltige Zeichen.")
+        if not any(line.startswith("- ") for line in lines):
+            raise ValueError("NPC-State enthaelt keine Markdown-Liste.")
+        return value
+
+
 class NpcService:
     @staticmethod
-    def _normalize_id(npc_name: str) -> tuple[str, str]:
-        cleaned_name = npc_name.strip()
+    def _normalize_description(character_description: str) -> str:
+        cleaned_description = character_description.strip()
+        if not cleaned_description:
+            raise ValueError("Charakterbeschreibung darf nicht leer sein.")
+        return cleaned_description
+
+    @staticmethod
+    def _normalize_name(character_name: str) -> tuple[str, str]:
+        cleaned_name = character_name.strip()
         npc_id = normalize_to_snake_id(cleaned_name)
         if not npc_id:
             raise ValueError("NPC-Name ergibt keine gueltige ID.")
         return cleaned_name, npc_id
 
-    def create_override(self, npc_name: str) -> Path:
-        cleaned_name, npc_id = self._normalize_id(npc_name)
-        target_dir = config.OVERRIDES_NPC_DIR / npc_id
-
-        if target_dir.is_dir():
-            return target_dir
-
+    def create_override(self, character_description: str) -> Path:
+        orientation = self._normalize_description(character_description)
+        description_draft = self._create_description_draft(orientation)
+        state_draft = self._create_state_draft(description_draft.description_markdown)
+        cleaned_name, npc_id = self._normalize_name(description_draft.character_name)
+        target_dir = self._next_available_dir(npc_id)
         target_dir.mkdir(parents=True, exist_ok=False)
-        payload = yaml.safe_dump({"name": cleaned_name}, allow_unicode=True, sort_keys=False)
-        (target_dir / "character.yaml").write_text(payload, encoding="utf-8")
+        self._save_npc_files(target_dir, cleaned_name, description_draft, state_draft)
+        self._save_npc_image(target_dir, description_draft.description_markdown)
         return target_dir
+
+    def _create_description_draft(self, character_description: str) -> NpcDescriptionDraft:
+        prompt = self._build_description_prompt(character_description)
+        return client.run_prompt_small_model(prompt, NpcDescriptionDraft)
+
+    def _create_state_draft(self, npc_description: str) -> NpcStateDraft:
+        prompt = self._build_state_prompt(npc_description)
+        return client.run_prompt_small_model(prompt, NpcStateDraft)
+
+    @staticmethod
+    def _build_description_prompt(character_description: str) -> str:
+        return (
+            storage.prompts.npc_create_description.get()
+            .strip()
+            .replace("{{CHARACTER_DESCRIPTION}}", character_description)
+        )
+
+    @staticmethod
+    def _build_state_prompt(npc_description: str) -> str:
+        return storage.prompts.npc_create_state.get().strip().replace("{{NPC_DESCRIPTION}}", npc_description)
+
+    @staticmethod
+    def _build_image_prompt(npc_description: str) -> str:
+        return (
+            storage.prompts.npc_create_image.get()
+            .strip()
+            .replace("{{IMAGE_STYLE_RULES}}", storage.prompts.image_style_rules.get().strip())
+            .replace("{{NPC_DESCRIPTION}}", npc_description)
+        )
+
+    @staticmethod
+    def _next_available_dir(npc_id: str) -> Path:
+        for suffix in range(0, 10_000):
+            candidate_id = npc_id if suffix == 0 else f"{npc_id}_{suffix}"
+            candidate_dir = config.OVERRIDES_NPC_DIR / candidate_id
+            if not candidate_dir.exists():
+                return candidate_dir
+        raise RuntimeError("Konnte kein freies NPC-Verzeichnis finden.")
+
+    @staticmethod
+    def _save_npc_files(
+        target_dir: Path,
+        character_name: str,
+        description_draft: NpcDescriptionDraft,
+        state_draft: NpcStateDraft,
+    ) -> None:
+        payload = yaml.safe_dump({"name": character_name}, allow_unicode=True, sort_keys=False)
+        (target_dir / "character.yaml").write_text(payload, encoding="utf-8")
+        (target_dir / "description.md").write_text(description_draft.description_markdown.strip() + "\n",
+                                                   encoding="utf-8")
+        (target_dir / "state.md").write_text(state_draft.state_markdown.strip() + "\n", encoding="utf-8")
+
+    def _save_npc_image(self, target_dir: Path, npc_description: str) -> None:
+        prompt = self._build_image_prompt(npc_description)
+        (target_dir / "img.png").write_bytes(client.generate_scene_img(prompt))
 
     @staticmethod
     def reset_active_runtime() -> None:
@@ -38,3 +140,14 @@ class NpcService:
         ).base_runtime
         if scene_data_dir.exists():
             shutil.rmtree(scene_data_dir)
+
+    @staticmethod
+    def delete_dynamic_npc_artifacts(npc_id: str) -> None:
+        if (config.NPC_DIR / npc_id).is_dir():
+            return
+        override_dir = config.OVERRIDES_NPC_DIR / npc_id
+        runtime_dir = config.DATA_NPC_DIR / npc_id
+        if override_dir.exists():
+            shutil.rmtree(override_dir)
+        if runtime_dir.exists():
+            shutil.rmtree(runtime_dir)

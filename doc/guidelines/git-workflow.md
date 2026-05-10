@@ -16,32 +16,7 @@
 * No direct work on `main`
 * `main` always represents a clean, squashed release state
 
-## Commit Messages
 
-### Format
-
-```
-<type>: <description>
-```
-
-### Types (based on usage)
-
-* `refactor:` → structural/code improvements
-* `feature:` → new functionality
-* `fix:` → bug fixes
-* `add:` → new files or setup (e.g. LICENSE, SECURITY)
-
-### Rules
-
-* lowercase type
-* concise and clear description
-* describe what changed
-
-### Examples
-
-* `refactor: simplify message handling and improve loading state`
-* `refactor: enhance input handling to maintain focus`
-* `add: LICENSE and SECURITY policy documents`
 
 ## Working in Release Branch
 

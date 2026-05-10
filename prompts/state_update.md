@@ -116,10 +116,10 @@ Hier kurze Beschreibung
 
 {{CURRENT_STATE}}
 
-## Short-Term-Memory
-
-{{SHORT_TERM_MEMORY}}
-
 ## Relevant Earlier ETM Episodes
 
 {{CURRENT_ETM}}
+
+## Short-Term-Memory
+
+{{SHORT_TERM_MEMORY}}

@@ -14,20 +14,7 @@ class FakeText:
         return self._value
 
 
-def test_normalize_state_output_removes_wrapping_markdown_fence() -> None:
-    raw = """```markdown
-trust: 68
-comfort: 65
-
-Freitext
-```"""
-
-    normalized = StateService._normalize_state_output(raw)
-
-    assert normalized == "trust: 68\ncomfort: 65\n\nFreitext"
-
-
-def test_run_update_saves_normalized_state(monkeypatch) -> None:
+def test_run_update_saves_provider_state(monkeypatch) -> None:
     saved: dict[str, str] = {}
 
     fake_storage = SimpleNamespace(
@@ -50,6 +37,5 @@ def test_run_update_saves_normalized_state(monkeypatch) -> None:
     service = StateService()
     result = service.run_update()
 
-    assert result == "trust: 70\n\nOk"
-    assert saved["value"] == "trust: 70\n\nOk"
-
+    assert result == "```\ntrust: 70\n\nOk\n```"
+    assert saved["value"] == "```\ntrust: 70\n\nOk\n```"

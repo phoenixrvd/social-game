@@ -5,15 +5,15 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import openai
+import requests
+from PIL import Image
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-import openai
-from PIL import Image
-import requests
 
+import engine.web.app as web_app_module
 from engine.config import config
 from engine.storage import storage
-import engine.web.app as web_app_module
 from engine.storage.models import Message
 
 
@@ -196,6 +196,7 @@ def test_security_headers_are_present_on_index(tmp_path, monkeypatch):
 
     csp = response.headers.get("content-security-policy", "")
     assert "script-src 'self'" in csp, "CSP fehlt script-src 'self'"
+    assert "media-src 'self'" in csp, "CSP fehlt media-src 'self'"
     assert "object-src 'none'" in csp, "CSP fehlt object-src 'none'"
     assert "frame-ancestors 'none'" in csp, "CSP fehlt frame-ancestors"
     assert "require-trusted-types-for" not in csp, "Trusted Types sollte nicht erzwungen sein"
@@ -244,18 +245,26 @@ def test_static_assets_disable_cache_in_web_debug_mode(tmp_path, monkeypatch):
 
 def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
+    (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")
+
     payload = web_app_module.get_state()
     assert payload["npc_id"] == "vika"
     assert payload["npc_name"] == "Vika"
     assert payload["character_description"] == "Charakterbeschreibung vika"
     assert payload["character_data"] == {"name": "Vika"}
     assert payload["scene_id"] == "office"
+    assert payload["default_npc_id"] == config.DEFAULT_NPC_ID
     assert payload["default_scene_id"] == config.DEFAULT_SCENE_ID
+    assert payload["is_dynamic_npc"] is False
     assert payload["is_dynamic_scene"] is False
     assert payload["image_url"] == "/api/image/current"
     assert payload["messages"][0]["content"] == "Hi"
     npc_options = {(entry["id"], entry["label"]) for entry in payload["npcs"]}
     assert {("mira", "Mira"), ("vika", "Vika")}.issubset(npc_options)
+    vika_option = next(entry for entry in payload["npcs"] if entry["id"] == "vika")
+    mira_option = next(entry for entry in payload["npcs"] if entry["id"] == "mira")
+    assert vika_option["video_url"].startswith("/api/npcs/vika/video?v=")
+    assert mira_option["video_url"] is None
     scene_options = {(entry["id"], entry["label"], entry["image_url"]) for entry in payload["scenes"]}
     assert {
         ("cafe", "Cafe", "/api/scenes/cafe/image?v="),
@@ -283,10 +292,6 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
     assert state_message["content"] == ""
     assert "Charakterbeschreibung vika" in character_message["html"]
     assert "Office" in scene_message["html"]
-    assert 'class="sg-initial-context-image"' in character_message["html"]
-    assert 'src="/api/npcs/vika/image?v=' in character_message["html"]
-    assert 'class="sg-initial-context-image"' in scene_message["html"]
-    assert 'src="/api/scenes/office/image?v=' in scene_message["html"]
     assert "kennt den Spieler" in state_message["html"]
     assert "<pre>" in state_message["html"]
     assert "mood: neutral" in state_message["html"]
@@ -321,8 +326,6 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
     assert payload["messages"][2]["id"] == "context-state"
     assert "Charakterbeschreibung vika" in payload["messages"][0]["html"]
     assert "Office" in payload["messages"][1]["html"]
-    assert 'src="/api/npcs/vika/image?v=' in payload["messages"][0]["html"]
-    assert 'src="/api/scenes/office/image?v=' in payload["messages"][1]["html"]
     assert "kennt den Spieler" in payload["messages"][2]["html"]
     assert "<pre>" in payload["messages"][2]["html"]
     assert "<li>kennt den Spieler</li>" in payload["messages"][2]["html"]
@@ -394,7 +397,66 @@ def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
     assert payload["scene_id"] == "office"
 
 
-def test_reset_active_dynamic_scene_deletes_scene_data_and_resets_session(tmp_path, monkeypatch):
+def test_reset_active_npc_can_delete_npc_scene_context(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    npc_scene_context_dir = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office"
+    npc_scene_context_dir.mkdir(parents=True, exist_ok=True)
+    (npc_scene_context_dir / "scene.md").write_text("Kontext", encoding="utf-8")
+
+    calls: list[str] = []
+
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            calls.append("clear_pending_jobs")
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    payload = web_app_module.reset_active_npc_runtime_data(delete_npc_context=True)
+
+    assert calls == ["clear_pending_jobs"]
+    assert not npc_scene_context_dir.exists()
+    assert storage.session.npc_id == "vika"
+    assert storage.session.scene_id == "office"
+    assert payload["npc_id"] == "vika"
+    assert payload["scene_id"] == "office"
+
+
+def test_reset_active_npc_can_delete_dynamic_npc_and_reset_session(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    dynamic_npc_id = "created_lina"
+    _write_session(tmp_path, dynamic_npc_id, "office")
+
+    dynamic_npc_dir = tmp_path / ".overrides" / "npcs" / dynamic_npc_id
+    dynamic_npc_dir.mkdir(parents=True)
+    (dynamic_npc_dir / "character.yaml").write_text("name: Lina\n", encoding="utf-8")
+    (dynamic_npc_dir / "description.md").write_text("Beschreibung", encoding="utf-8")
+    (dynamic_npc_dir / "state.md").write_text("---\nmood: neutral\n---\n", encoding="utf-8")
+    _make_test_png(dynamic_npc_dir / "img.png")
+
+    dynamic_runtime_dir = tmp_path / ".data" / "npcs" / dynamic_npc_id
+    active_runtime = dynamic_runtime_dir / "office"
+    active_runtime.mkdir(parents=True, exist_ok=True)
+    (active_runtime / "stm.jsonl").write_text("{}\n", encoding="utf-8")
+
+    calls: list[str] = []
+
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            calls.append("clear_pending_jobs")
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    payload = web_app_module.reset_active_npc_runtime_data(delete_npc=True)
+
+    assert calls == ["clear_pending_jobs"]
+    assert not dynamic_npc_dir.exists()
+    assert not dynamic_runtime_dir.exists()
+    assert storage.session.npc_id == config.DEFAULT_NPC_ID
+    assert payload["npc_id"] == config.DEFAULT_NPC_ID
+    assert payload["is_dynamic_npc"] is False
+
+
+def test_reset_active_npc_can_delete_dynamic_scene_and_reset_session(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     dynamic_scene_id = "created_rooftop"
     _write_session(tmp_path, "vika", dynamic_scene_id)
@@ -425,7 +487,7 @@ def test_reset_active_dynamic_scene_deletes_scene_data_and_resets_session(tmp_pa
 
     monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
-    payload = web_app_module.reset_active_dynamic_scene_with_npc_runtime_data()
+    payload = web_app_module.reset_active_npc_runtime_data(delete_scene=True)
 
     assert calls == ["clear_pending_jobs"]
     assert not dynamic_scene_dir.exists()
@@ -433,20 +495,11 @@ def test_reset_active_dynamic_scene_deletes_scene_data_and_resets_session(tmp_pa
     assert other_runtime.exists()
     assert not active_npc_scene_override.exists()
     assert not other_npc_scene_override.exists()
+    assert storage.session.npc_id == "vika"
     assert storage.session.scene_id == config.DEFAULT_SCENE_ID
+    assert payload["npc_id"] == "vika"
     assert payload["scene_id"] == config.DEFAULT_SCENE_ID
     assert payload["is_dynamic_scene"] is False
-
-
-def test_reset_active_dynamic_scene_rejects_default_scene(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-
-    try:
-        web_app_module.reset_active_dynamic_scene_with_npc_runtime_data()
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-        assert exc.detail == "Aktive Scene ist keine erstellte Scene."
 
 
 def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
@@ -495,6 +548,37 @@ def test_npc_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypa
     assert response.content
 
 
+def test_npc_option_video_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")
+
+    class FakeScheduler:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/npcs/vika/video?v=123")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("video/mp4")
+    assert response.content == b"video"
+
+
+def test_npc_option_video_uses_storage_node(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    source = (Path(__file__).parents[1] / "engine" / "web" / "app.py").read_text(encoding="utf-8")
+    helper_source = source[source.find("def _npc_option_video(npc_id: str):"):source.find("def _npc_option_video_url")]
+    assert ".video" in helper_source
+    assert "OVERRIDES_NPC_DIR" not in helper_source
+    assert "NPC_DIR" not in helper_source
+
+
 def test_scene_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     _make_test_png(tmp_path / "scenes" / "office" / "img.png")
@@ -516,7 +600,7 @@ def test_scene_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkey
     assert response.content
 
 
-def test_npc_option_image_endpoint_scales_width_to_100(tmp_path, monkeypatch):
+def test_npc_option_image_endpoint_scales_width_to_256(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     _make_test_png(tmp_path / "npcs" / "vika" / "img.png", width=400, height=200)
 
@@ -534,11 +618,11 @@ def test_npc_option_image_endpoint_scales_width_to_100(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     with Image.open(BytesIO(response.content)) as image:
-        assert image.width == 100
-        assert image.height == 50
+        assert image.width == 256
+        assert image.height == 128
 
 
-def test_scene_option_image_endpoint_scales_width_to_100(tmp_path, monkeypatch):
+def test_scene_option_image_endpoint_scales_width_to_256(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     _make_test_png(tmp_path / "scenes" / "office" / "img.png", width=250, height=150)
 
@@ -556,8 +640,8 @@ def test_scene_option_image_endpoint_scales_width_to_100(tmp_path, monkeypatch):
 
     assert response.status_code == 200
     with Image.open(BytesIO(response.content)) as image:
-        assert image.width == 100
-        assert image.height == 60
+        assert image.width == 250
+        assert image.height == 150
 
 
 def test_refresh_active_image_uses_character_image_service_directly(tmp_path, monkeypatch):
@@ -1145,6 +1229,77 @@ def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, mo
     assert created_npc_scenes == ["Ein neues Café"]
 
 
+def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: false\n", encoding="utf-8")
+
+    created_scenes: list[str] = []
+    created_npc_scenes: list[str] = []
+
+    def fake_scene_create(self, short_description: str):
+        created_scenes.append(short_description)
+        scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        return scene_dir
+
+    def fake_npc_scene_create(self, short_description: str):
+        created_npc_scenes.append(short_description)
+
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={"scene_description": "Ein neues Café", "create_scene": True, "create_npc_context": False},
+        )
+
+    assert response.status_code == 200
+    assert created_scenes == ["Ein neues Café"]
+    assert created_npc_scenes == []
+    assert storage.session.scene_id == "test_scene"
+
+
+def test_create_scene_can_create_only_npc_context(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: false\n", encoding="utf-8")
+
+    created_scenes: list[str] = []
+    created_npc_scenes: list[tuple[str, str]] = []
+
+    def fake_scene_create(self, short_description: str):
+        created_scenes.append(short_description)
+        return tmp_path / ".overrides" / "scenes" / "test_scene"
+
+    def fake_npc_scene_create(self, short_description: str):
+        created_npc_scenes.append((short_description, storage.session.scene_id))
+
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={"scene_description": "NPC sitzt am Fenster", "create_scene": False, "create_npc_context": True},
+        )
+
+    assert response.status_code == 200
+    assert created_scenes == []
+    assert created_npc_scenes == [("NPC sitzt am Fenster", "cafe")]
+    assert storage.session.scene_id == "cafe"
+
+
 def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
@@ -1222,3 +1377,90 @@ def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
     assert response.status_code == 400
     assert "darf nicht leer sein" in response.json()["detail"].lower()
 
+
+def test_create_scene_rejects_missing_create_option(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    import engine.web.app as web_app_module
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={"scene_description": "Ein neues Café", "create_scene": False, "create_npc_context": False},
+        )
+
+    assert response.status_code == 400
+    assert "mindestens eine" in response.json()["detail"].lower()
+
+
+def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_service import NpcService
+
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    created_npcs: list[str] = []
+
+    def fake_npc_create(self, character_description: str):
+        created_npcs.append(character_description)
+        npc_dir = tmp_path / ".overrides" / "npcs" / "alex"
+        npc_dir.mkdir(parents=True, exist_ok=True)
+        (npc_dir / "character.yaml").write_text("name: Alex\n", encoding="utf-8")
+        (npc_dir / "description.md").write_text("# Alex\n", encoding="utf-8")
+        (npc_dir / "state.md").write_text("---\ntrust: 0\n---\n", encoding="utf-8")
+        (npc_dir / "img.png").write_bytes(b"test-image-data")
+        return npc_dir
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(NpcService, "create_override", fake_npc_create)
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/npcs/create",
+            json={
+                "character_description": "Alex, 28, arbeitet als Koch.",
+            }
+        )
+
+    assert response.status_code == 200
+    assert created_npcs == ["Alex, 28, arbeitet als Koch."]
+    assert response.json()["npc_id"] == "alex"
+    assert storage.session.npc_id == "alex"
+
+
+def test_create_npc_rejects_empty_character_description(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    import engine.web.app as web_app_module
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/npcs/create",
+            json={
+                "character_description": "   ",
+            }
+        )
+
+    assert response.status_code == 400
+    assert "darf nicht leer sein" in response.json()["detail"].lower()

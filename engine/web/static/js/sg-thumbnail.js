@@ -13,11 +13,15 @@ class SocialGameThumbnail extends HTMLElement {
       imageSignature: "",
       isLoading: false,
       isExpanded: false,
+      videoUrl: "",
+      imageIsOriginal: true,
+      imageVideoAutoplayRequestedAt: null,
     }
 
     this.$ = {}
     this._lastFocusedElement = null
     this._lastAnimatedSignature = ""
+    this._inlineVideoActive = false
     this._updatedClassTimer = null
   }
 
@@ -27,6 +31,7 @@ class SocialGameThumbnail extends HTMLElement {
     this.registerDomEvents()
     this.registerSubscriptions()
     this.syncFromStore()
+    this.syncVideoSources()
     this.render()
   }
 
@@ -36,6 +41,7 @@ class SocialGameThumbnail extends HTMLElement {
         <div class="sg-image-content">
           <img class="sg-image-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" fetchpriority="low" />
           <img class="sg-image-main" src="data:," alt="Szenenbild" role="button" tabindex="0" aria-label="Bild vergroessern" loading="lazy" decoding="async" />
+          <video class="sg-image-inline-video" preload="auto" muted playsinline disablepictureinpicture disableremoteplayback></video>
         </div>
       </div>
 
@@ -43,6 +49,7 @@ class SocialGameThumbnail extends HTMLElement {
         <div class="sg-image-overlay-frame">
           <img class="sg-image-overlay-bg" src="data:," alt="Hintergrund" loading="lazy" decoding="async" />
           <img class="sg-image-overlay-main" src="data:," alt="Szenenbild" loading="lazy" decoding="async" />
+          <video class="sg-image-overlay-video" preload="auto" muted playsinline disablepictureinpicture disableremoteplayback></video>
         </div>
       </div>
     `
@@ -52,10 +59,13 @@ class SocialGameThumbnail extends HTMLElement {
     this.$ = {
       frame: this.querySelector(".sg-image-frame"),
       overlay: this.querySelector(".sg-image-overlay"),
+      overlayFrame: this.querySelector(".sg-image-overlay-frame"),
       bg: this.querySelector(".sg-image-bg"),
       main: this.querySelector(".sg-image-main"),
+      inlineVideo: this.querySelector(".sg-image-inline-video"),
       overlayBg: this.querySelector(".sg-image-overlay-bg"),
       overlayMain: this.querySelector(".sg-image-overlay-main"),
+      overlayVideo: this.querySelector(".sg-image-overlay-video"),
     }
   }
 
@@ -63,21 +73,13 @@ class SocialGameThumbnail extends HTMLElement {
     this.$.main.addEventListener("error", this.handleMainError.bind(this))
     this.$.main.addEventListener("click", this.handleMainClick.bind(this))
     this.$.main.addEventListener("keydown", this.handleMainKeyDown.bind(this))
+    this.$.inlineVideo.addEventListener("click", this.handleInlineVideoClick.bind(this))
     this.$.overlay.addEventListener("click", this.handleOverlayClick.bind(this))
     this.$.overlay.addEventListener("keydown", this.handleOverlayKeyDown.bind(this))
   }
 
   registerSubscriptions() {
-    const subscriptions = [
-      ["imageUrl", this.onImageUrlChanged.bind(this)],
-      ["imageSignature", this.onImageSignatureChanged.bind(this)],
-      ["isImageExpanded", this.onImageExpandedChanged.bind(this)],
-      ["isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this)],
-    ]
-
-    for (const [key, listener] of subscriptions) {
-      appStore.subscribe(key, listener)
-    }
+    appStore.subscribeState(this.onStateChanged.bind(this))
   }
 
   syncFromStore() {
@@ -86,26 +88,64 @@ class SocialGameThumbnail extends HTMLElement {
     this._state.imageSignature = typeof state.imageSignature === "string" ? state.imageSignature : ""
     this._state.isExpanded = Boolean(state.isImageExpanded)
     this._state.isLoading = Boolean(state.isImageRefreshLoading)
+    this._state.videoUrl = typeof state.videoUrl === "string" ? state.videoUrl : ""
+    this._state.imageIsOriginal = typeof state.imageIsOriginal === "boolean" ? state.imageIsOriginal : true
+    this._state.imageVideoAutoplayRequestedAt = state.imageVideoAutoplayRequestedAt || null
   }
 
-  onImageUrlChanged(imageUrl) {
-    this._state.imageUrl = typeof imageUrl === "string" ? imageUrl : ""
-    this.render()
+  onStateChanged(state, prevState, changedKeys) {
+    if (!this.hasRelevantChange(changedKeys)) {
+      return
+    }
+
+    const imageUrlChanged = prevState.imageUrl !== state.imageUrl
+    const videoSourceChanged = prevState.videoUrl !== state.videoUrl || prevState.imageIsOriginal !== state.imageIsOriginal
+    const autoplayRequested = prevState.imageVideoAutoplayRequestedAt !== state.imageVideoAutoplayRequestedAt
+    const shouldRender = this.hasRenderChange(changedKeys)
+
+    this.syncFromStore()
+
+    if (imageUrlChanged && !this.hasActiveVideo()) {
+      this._inlineVideoActive = false
+    }
+
+    if (videoSourceChanged) {
+      this.syncVideoSources()
+    }
+
+    if (shouldRender) {
+      this.render()
+    }
+
+    if (autoplayRequested && !imageUrlChanged && this._state.imageVideoAutoplayRequestedAt) {
+      this.playInlineVideoFromImageUpdate()
+    }
   }
 
-  onImageSignatureChanged(imageSignature) {
-    this._state.imageSignature = typeof imageSignature === "string" ? imageSignature : ""
-    this.render()
+  hasRelevantChange(changedKeys) {
+    return this.hasRenderChange(changedKeys) || changedKeys.includes("imageVideoAutoplayRequestedAt")
   }
 
-  onImageExpandedChanged(isImageExpanded) {
-    this._state.isExpanded = Boolean(isImageExpanded)
-    this.render()
+  hasRenderChange(changedKeys) {
+    return changedKeys.some((key) =>
+      ["imageUrl", "imageSignature", "isImageExpanded", "isImageRefreshLoading", "videoUrl", "imageIsOriginal"].includes(key)
+    )
   }
 
-  onImageRefreshLoadingChanged(isImageRefreshLoading) {
-    this._state.isLoading = Boolean(isImageRefreshLoading)
-    this.render()
+  syncVideoSources() {
+    ;[this.$.inlineVideo, this.$.overlayVideo].forEach((video) => {
+      video.muted = true
+      video.defaultMuted = true
+      if (this._state.videoUrl && this._state.imageIsOriginal) {
+        if (video.getAttribute("src") !== this._state.videoUrl) {
+          video.src = this._state.videoUrl
+          video.load()
+        }
+      } else {
+        video.removeAttribute("src")
+        video.load()
+      }
+    })
   }
 
   handleMainError(event) {
@@ -127,6 +167,7 @@ class SocialGameThumbnail extends HTMLElement {
 
   playImageUpdateAnimation() {
     this.$.main.classList.add("is-updated")
+    this.$.inlineVideo.classList.add("is-updated")
     this.$.overlayMain.classList.add("is-updated")
 
     if (this._updatedClassTimer !== null) {
@@ -135,6 +176,7 @@ class SocialGameThumbnail extends HTMLElement {
 
     this._updatedClassTimer = window.setTimeout(() => {
       this.$.main.classList.remove("is-updated")
+      this.$.inlineVideo.classList.remove("is-updated")
       this.$.overlayMain.classList.remove("is-updated")
       this._updatedClassTimer = null
     }, 520)
@@ -142,6 +184,9 @@ class SocialGameThumbnail extends HTMLElement {
 
   handleMainClick(event) {
     event.stopPropagation()
+    if (this.playInlineVideoFromUserGesture()) {
+      return
+    }
     this.requestExpandFromUserGesture()
   }
 
@@ -151,7 +196,44 @@ class SocialGameThumbnail extends HTMLElement {
     }
 
     event.preventDefault()
+    if (this.playInlineVideoFromUserGesture()) {
+      return
+    }
     this.requestExpandFromUserGesture()
+  }
+
+  handleInlineVideoClick(event) {
+    event.stopPropagation()
+    this.playInlineVideoFromUserGesture()
+  }
+
+  _playInlineVideo() {
+    this._inlineVideoActive = true
+    this.renderInlineVideo(Boolean(this._state.imageUrl))
+    this.$.inlineVideo.pause()
+    this.$.inlineVideo.currentTime = 0
+    this.$.inlineVideo.play().catch(() => {})
+  }
+
+  playInlineVideoFromUserGesture() {
+    if (!this.hasActiveVideo() || isMobileViewport()) {
+      return false
+    }
+
+    this._playInlineVideo()
+    return true
+  }
+
+  playInlineVideoFromImageUpdate() {
+    if (!this.hasActiveVideo() || isMobileViewport()) {
+      return
+    }
+
+    this._playInlineVideo()
+  }
+
+  hasActiveVideo() {
+    return Boolean(this._state.videoUrl && this._state.imageIsOriginal)
   }
 
   handleOverlayClick() {
@@ -209,6 +291,9 @@ class SocialGameThumbnail extends HTMLElement {
       this.$.overlay.focus()
     }
 
+    this.renderInlineVideo(hasImage)
+    this.renderOverlayVideo(overlayIsOpen)
+
     if (!hasImage) {
       return
     }
@@ -220,12 +305,57 @@ class SocialGameThumbnail extends HTMLElement {
 
     const shouldAnimate = this.shouldAnimateImageUpdate()
 
+    if (shouldAnimate) {
+      this.playImageUpdateAnimationAfterLoad(this._state.imageUrl)
+    }
+
     ;[this.$.bg, this.$.main, this.$.overlayBg, this.$.overlayMain].forEach((img) => {
       img.src = this._state.imageUrl
     })
+  }
 
-    if (shouldAnimate) {
-      this.playImageUpdateAnimation()
+  playImageUpdateAnimationAfterLoad(imageUrl) {
+    this.$.main.addEventListener(
+      "load",
+      () => {
+        if (this.$.main.getAttribute("src") !== imageUrl) {
+          return
+        }
+
+        this.playImageUpdateAnimation()
+        this.playInlineVideoFromImageUpdate()
+      },
+      { once: true }
+    )
+  }
+
+  renderOverlayVideo(overlayIsOpen) {
+    const videoActive = this.hasActiveVideo()
+    const video = this.$.overlayVideo
+
+    this.$.overlayMain.classList.toggle("sg-hidden", videoActive && overlayIsOpen)
+    video.classList.toggle("is-visible", videoActive && overlayIsOpen)
+
+    if (videoActive && overlayIsOpen) {
+      if (video.paused) {
+        video.play().catch(() => {})
+      }
+    } else {
+      if (!video.paused) {
+        video.pause()
+      }
+    }
+  }
+
+  renderInlineVideo(hasImage) {
+    const videoActive = Boolean(hasImage && this._inlineVideoActive && this.hasActiveVideo() && !isMobileViewport())
+    const video = this.$.inlineVideo
+
+    this.$.main.classList.toggle("sg-hidden", videoActive)
+    video.classList.toggle("is-visible", videoActive)
+
+    if (!videoActive && !video.paused) {
+      video.pause()
     }
   }
 }

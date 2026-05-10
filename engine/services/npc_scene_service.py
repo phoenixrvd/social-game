@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 from engine.client import client
@@ -42,3 +43,9 @@ class NpcSceneService:
         target_file.parent.mkdir(parents=True, exist_ok=True)
         target_file.write_text(markdown.strip() + "\n", encoding="utf-8")
         return target_file
+
+    @staticmethod
+    def delete_override(npc_id: str, scene_id: str) -> None:
+        target_dir = config.OVERRIDES_NPC_DIR / npc_id / "scenes" / scene_id
+        if target_dir.exists():
+            shutil.rmtree(target_dir)

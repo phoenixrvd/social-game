@@ -166,15 +166,31 @@ def test_sg_input_split_components_handle_actions_directly_without_parent_events
     assert "appActions.revertImage()" in image_source
     assert "appActions.deleteImage()" in image_source
     assert "appActions.toggleTheme()" in general_source
-    assert "appActions.resetNpc()" in general_source
-    assert "appActions.resetNpcAndDynamicScene()" in general_source
+    assert "appActions.resetNpc({" in general_source
+    assert "deleteScene: this.$.deleteSceneCheckbox.checked" in general_source
     assert "appActions.toggleSelectorPanel()" in composer_source
+
+
+def test_sg_input_scene_supports_separate_scene_and_npc_context_options():
+    source = _read("engine/web/static/js/sg-input-scene.js")
+    actions_source = _read("engine/web/static/js/app-actions.js")
+
+    assert "Scene Erstellen" in source
+    assert "NPC Kontext erstellen" in source
+    assert 'data-option="create-scene" checked' in source
+    assert 'data-option="create-npc-context" checked' in source
+    assert "create_scene: createScene" in source
+    assert "create_npc_context: createNpcContext" in source
+    assert "!hasDescription || !hasCreateOption" in source
+    assert "create_scene: createScene" in actions_source
+    assert "create_npc_context: createNpcContext" in actions_source
 
 
 def test_sg_input_split_components_use_icon_constants_instead_of_render_functions():
     image_source = _read("engine/web/static/js/sg-input-image.js")
     general_source = _read("engine/web/static/js/sg-input-general.js")
     composer_source = _read("engine/web/static/js/sg-input-composer.js")
+    gallery_source = _read("engine/web/static/js/sg-context-gallery.js")
 
     assert "const REFRESH_ICON" in image_source
     assert "const REVERT_ICON" in image_source
@@ -192,6 +208,9 @@ def test_sg_input_split_components_use_icon_constants_instead_of_render_function
     assert "const GEAR_ICON" in composer_source
     assert "function renderSendIcon" not in composer_source
     assert "function renderGearIcon" not in composer_source
+
+    assert "const PLUS_ICON" in gallery_source
+    assert "${PLUS_ICON}" in gallery_source
 
 
 def test_sg_input_renders_options_trigger_and_panel_actions_in_order():
@@ -248,8 +267,7 @@ def test_confirm_actions_return_execution_status_for_cancel_safe_ui_flow():
 
     assert "async function revertImage()" in source
     assert "async function deleteImage()" in source
-    assert "async function resetNpc()" in source
-    assert "async function resetNpcAndDynamicScene()" in source
+    assert "async function resetNpc(options = {})" in source
     assert "return false" in source
     assert "return true" in source
 
@@ -262,18 +280,36 @@ def test_confirm_actions_close_selector_panel_only_when_action_executed():
     assert "const hasExecuted = await appActions.deleteImage()" in image_source
     assert "if (hasExecuted && appStore.getState().isSelectorPanelOpen)" in image_source
 
-    assert "const hasExecuted = await appActions.resetNpc()" in general_source
-    assert "const hasExecuted = await appActions.resetNpcAndDynamicScene()" in general_source
+    assert "const hasExecuted = await appActions.resetNpc({" in general_source
+    assert "deleteNpc: this.$.deleteNpcCheckbox.checked" in general_source
+    assert "deleteScene: this.$.deleteSceneCheckbox.checked" in general_source
+    assert "deleteNpcContext: this.$.deleteNpcContextCheckbox.checked" in general_source
     assert "if (hasExecuted && appStore.getState().isSelectorPanelOpen)" in general_source
 
 
-def test_dynamic_scene_reset_button_is_wired_and_conditionally_visible():
+def test_reset_checkboxes_are_wired_and_conditionally_enabled():
     source = _read("engine/web/static/js/sg-input-general.js")
 
-    assert 'data-action="reset-active-scene"' in source
+    assert 'data-action="delete-active-npc"' in source
+    assert 'data-action="delete-active-scene"' in source
+    assert 'data-action="delete-active-npc-context"' in source
+    assert "Erstellten NPC-Kontext löschen" in source
+    assert 'data-action="reset-active-scene"' not in source
+    assert 'Verlauf und Szene löschen' not in source
+    assert '["isDynamicNpc", this.onDynamicNpcChanged.bind(this)]' in source
     assert '["isDynamicScene", this.onDynamicSceneChanged.bind(this)]' in source
-    assert "Standard-Szene kann nicht gelöscht werden" in source
-    assert "this.$.resetSceneButton.disabled = this._state.disabled || !this._state.isDynamicScene" in source
+    assert "this.$.deleteNpcCheckbox.disabled = this._state.disabled || !this._state.isDynamicNpc" in source
+    assert "this.$.deleteSceneCheckbox.disabled = this._state.disabled || !this._state.isDynamicScene" in source
+    assert "this.$.deleteNpcContextCheckbox.disabled = this._state.disabled || this.$.deleteNpcCheckbox.checked" in source
+    assert "this.$.deleteNpcContextCheckbox.checked = true" in source
+
+
+def test_reset_action_sends_npc_context_delete_option():
+    source = _read("engine/web/static/js/app-actions.js")
+
+    assert "const deleteNpcContext = Boolean(options.deleteNpcContext || deleteNpc)" in source
+    assert 'params.set("delete_npc_context", "true")' in source
+    assert "getResetNpcConfirmMessage(deleteNpc, deleteScene, deleteNpcContext)" in source
 
 
 def test_sg_input_subscribes_directly_to_store_keys():
@@ -345,10 +381,6 @@ def test_sg_thumbnail_subscribes_directly_to_image_store_keys_and_actions():
 
     assert 'import { appStore } from "./app-store.js"' in source
     assert 'import { appActions } from "./app-actions.js"' in source
-    assert '["imageUrl", this.onImageUrlChanged.bind(this)]' in source
-    assert '["isImageExpanded", this.onImageExpandedChanged.bind(this)]' in source
-    assert '["isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this)]' in source
-    assert "appStore.subscribe(key, listener)" in source
     assert "appActions.toggleImageExpand(true)" in source
     assert "appActions.toggleImageExpand(false)" in source
     assert "appActions.setImageError()" in source
@@ -378,7 +410,10 @@ def test_sg_app_syncs_app_viewport_height_with_visual_viewport():
 
 
 def test_mobile_css_uses_fixed_app_shell_with_app_vh_and_local_composer_anchor():
-    source = _read("engine/web/static/css/app.css")
+    source = "\n".join([
+        _read("engine/web/static/css/layout.css"),
+        _read("engine/web/static/css/input.css"),
+    ])
 
     assert ".app-viewport {" in source
     assert "position: fixed;" in source
@@ -469,3 +504,79 @@ def test_context_gallery_ignores_click_on_current_selection():
     assert "const selectedId = typeof state[this._stateKey] === \"string\" ? state[this._stateKey] : \"\"" in source
     assert "if (itemId === selectedId) return" in source
 
+
+def test_context_gallery_keeps_selector_open_after_selection():
+    source = _read("engine/web/static/js/sg-context-gallery.js")
+
+    handle_start = source.find("handleItemClick(itemId)")
+    handle_item_source = source[handle_start:source.find("render()", handle_start)]
+    assert "appActions.updateSession(session)" in handle_item_source
+    assert "toggleSelectorPanel" not in handle_item_source
+
+
+def test_context_gallery_clears_video_when_other_item_is_selected():
+    source = _read("engine/web/static/js/sg-context-gallery.js")
+
+    assert "this._state.playingVideoItemId && this._state.playingVideoItemId !== this._state.selectedId" in source
+    assert 'this._state.playingVideoItemId = ""' in source
+    assert "} else if (this._state.playingVideoItemId !== itemId) {" in source
+
+
+def test_context_gallery_plays_npc_video_from_media_click():
+    source = _read("engine/web/static/js/sg-context-gallery.js")
+
+    assert 'const videoUrl = e.currentTarget.getAttribute("data-video-url")' in source
+    assert 'e.target.closest(".sg-context-gallery-media")' in source
+    assert "itemId !== selectedId" in source
+    assert "this.playItemVideo(e.currentTarget)" in source
+    assert "this.handleItemClick(itemId)" in source
+    assert "data-video-url" in source
+    assert "<video" in source
+    assert "autoplay" not in source
+    assert "loop" not in source
+    assert 'preload="auto"' in source
+    assert "muted" in source
+    assert "disablepictureinpicture" in source
+    assert "disableremoteplayback" in source
+    assert "controls" not in source
+    assert 'loading="eager"' in source
+    assert 'loading="lazy"' not in source
+
+
+def test_context_gallery_starts_video_directly_on_tap_without_render_replay():
+    source = _read("engine/web/static/js/sg-context-gallery.js")
+
+    assert "this.playItemVideo(e.currentTarget)" in source
+    assert "this._state.playingVideoItemId" in source
+    assert "video.play().catch(() => {})" in source
+    assert "playActiveVideo" not in source
+    assert "startedVideoItemId" not in source
+
+
+def test_context_gallery_preserves_tapped_video_during_selection_update():
+    source = _read("engine/web/static/js/sg-context-gallery.js")
+
+    assert "this._state.playingVideoItemId" in source
+    assert "this.updateSelectedItemState()" in source
+    assert "updateSelectedItemState()" in source
+    assert "this.$.fieldset.disabled = this._state.disabled" in source
+
+
+def test_context_gallery_media_keeps_stable_thumbnail_ratio():
+    source = _read("engine/web/static/css/context-gallery.css")
+
+    assert ".sg-context-gallery-media" in source
+    assert "position: relative;" in source
+    assert ".sg-context-gallery-video" in source
+    assert "position: absolute;" in source
+    assert "height: 100%;" in source
+    assert "object-fit: cover;" in source
+    assert "opacity: 0;" in source
+    assert ".sg-context-gallery-video--playing" in source
+
+
+def test_context_gallery_renders_npc_tiles_larger_than_default():
+    source = _read("engine/web/static/css/context-gallery.css")
+
+    assert 'sg-context-gallery[data-context-type="npc"] .sg-context-gallery-item' in source
+    assert "width: 106px;" in source

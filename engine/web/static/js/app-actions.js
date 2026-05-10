@@ -76,10 +76,14 @@ function mapStatePayload(payload = {}) {
     scenes: Array.isArray(payload.scenes) ? payload.scenes : [],
     npcId: typeof payload.npc_id === "string" ? payload.npc_id : null,
     sceneId: typeof payload.scene_id === "string" ? payload.scene_id : null,
+    defaultNpcId: typeof payload.default_npc_id === "string" ? payload.default_npc_id : null,
     defaultSceneId: typeof payload.default_scene_id === "string" ? payload.default_scene_id : null,
+    isDynamicNpc: Boolean(payload.is_dynamic_npc),
     isDynamicScene: Boolean(payload.is_dynamic_scene),
-    user_profile: typeof payload.user_profile === "string" ? payload.user_profile : "",
+    userProfile: typeof payload.user_profile === "string" ? payload.user_profile : "",
     imageAutogenerate: typeof payload.image_autogenerate === "boolean" ? payload.image_autogenerate : true,
+    videoUrl: typeof payload.video_url === "string" ? payload.video_url : null,
+    imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : true,
   }
 }
 
@@ -154,8 +158,12 @@ async function pollImageSignature(force = false) {
   appStore.setState({
     imageSignature: signature,
     imageUrl: appendCacheBuster(typeof payload.image_url === "string" ? payload.image_url : latestState.imageUrl),
+    imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : latestState.imageIsOriginal,
+    videoUrl: typeof payload.video_url === "string" ? payload.video_url : null,
   })
 }
+
+
 
 async function loadInitialState() {
   appStore.setState({ isSessionLoading: true })
@@ -198,7 +206,8 @@ async function updateSession(nextSession = {}) {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Session konnte nicht aktualisiert werden.") })
       return
     }
-    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+    const nextState = mapStatePayload(payload)
+    appStore.setState({ ...nextState, errorMessage: "" })
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Session konnte nicht aktualisiert werden." })
   } finally {
@@ -294,19 +303,34 @@ async function deleteImage() {
   }
 }
 
-async function resetNpc() {
+async function resetNpc(options = {}) {
   const state = appStore.getState()
   if (state.isSending || state.isSessionLoading) {
     return false
   }
 
-  if (!window.confirm("Soll der Verlauf des aktiven NPC wirklich gelöscht werden?")) {
+  const deleteNpc = Boolean(options.deleteNpc && state.isDynamicNpc)
+  const deleteScene = Boolean(options.deleteScene && state.isDynamicScene)
+  const deleteNpcContext = Boolean(options.deleteNpcContext || deleteNpc)
+  const params = new URLSearchParams()
+  if (deleteNpc) {
+    params.set("delete_npc", "true")
+  }
+  if (deleteScene) {
+    params.set("delete_scene", "true")
+  }
+  if (deleteNpcContext) {
+    params.set("delete_npc_context", "true")
+  }
+  const resetUrl = params.toString() ? `/api/npc/reset-active?${params}` : "/api/npc/reset-active"
+
+  if (!window.confirm(getResetNpcConfirmMessage(deleteNpc, deleteScene, deleteNpcContext))) {
     return false
   }
 
   appStore.setState({ isSessionLoading: true })
   try {
-    const response = await fetch("/api/npc/reset-active", { method: "DELETE" })
+    const response = await fetch(resetUrl, { method: "DELETE" })
     const payload = await readJsonResponse(response)
     if (!response.ok) {
       appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf konnte nicht gelöscht werden.") })
@@ -322,32 +346,18 @@ async function resetNpc() {
   }
 }
 
-async function resetNpcAndDynamicScene() {
-  const state = appStore.getState()
-  if (state.isSending || state.isSessionLoading || !state.isDynamicScene) {
-    return false
+function getResetNpcConfirmMessage(deleteNpc, deleteScene, deleteNpcContext) {
+  const items = ["Verlauf"]
+  if (deleteNpc) {
+    items.push("erstellter NPC")
   }
-
-  if (!window.confirm("Soll der Verlauf und die erstellte Szene wirklich gelöscht werden?")) {
-    return false
+  if (deleteScene) {
+    items.push("erstellte Szene")
   }
-
-  appStore.setState({ isSessionLoading: true })
-  try {
-    const response = await fetch("/api/scene/reset-active", { method: "DELETE" })
-    const payload = await readJsonResponse(response)
-    if (!response.ok) {
-      appStore.setState({ errorMessage: getErrorMessage(payload, "Verlauf und Szene konnten nicht gelöscht werden.") })
-      return false
-    }
-    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
-    return true
-  } catch (error) {
-    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Verlauf und Szene konnten nicht gelöscht werden." })
-    return false
-  } finally {
-    appStore.setState({ isSessionLoading: false })
+  if (deleteNpcContext) {
+    items.push("NPC-Kontext")
   }
+  return `Sollen folgende Dinge gelöscht werden?\n\n- ${items.join("\n- ")}`
 }
 
 function handleChatStreamEvent(event, assistantId, assistantTimestamp) {
@@ -473,7 +483,7 @@ function setInput(value = "") {
 }
 
 function toggleSelectorPanel() {
-   appStore.setState({ isSelectorPanelOpen: !appStore.getState().isSelectorPanelOpen })
+  appStore.setState({ isSelectorPanelOpen: !appStore.getState().isSelectorPanelOpen })
 }
 
 function toggleImageExpand(expanded = false) {
@@ -488,23 +498,23 @@ function setImageError() {
 }
 
 async function toggleImageAutogenerate() {
-   const nextValue = !appStore.getState().imageAutogenerate
-   try {
-     const response = await fetch("/api/session", {
-       method: "PUT",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ image_autogenerate: nextValue }),
-     })
-     const payload = await readJsonResponse(response)
-     if (!response.ok) {
-       appStore.setState({ errorMessage: getErrorMessage(payload, "Einstellung konnte nicht gespeichert werden.") })
-       return
-     }
-     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
-   } catch (error) {
-     appStore.setState({ errorMessage: error instanceof Error ? error.message : "Einstellung konnte nicht gespeichert werden." })
-   }
- }
+  const nextValue = !appStore.getState().imageAutogenerate
+  try {
+    const response = await fetch("/api/session", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ image_autogenerate: nextValue }),
+    })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ errorMessage: getErrorMessage(payload, "Einstellung konnte nicht gespeichert werden.") })
+      return
+    }
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+  } catch (error) {
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "Einstellung konnte nicht gespeichert werden." })
+  }
+}
 
 async function createScene(payload = {}) {
   const state = appStore.getState()
@@ -513,9 +523,15 @@ async function createScene(payload = {}) {
   }
 
   const sceneDescription = typeof payload.scene_description === "string" ? payload.scene_description.trim() : ""
+  const createScene = payload.create_scene !== false
+  const createNpcContext = payload.create_npc_context !== false
 
   if (!sceneDescription) {
     appStore.setState({ sceneCreatorError: "Szenenbeschreibung ist erforderlich." })
+    return
+  }
+  if (!createScene && !createNpcContext) {
+    appStore.setState({ sceneCreatorError: "Mindestens eine Erstellungsoption muss aktiv sein." })
     return
   }
 
@@ -528,6 +544,8 @@ async function createScene(payload = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_description: sceneDescription,
+        create_scene: createScene,
+        create_npc_context: createNpcContext,
       }),
     })
     const responsePayload = await readJsonResponse(response)
@@ -546,137 +564,177 @@ async function createScene(payload = {}) {
   }
 }
 
- async function updateUserProfile(content = "") {
-   const state = appStore.getState()
-   if (state.isSending || state.isSessionLoading) {
-     return
-   }
+async function createNpc(payload = {}) {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isNpcCreatorLoading) {
+    return
+  }
 
-   try {
-     const response = await fetch("/api/user-profile", {
-       method: "PUT",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ content }),
-     })
-     const payload = await readJsonResponse(response)
-     if (!response.ok) {
-       appStore.setState({ errorMessage: getErrorMessage(payload, "User Profile konnte nicht aktualisiert werden.") })
-       return
-     }
-     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
-   } catch (error) {
-     appStore.setState({ errorMessage: error instanceof Error ? error.message : "User Profile konnte nicht aktualisiert werden." })
-   }
+  const characterDescription = typeof payload.character_description === "string" ? payload.character_description.trim() : ""
+
+  if (!characterDescription) {
+    appStore.setState({ npcCreatorError: "Charakterbeschreibung ist erforderlich." })
+    return
+  }
+
+  appStore.setState({ isNpcCreatorLoading: true, npcCreatorError: "" })
+  await waitForNextPaint()
+
+  try {
+    const response = await fetch("/api/npcs/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        character_description: characterDescription,
+      }),
+    })
+    const responsePayload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ npcCreatorError: getErrorMessage(responsePayload, "NPC konnte nicht erstellt werden.") })
+      return
+    }
+
+    appStore.setState({ ...mapStatePayload(responsePayload), errorMessage: "" })
+  } catch (error) {
+    appStore.setState({
+      npcCreatorError: error instanceof Error ? error.message : "NPC konnte nicht erstellt werden.",
+    })
+  } finally {
+    appStore.setState({ isNpcCreatorLoading: false })
+  }
+}
+
+async function updateUserProfile(content = "") {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading) {
+    return
+  }
+
+  try {
+    const response = await fetch("/api/user-profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ errorMessage: getErrorMessage(payload, "User Profile konnte nicht aktualisiert werden.") })
+      return
+    }
+    appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
+  } catch (error) {
+    appStore.setState({ errorMessage: error instanceof Error ? error.message : "User Profile konnte nicht aktualisiert werden." })
+  }
 }
 
 async function loadCheckpoints() {
-   const state = appStore.getState()
-   if (state.isHistoryLoading) {
-     return
-   }
+  const state = appStore.getState()
+  if (state.isHistoryLoading) {
+    return
+  }
 
-   appStore.setState({ isHistoryLoading: true, historyError: "" })
-   try {
-     const response = await fetch("/api/history/list", { cache: "no-store" })
-     const payload = await readJsonResponse(response)
-     if (!response.ok) {
-       appStore.setState({ historyError: getErrorMessage(payload, "Checkpoints konnten nicht geladen werden.") })
-       return
-     }
+  appStore.setState({ isHistoryLoading: true, historyError: "" })
+  try {
+    const response = await fetch("/api/history/list", { cache: "no-store" })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ historyError: getErrorMessage(payload, "Checkpoints konnten nicht geladen werden.") })
+      return
+    }
 
-     appStore.setState({ checkpoints: Array.isArray(payload.checkpoints) ? payload.checkpoints : [] })
-   } catch (error) {
-     appStore.setState({ historyError: error instanceof Error ? error.message : "Checkpoints konnten nicht geladen werden." })
-   } finally {
-     appStore.setState({ isHistoryLoading: false })
-   }
- }
+    appStore.setState({ checkpoints: Array.isArray(payload.checkpoints) ? payload.checkpoints : [] })
+  } catch (error) {
+    appStore.setState({ historyError: error instanceof Error ? error.message : "Checkpoints konnten nicht geladen werden." })
+  } finally {
+    appStore.setState({ isHistoryLoading: false })
+  }
+}
 
- async function saveCheckpoint() {
-   const state = appStore.getState()
-   if (state.isSending || state.isSessionLoading || state.isHistoryLoading) {
-     return false
-   }
+async function saveCheckpoint() {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isHistoryLoading) {
+    return false
+  }
 
-   let shouldReloadCheckpoints = false
-   appStore.setState({ isHistoryLoading: true, historyError: "" })
-   await waitForNextPaint()
+  let shouldReloadCheckpoints = false
+  appStore.setState({ isHistoryLoading: true, historyError: "" })
+  await waitForNextPaint()
 
-   try {
-     const response = await fetch("/api/history/save", { method: "POST" })
-     const payload = await readJsonResponse(response)
-     if (!response.ok) {
-       appStore.setState({ historyError: getErrorMessage(payload, "Checkpoint konnte nicht erstellt werden.") })
-       return false
-     }
+  try {
+    const response = await fetch("/api/history/save", { method: "POST" })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ historyError: getErrorMessage(payload, "Checkpoint konnte nicht erstellt werden.") })
+      return false
+    }
 
-     shouldReloadCheckpoints = true
-     return true
-   } catch (error) {
-     appStore.setState({ historyError: error instanceof Error ? error.message : "Checkpoint konnte nicht erstellt werden." })
-     return false
-   } finally {
-     appStore.setState({ isHistoryLoading: false })
-     if (shouldReloadCheckpoints) {
-       await loadCheckpoints()
-     }
-   }
- }
+    shouldReloadCheckpoints = true
+    return true
+  } catch (error) {
+    appStore.setState({ historyError: error instanceof Error ? error.message : "Checkpoint konnte nicht erstellt werden." })
+    return false
+  } finally {
+    appStore.setState({ isHistoryLoading: false })
+    if (shouldReloadCheckpoints) {
+      await loadCheckpoints()
+    }
+  }
+}
 
- async function restoreCheckpoint(commitHash) {
-   const state = appStore.getState()
-   if (state.isSending || state.isSessionLoading || !commitHash) {
-     return false
-   }
+async function restoreCheckpoint(commitHash) {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || !commitHash) {
+    return false
+  }
 
-   if (!window.confirm("Soll dieser Spielstand wirklich wiederhergestellt werden?")) {
-     return false
-   }
+  if (!window.confirm("Soll dieser Spielstand wirklich wiederhergestellt werden?")) {
+    return false
+  }
 
-   appStore.setState({ isSessionLoading: true, historyError: "" })
-   await waitForNextPaint()
+  appStore.setState({ isSessionLoading: true, historyError: "" })
+  await waitForNextPaint()
 
-   try {
-     const response = await fetch("/api/history/restore", {
-       method: "POST",
-       headers: { "Content-Type": "application/json" },
-       body: JSON.stringify({ commit_hash: commitHash }),
-     })
-     const payload = await readJsonResponse(response)
-     if (!response.ok) {
-       appStore.setState({ historyError: getErrorMessage(payload, "Spielstand konnte nicht wiederhergestellt werden.") })
-       return false
-     }
+  try {
+    const response = await fetch("/api/history/restore", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commit_hash: commitHash }),
+    })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ historyError: getErrorMessage(payload, "Spielstand konnte nicht wiederhergestellt werden.") })
+      return false
+    }
 
-     // Neu laden nach erfolgreicher Wiederherstellung
-     window.location.reload()
-     return true
-   } catch (error) {
-     appStore.setState({ historyError: error instanceof Error ? error.message : "Spielstand konnte nicht wiederhergestellt werden." })
-     return false
-   } finally {
-     appStore.setState({ isSessionLoading: false })
-   }
- }
+    // Neu laden nach erfolgreicher Wiederherstellung
+    window.location.reload()
+    return true
+  } catch (error) {
+    appStore.setState({ historyError: error instanceof Error ? error.message : "Spielstand konnte nicht wiederhergestellt werden." })
+    return false
+  } finally {
+    appStore.setState({ isSessionLoading: false })
+  }
+}
 
 export const appActions = {
-    loadInitialState,
-    submitMessage,
-    updateSession,
-    refreshImage,
-    revertImage,
-    deleteImage,
-    resetNpc,
-    resetNpcAndDynamicScene,
-    setInput,
-    toggleTheme,
-    toggleSelectorPanel,
-    toggleImageExpand,
-    setImageError,
-    updateUserProfile,
-    toggleImageAutogenerate,
-    createScene,
-    loadCheckpoints,
-    saveCheckpoint,
-    restoreCheckpoint,
-  }
+  loadInitialState,
+  submitMessage,
+  updateSession,
+  refreshImage,
+  revertImage,
+  deleteImage,
+  resetNpc,
+  setInput,
+  toggleTheme,
+  toggleSelectorPanel,
+  toggleImageExpand,
+  setImageError,
+  updateUserProfile,
+  toggleImageAutogenerate,
+  createScene,
+  createNpc,
+  loadCheckpoints,
+  saveCheckpoint,
+  restoreCheckpoint,
+}

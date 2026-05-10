@@ -51,7 +51,8 @@
 
 .sg-options-tab:focus-visible,
 .sg-context-gallery-item:focus-visible,
-.sg-settings-action:focus-visible {
+.sg-settings-action:focus-visible,
+.sg-settings-checkbox input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
   outline-offset: 2px;
 }
@@ -315,6 +316,28 @@
   color: color-mix(in srgb, var(--text-error) 82%, var(--text-muted));
 }
 
+.sg-settings-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.1rem 0.15rem;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.sg-settings-checkbox input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--text-error);
+}
+
+.sg-settings-checkbox:has(input:disabled) {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
 .sg-settings-action-inactive .sg-settings-action-icon {
   color: var(--text-muted);
   opacity: 0.55;
@@ -511,7 +534,6 @@ sg-input-scene .sg-form-group {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  margin-bottom: 1rem;
 }
 
 sg-input-scene .sg-form-label {

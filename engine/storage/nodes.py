@@ -6,7 +6,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from engine.config import config
-from engine.storage.files import ImageFile, TextFile, YamlFile
+from engine.storage.files import ImageFile, TextFile, VideoFile, YamlFile
 from engine.storage.models import Episode, Message, SessionState
 from engine.storage.paths import path_resolver
 from engine.storage.stores import _EtmSqliteStore, _StmJsonlStore
@@ -182,6 +182,18 @@ class PromptsNode:
         return TextFile(path_resolver.prompt_file("scene_create_text.md"))
 
     @property
+    def npc_create_description(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_create_description.md"))
+
+    @property
+    def npc_create_state(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_create_state.md"))
+
+    @property
+    def npc_create_image(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_create_image.md"))
+
+    @property
     def npc_scene_create_text(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("npc_scene_create_text.md"))
 
@@ -301,6 +313,17 @@ class NpcNode(_StorageNodeBase):
         return self.img_original
 
     @property
+    def is_image_original(self) -> bool:
+        return not self.img_runtime.is_file()
+
+    @property
+    def video(self) -> VideoFile:
+        override_video = VideoFile(config.OVERRIDES_NPC_DIR / self.npc_id / "video.mp4")
+        if override_video.is_file():
+            return override_video
+        return VideoFile(config.NPC_DIR / self.npc_id / "video.mp4")
+
+    @property
     def backup_dir(self) -> Path:
         return self.base_runtime / "img_backup"
 
@@ -320,6 +343,12 @@ class NpcNode(_StorageNodeBase):
     def user_profile(self) -> str:
         preferred = path_resolver.preferred_file(path_resolver.user_profile_candidates(self.npc_id, self.scene_id))
         return TextFile(preferred).get() or ""
+
+    @property
+    def is_dynamic_npc(self) -> bool:
+        is_default_npc = (config.NPC_DIR / self.npc_id).is_dir()
+        is_override_npc = (config.OVERRIDES_NPC_DIR / self.npc_id).is_dir()
+        return is_override_npc and not is_default_npc
 
 
 @dataclass(frozen=True)
@@ -376,4 +405,3 @@ class SceneNode(_StorageNodeBase):
         is_default_scene = (config.SCENE_DIR / self.scene_id).is_dir()
         is_override_scene = (config.OVERRIDES_SCENE_DIR / self.scene_id).is_dir()
         return is_override_scene and not is_default_scene
-

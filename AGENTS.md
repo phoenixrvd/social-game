@@ -41,8 +41,12 @@ pip install -r requirements.txt && pip install -e .
 # Starten
 sg web                                         # http://127.0.0.1:8000
 
-# Tests
-pytest                                         # alle Tests
+# Browser-MCP/Edge-DevTools verbinden
+microsoft-edge \
+  --remote-debugging-port=9222 \
+  --auto-open-devtools-for-tabs \
+  --user-data-dir=.data/edge \
+  http://localhost:8000
 ```
 
 ## Projektspezifische Muster

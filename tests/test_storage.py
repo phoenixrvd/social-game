@@ -100,6 +100,57 @@ def test_prompt_npc_scene_create_text_prefers_override_over_default(tmp_path, mo
     assert item.get() == "override-npc-scene"
 
 
+def test_prompt_npc_create_description_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "npc_create_description.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default-npc-description", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "npc_create_description.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override-npc-description", encoding="utf-8")
+
+    item = storage.prompts.npc_create_description
+    assert item.path == override_prompt
+    assert item.get() == "override-npc-description"
+
+
+def test_prompt_npc_create_state_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "npc_create_state.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default-npc-state", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "npc_create_state.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override-npc-state", encoding="utf-8")
+
+    item = storage.prompts.npc_create_state
+    assert item.path == override_prompt
+    assert item.get() == "override-npc-state"
+
+
+def test_prompt_npc_create_image_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "npc_create_image.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default-npc-image", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "npc_create_image.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override-npc-image", encoding="utf-8")
+
+    item = storage.prompts.npc_create_image
+    assert item.path == override_prompt
+    assert item.get() == "override-npc-image"
+
+
 def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
     monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")
@@ -144,3 +195,23 @@ def test_storage_description_uses_default_path_when_runtime_file_is_missing(tmp_
     assert storage.npc.description.path == npc_dir / "description.md"
     assert storage.npc.description.get() == "default-description"
 
+
+def test_storage_npc_video_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    _set_session(tmp_path, "vika", "office")
+    (tmp_path / "scenes" / "office").mkdir(parents=True)
+
+    default_video = tmp_path / "npcs" / "vika" / "video.mp4"
+    default_video.parent.mkdir(parents=True)
+    default_video.write_bytes(b"default")
+
+    override_video = tmp_path / ".overrides" / "npcs" / "vika" / "video.mp4"
+    override_video.parent.mkdir(parents=True)
+    override_video.write_bytes(b"override")
+
+    assert storage.npc.video.path == override_video
+    assert storage.npc.video.get() == override_video

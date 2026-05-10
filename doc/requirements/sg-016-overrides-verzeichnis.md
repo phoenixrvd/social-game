@@ -47,7 +47,17 @@ SG-016 beschreibt ausschließlich die fachliche Rolle des lokalen Verzeichnisses
 **Akzeptanzkriterien:**
 - Jede Datei unter `npcs/<npc_id>/scenes/<scene_id>/` kann durch eine gleichnamige Datei unter `.overrides/npcs/<npc_id>/scenes/<scene_id>/` vollständig ersetzt werden.
 - Ohne lokale Überschreibung bleibt der versionierte Standardinhalt wirksam.
+- Fehlt eine eigene NPC-szenenspezifische Ergänzung, kann ein passend auf den aktiven NPC bezogener Default-Fallback wirksam werden.
 **Referenzen:** `engine/storage.py`
+
+### Entfernen lokaler NPC-szenenspezifischer Ergänzungen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss lokal erzeugte NPC-szenenspezifische Ergänzungen getrennt von NPC und Scene entfernbar machen.  
+**Akzeptanzkriterien:**
+- Eine lokal erzeugte NPC-szenenspezifische Ergänzung kann entfernt werden, ohne den betroffenen NPC oder die betroffene Scene zu löschen.
+- Nach dem Entfernen wirkt die lokale NPC-szenenspezifische Ergänzung nicht mehr.
+- Danach greifen für den betroffenen NPC in der betroffenen Scene wieder die verbleibenden Prioritäten und Fallbacks.
+**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
 
 ### Priorisierung der Datenschichten
 **Typ:** Randbedingung  

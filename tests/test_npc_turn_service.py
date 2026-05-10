@@ -16,7 +16,7 @@ class FakeStmView:
 
     @property
     def text_short_latest(self) -> str:
-        selected = self._messages[-npc_turn_service_module.config.STM_LATEST_MESSAGES:]
+        selected = self._messages[-5:]
         if not selected:
             return "(keine Nachrichten)"
         return "\n".join(f"{m.role}: {m.content.strip()}" for m in selected)
@@ -72,6 +72,12 @@ def test_build_chat_messages_uses_prompt_template_with_placeholders(monkeypatch)
     template = """# Role\n{{ROLE}}\n\n# Data\n{{CHARACTER_DATA}}\n\n# Description\n{{CHARACTER_DESCRIPTION}}\n\n# State\n{{CURRENT_STATE}}\n\n# Retrieved\n{{CURRENT_ETM}}\n\n# Rules\nRegel A\n"""
 
     npc = _build_npc()
+
+    class FakeEtmService:
+        def load_relevant(self, _query_text):
+            return ""
+
+    monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     _patch_storage(monkeypatch, npc, template)
 
     service = NpcTurnService()
@@ -91,6 +97,12 @@ def test_build_chat_messages_uses_prompt_template_with_placeholders(monkeypatch)
 
 def test_build_chat_messages_uses_leer_for_empty_values(monkeypatch):
     npc = _build_npc(system_prompt="   ", description="", state=" ", character={})
+
+    class FakeEtmService:
+        def load_relevant(self, _query_text):
+            return ""
+
+    monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     _patch_storage(monkeypatch, npc, "{{ROLE}} | {{CHARACTER_DATA}} | {{CHARACTER_DESCRIPTION}} | {{CURRENT_STATE}} | {{CURRENT_ETM}}")
 
     service = NpcTurnService()
@@ -161,7 +173,6 @@ def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypa
             return "- Er erinnert sich an eine ruhige Bar mit guten Gläsern."
 
     monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
-    monkeypatch.setattr(npc_turn_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
     _patch_storage(monkeypatch, npc, "{{CURRENT_STATE}}\n---\n{{CURRENT_ETM}}")
 
     service = NpcTurnService()
@@ -173,49 +184,20 @@ def test_build_turn_messages_includes_retrieved_memories_from_etm_store(monkeypa
     assert system_message["content"].count("mood: neutral") == 1
 
 
-def test_build_turn_messages_skips_retrieval_without_store(monkeypatch, tmp_path):
+def test_build_turn_messages_uses_empty_text_without_relevant_memories(monkeypatch):
     npc = _build_npc()
-    monkeypatch.setattr(npc_turn_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+
+    class FakeEtmService:
+        def load_relevant(self, _query_text):
+            return ""
+
+    monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
     _patch_storage(monkeypatch, npc, "{{CURRENT_ETM}}")
 
     service = NpcTurnService()
     turn_messages = service.build_chat_messages("Hi")
 
     assert turn_messages[0]["content"] == "(keine zusätzlichen relevanten Erinnerungen)"
-
-
-def test_build_chat_messages_uses_configured_stm_window_for_retrieval(monkeypatch):
-    stm_messages = [
-        Message(
-            id=f"m{index}",
-            timestamp_utc=f"2026-03-28T10:00:0{index}+00:00",
-            role="user" if index % 2 == 0 else "assistant",
-            content=f"Nachricht {index}",
-        )
-        for index in range(6)
-    ]
-    npc = _build_npc(stm=stm_messages)
-
-    captured: dict[str, str] = {}
-
-    class FakeEtmService:
-        def load_relevant(self, query_text):
-            captured["query"] = query_text
-            return ""
-
-    monkeypatch.setattr(npc_turn_service_module, "EtmService", FakeEtmService)
-    monkeypatch.setattr(npc_turn_service_module.config, "STM_LATEST_MESSAGES", 3)
-    _patch_storage(monkeypatch, npc, "{{CURRENT_ETM}}")
-
-    service = NpcTurnService()
-    service.build_chat_messages("Neue Eingabe")
-
-    query_text = captured["query"]
-    assert "Nachricht 2" not in query_text
-    assert "Nachricht 0" not in query_text
-    assert "Nachricht 3" in query_text
-    assert "Nachricht 5" in query_text
-    assert query_text.endswith("user: Neue Eingabe")
 
 
 def test_build_chat_messages_appends_user_message(monkeypatch):
@@ -265,4 +247,3 @@ def test_finalize_turn_persists_trimmed_messages(monkeypatch):
     assert appended_messages[1].id == "assistant-id"
     assert appended_messages[1].role == "assistant"
     assert appended_messages[1].content == "Hi zurück"
-

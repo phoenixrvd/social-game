@@ -13,18 +13,26 @@ function createInitialState() {
     scenes: [],
     npcId: null,
     sceneId: null,
+    defaultNpcId: null,
     defaultSceneId: null,
+    isDynamicNpc: false,
     isDynamicScene: false,
     isImageExpanded: false,
     isSelectorPanelOpen: false,
     isSceneCreatorLoading: false,
     sceneCreatorError: "",
+    isNpcCreatorLoading: false,
+    npcCreatorError: "",
     checkpoints: [],
     isHistoryLoading: false,
     historyError: "",
     focusRequestedAt: null,
     theme: localStorage.getItem("theme") === "light" ? "light" : "dark",
     imageAutogenerate: true,
+    userProfile: "",
+    videoUrl: null,
+    imageIsOriginal: true,
+    imageVideoAutoplayRequestedAt: null,
   }
 }
 
@@ -32,6 +40,7 @@ class AppStore {
   constructor() {
     this._state = createInitialState()
     this._listeners = new Map()
+    this._stateListeners = new Set()
   }
 
   getState() {
@@ -55,23 +64,40 @@ class AppStore {
     }
   }
 
+  subscribeState(listener) {
+    if (typeof listener !== "function") {
+      return () => {}
+    }
+
+    this._stateListeners.add(listener)
+
+    return () => {
+      this._stateListeners.delete(listener)
+    }
+  }
+
   setState(patch = {}) {
     const prevState = this._state
     const nextState = { ...prevState, ...(patch || {}) }
+    const changedKeys = Object.keys(patch || {}).filter((key) => prevState[key] !== nextState[key])
 
     this._state = nextState
 
-    for (const key of Object.keys(patch || {})) {
-      if (prevState[key] === nextState[key]) {
-        continue
-      }
-
+    for (const key of changedKeys) {
       const listeners = this._listeners.get(key)
       if (listeners) {
         for (const listener of listeners) {
           listener(nextState[key], prevState[key], nextState)
         }
       }
+    }
+
+    if (changedKeys.length === 0) {
+      return
+    }
+
+    for (const listener of this._stateListeners) {
+      listener(nextState, prevState, changedKeys)
     }
   }
 }

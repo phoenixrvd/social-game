@@ -46,19 +46,6 @@ function renderActionContent(icon, title, description = "") {
   `
 }
 
-function getResetSceneButtonCopy(isDynamicScene) {
-  if (isDynamicScene) {
-    return {
-      label: "Verlauf und Szene löschen",
-      description: "Entfernt Verlauf sowie Inhalte erstellter Szenen",
-    }
-  }
-  return {
-    label: "Verlauf und Szene löschen",
-    description: "Standard-Szene kann nicht gelöscht werden",
-  }
-}
-
 class SocialGameInputGeneral extends HTMLElement {
   constructor() {
     super()
@@ -66,6 +53,7 @@ class SocialGameInputGeneral extends HTMLElement {
       disabled: false,
       theme: "dark",
       userProfile: "",
+      isDynamicNpc: false,
       isDynamicScene: false,
     }
 
@@ -81,9 +69,18 @@ class SocialGameInputGeneral extends HTMLElement {
           <button type="button" data-action="reset-active-npc" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf löschen">
             ${renderActionContent(DELETE_ICON, "Verlauf löschen", "Entfernt Nachrichten und Bilder der aktiven Konversation")}
           </button>
-          <button type="button" data-action="reset-active-scene" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf und Szene löschen">
-            ${renderActionContent(DELETE_ICON, "Verlauf und Szene löschen", "Entfernt Verlauf sowie Inhalte erstellter Szenen")}
-          </button>
+          <label class="sg-settings-checkbox">
+            <input type="checkbox" data-action="delete-active-npc" />
+            <span>Erstellten NPC mit löschen</span>
+          </label>
+          <label class="sg-settings-checkbox">
+            <input type="checkbox" data-action="delete-active-scene" />
+            <span>Erstellte Szene mit löschen</span>
+          </label>
+          <label class="sg-settings-checkbox">
+            <input type="checkbox" data-action="delete-active-npc-context" />
+            <span>Erstellten NPC-Kontext löschen</span>
+          </label>
         </div>
       </section>
       <section class="sg-settings-section">
@@ -99,13 +96,15 @@ class SocialGameInputGeneral extends HTMLElement {
     this.$ = {
       themeButton: this.querySelector('[data-action="toggle-theme"]'),
       resetButton: this.querySelector('[data-action="reset-active-npc"]'),
-      resetSceneButton: this.querySelector('[data-action="reset-active-scene"]'),
+      deleteNpcCheckbox: this.querySelector('[data-action="delete-active-npc"]'),
+      deleteSceneCheckbox: this.querySelector('[data-action="delete-active-scene"]'),
+      deleteNpcContextCheckbox: this.querySelector('[data-action="delete-active-npc-context"]'),
       userProfileTextarea: this.querySelector('[data-element="user-profile-textarea"]'),
     }
 
     this.$.themeButton.addEventListener("click", this.handleThemeClick.bind(this))
     this.$.resetButton.addEventListener("click", this.handleResetClick.bind(this))
-    this.$.resetSceneButton.addEventListener("click", this.handleResetSceneClick.bind(this))
+    this.$.deleteNpcCheckbox.addEventListener("change", this.handleDeleteNpcChange.bind(this))
     this.$.userProfileTextarea.addEventListener("blur", this.handleUserProfileBlur.bind(this))
     this.registerSubscriptions()
     this.syncFromStore()
@@ -116,7 +115,8 @@ class SocialGameInputGeneral extends HTMLElement {
     const state = appStore.getState()
     this._state.theme = state.theme === "light" ? "light" : "dark"
     this._state.disabled = Boolean(state.isSending) || Boolean(state.isSessionLoading)
-    this._state.userProfile = state.user_profile || ""
+    this._state.userProfile = state.userProfile || ""
+    this._state.isDynamicNpc = Boolean(state.isDynamicNpc)
     this._state.isDynamicScene = Boolean(state.isDynamicScene)
   }
 
@@ -125,7 +125,8 @@ class SocialGameInputGeneral extends HTMLElement {
       ["theme", this.onThemeChanged.bind(this)],
       ["isSending", this.onDisabledTriggerChanged.bind(this)],
       ["isSessionLoading", this.onDisabledTriggerChanged.bind(this)],
-      ["user_profile", this.onUserProfileChanged.bind(this)],
+      ["userProfile", this.onUserProfileChanged.bind(this)],
+      ["isDynamicNpc", this.onDynamicNpcChanged.bind(this)],
       ["isDynamicScene", this.onDynamicSceneChanged.bind(this)],
     ]
 
@@ -150,6 +151,11 @@ class SocialGameInputGeneral extends HTMLElement {
     this.render()
   }
 
+  onDynamicNpcChanged(value) {
+    this._state.isDynamicNpc = Boolean(value)
+    this.render()
+  }
+
   handleThemeClick() {
     appActions.toggleTheme()
     if (appStore.getState().isSelectorPanelOpen) {
@@ -158,17 +164,11 @@ class SocialGameInputGeneral extends HTMLElement {
   }
 
   async handleResetClick() {
-    const hasExecuted = await appActions.resetNpc()
-    if (hasExecuted && appStore.getState().isSelectorPanelOpen) {
-      appActions.toggleSelectorPanel()
-    }
-  }
-
-  async handleResetSceneClick() {
-    if (!this._state.isDynamicScene) {
-      return
-    }
-    const hasExecuted = await appActions.resetNpcAndDynamicScene()
+    const hasExecuted = await appActions.resetNpc({
+      deleteNpc: this.$.deleteNpcCheckbox.checked,
+      deleteScene: this.$.deleteSceneCheckbox.checked,
+      deleteNpcContext: this.$.deleteNpcContextCheckbox.checked,
+    })
     if (hasExecuted && appStore.getState().isSelectorPanelOpen) {
       appActions.toggleSelectorPanel()
     }
@@ -184,6 +184,10 @@ class SocialGameInputGeneral extends HTMLElement {
     await appActions.updateUserProfile(content)
   }
 
+  handleDeleteNpcChange() {
+    this.render()
+  }
+
   render() {
     this.$.themeButton.innerHTML = renderActionContent(
       getThemeToggleIcon(this._state.theme),
@@ -192,10 +196,18 @@ class SocialGameInputGeneral extends HTMLElement {
     )
     this.$.themeButton.disabled = this._state.disabled
     this.$.resetButton.disabled = this._state.disabled
-    const resetSceneCopy = getResetSceneButtonCopy(this._state.isDynamicScene)
-    this.$.resetSceneButton.innerHTML = renderActionContent(DELETE_ICON, resetSceneCopy.label, resetSceneCopy.description)
-    this.$.resetSceneButton.disabled = this._state.disabled || !this._state.isDynamicScene
-    this.$.resetSceneButton.setAttribute("aria-label", resetSceneCopy.label)
+    this.$.deleteNpcCheckbox.disabled = this._state.disabled || !this._state.isDynamicNpc
+    this.$.deleteSceneCheckbox.disabled = this._state.disabled || !this._state.isDynamicScene
+    if (this.$.deleteNpcCheckbox.disabled) {
+      this.$.deleteNpcCheckbox.checked = false
+    }
+    if (this.$.deleteSceneCheckbox.disabled) {
+      this.$.deleteSceneCheckbox.checked = false
+    }
+    if (this.$.deleteNpcCheckbox.checked) {
+      this.$.deleteNpcContextCheckbox.checked = true
+    }
+    this.$.deleteNpcContextCheckbox.disabled = this._state.disabled || this.$.deleteNpcCheckbox.checked
     this.$.userProfileTextarea.value = this._state.userProfile
     this.$.userProfileTextarea.disabled = this._state.disabled
   }

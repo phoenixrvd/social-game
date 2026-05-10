@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import yaml
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+import yaml
+
 
 @dataclass(frozen=True)
 class StorageFile(ABC):
@@ -59,3 +60,11 @@ class ImageFile(StorageFile):
         self.path.write_bytes(value)
 
 
+@dataclass(frozen=True)
+class VideoFile(StorageFile):
+    def get(self) -> Path:
+        return self.path
+
+    def save(self, value: bytes) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_bytes(value)

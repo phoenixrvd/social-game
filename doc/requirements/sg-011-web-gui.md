@@ -1,5 +1,5 @@
 ---
-state: implemented
+state: defined
 ---
 
 # SG-011: Web-GUI
@@ -45,14 +45,14 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** Keine
 
-### Automatisch geoeffnete Session-Auswahl beim ersten App-Start
+### Automatisch geöffnete Session-Auswahl beim ersten App-Start
 **Typ:** Funktional  
-**Beschreibung:** Das System muss beim ersten erfolgreichen Oeffnen der Web-GUI im Browser die Session-Auswahl automatisch anzeigen, damit Nutzer NPC und Szene direkt auswaehlen koennen.  
+**Beschreibung:** Das System muss beim ersten erfolgreichen Öffnen der Web-GUI im Browser die Session-Auswahl automatisch anzeigen, damit Nutzer NPC und Szene direkt auswählen können.  
 **Akzeptanzkriterien:**
-- Beim ersten erfolgreichen Laden der Web-GUI in einem Browser wird die Session-Auswahl automatisch geoeffnet.
-- Die automatisch geoeffnete Session-Auswahl zeigt die Auswahlmoeglichkeiten fuer NPC und Szene an.
-- Nach der ersten automatischen Oeffnung wird die Session-Auswahl bei weiteren Starts im selben Browser nicht erneut automatisch geoeffnet.
-- Unabhaengig vom Erststart bleibt die Session-Auswahl weiterhin manuell aufrufbar.
+- Beim ersten erfolgreichen Laden der Web-GUI in einem Browser wird die Session-Auswahl automatisch geöffnet.
+- Die automatisch geöffnete Session-Auswahl zeigt die Auswahlmöglichkeiten für NPC und Szene an.
+- Nach der ersten automatischen Öffnung wird die Session-Auswahl bei weiteren Starts im selben Browser nicht erneut automatisch geöffnet.
+- Unabhängig vom Erststart bleibt die Session-Auswahl weiterhin manuell aufrufbar.
 
 **Referenzen:** Keine
 
@@ -150,18 +150,54 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 **Beschreibung:** Das System muss das Anlegen neuer Szenen in der Web-GUI ermöglichen.  
 **Akzeptanzkriterien:**
 - Eine neue Szene kann in der Web-GUI angelegt werden.
+- Die Auslöseaktion für das Anlegen heißt `Erstellen`.
+- Die Web-GUI bietet beim Erstellen die Optionen `Scene Erstellen` und `NPC Kontext erstellen` an.
+- Beide Optionen sind standardmäßig aktiviert.
+- Die Erstellung ist nur ausführbar, wenn eine Beschreibung vorhanden ist und mindestens eine der beiden Optionen aktiviert ist.
 - Nach erfolgreichem Anlegen steht die neue Szene für die Nutzung in der Sitzung zur Verfügung.
 
 **Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
 
-### Steuerung der Löschung erstellter Szenen
+### Anlegen von NPCs in der Web-GUI
 **Typ:** Funktional  
-**Beschreibung:** Das System muss in der Web-GUI eine kontrollierte Löschaktion für in der Session erstellte Szenen bereitstellen.  
+**Beschreibung:** Das System muss das Anlegen neuer NPCs in der Web-GUI ermöglichen.  
 **Akzeptanzkriterien:**
-- Eine Löschaktion für Szenen ist in den Einstellungen vorhanden.
-- Die Aktion ist nur bei erstellten Szenen ausführbar; bei Standard-Szenen ist sie deaktiviert.
-- Das System zeigt den Zustand der Aktion eindeutig an (aktiv/inaktiv mit entsprechender Beschriftung).
-- Vor der Ausführung wird ein Bestätigungsdialog angezeigt.
-- Nach erfolgreichem Löschen wird die Session zur Standard-Szene zurückgesetzt und der Einstellungs-Panel geschlossen.
+- Eine neue NPC-Erstellung kann in der Web-GUI aus demselben fachlichen Kontext wie die Szenen-Erstellung gestartet werden.
+- Für die NPC-Erstellung kann eine Beschreibung eingegeben und abgesendet werden.
+- Nach erfolgreichem Anlegen steht der neue NPC für die Nutzung in der Sitzung zur Verfügung.
+- Die Oberfläche zeigt Erfolg oder Fehlschlag des Anlegens nachvollziehbar an.
 
-**Referenzen:** `doc/requirements/sg-020-verwaltung-dynamischer-szenen.md`
+**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
+
+### Optionale Löschung erstellter Inhalte beim Verlauf-Löschen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die optionale Löschung erstellter NPCs, Szenen und NPC-Kontexte in der Web-GUI über die Aktion `Verlauf löschen` bereitstellen.  
+**Akzeptanzkriterien:**
+- In der Web-GUI gibt es keinen separaten Button `Verlauf und Szene löschen`.
+- Unter `Verlauf löschen` werden die Checkboxen `Erstellten NPC mit löschen`, `Erstellte Szene mit löschen` und `Erstellten NPC-Kontext löschen` angezeigt.
+- Vor der Ausführung kann für die Löschoptionen entschieden werden, ob sie berücksichtigt werden sollen.
+- Wird `Erstellten NPC mit löschen` aktiviert, wird `Erstellten NPC-Kontext löschen` automatisch aktiviert und ist nicht separat änderbar.
+
+**Referenzen:** `doc/requirements/sg-009-git-basierte-spielstandshistorie.md`, `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
+
+### Aktivierbarkeit der optionalen Löschoptionen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die optionalen Löschoptionen nur bei passend erstellten aktiven Inhalten aktivierbar machen.  
+**Akzeptanzkriterien:**
+- `Erstellten NPC mit löschen` ist nur aktivierbar, wenn der aktive NPC erstellt oder dynamisch und nicht der Default-NPC ist.
+- `Erstellte Szene mit löschen` ist nur aktivierbar, wenn die aktive Szene erstellt oder dynamisch und nicht die Default-Szene ist.
+- `Erstellten NPC-Kontext löschen` bleibt auch dann aktivierbar, wenn `Erstellten NPC mit löschen` nicht aktivierbar ist.
+- Sind die Voraussetzungen für NPC- oder Szenenlöschung nicht erfüllt, ist die jeweilige Checkbox deaktiviert.
+
+**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
+
+### Dynamischer Bestätigungsdialog beim Verlauf-Löschen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss vor dem Verlauf-Löschen die tatsächlich ausgewählten Löschumfänge verständlich bestätigen lassen.  
+**Akzeptanzkriterien:**
+- Vor der Ausführung von `Verlauf löschen` erscheint ein Bestätigungsdialog.
+- Der Bestätigungsdialog verwendet die Einleitung `Sollen folgende Dinge gelöscht werden?`.
+- Der Bestätigungsdialog zählt genau die Inhalte auf, die mit der aktuellen Auswahl gelöscht werden.
+- Wird die Bestätigung abgebrochen, bleiben Verlauf und ausgewählte Inhalte unverändert.
+
+**Referenzen:** `doc/requirements/sg-009-git-basierte-spielstandshistorie.md`, `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
