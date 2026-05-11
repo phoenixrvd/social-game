@@ -1,8 +1,9 @@
 import { appStore } from "./app-store.js"
 import { appActions } from "./app-actions.js"
+import "./sg-settings-action.js"
 
 const CREATE_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M12 5v14M5 12h14"></path>
   </svg>
 `
@@ -37,17 +38,14 @@ class SocialGameInputNpc extends HTMLElement {
 
         <div class="sg-scene-error sg-hidden"></div>
 
-        <button
-          type="button"
-          class="sg-settings-action"
+        <sg-settings-action
           data-action="create-npc"
           aria-label="NPC erstellen"
         >
-          <span class="sg-settings-action-icon" aria-hidden="true">${CREATE_ICON}</span>
-          <span class="sg-settings-action-copy">
-            <span class="sg-settings-action-title">NPC erstellen</span>
-          </span>
-        </button>
+            ${CREATE_ICON}
+            <span>NPC erstellen</span>
+            <span slot="description">Erzeugt eine neue Figur aus deiner Charakterbeschreibung</span>
+        </sg-settings-action>
       </section>
     `
 

@@ -1,8 +1,9 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
+import "./sg-settings-action.js"
 
 const REFRESH_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M3 3h18v18H3z"></path>
     <path d="M3 15l5-5 4 4 3-3 6 6"></path>
     <path d="M16 8h4v4"></path>
@@ -11,14 +12,14 @@ const REFRESH_ICON = /*html*/ `
 `
 
 const REVERT_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M21 12a9 9 0 1 1-3.1-6.8"></path>
     <path d="M21 3v6h-6"></path>
   </svg>
 `
 
 const DELETE_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <polyline points="3 6 5 6 21 6"></polyline>
     <path d="M19 6l-1 14H6L5 6"></path>
     <path d="M10 11v6"></path>
@@ -40,17 +41,6 @@ const CHECKBOX_UNCHECKED_ICON = /*html*/ `
   </svg>
 `
 
-function renderActionContent(icon, title, description = "") {
-  const descriptionMarkup = description ? `<span class="sg-settings-action-text">${description}</span>` : ""
-  return /*html*/ `
-    <span class="sg-settings-action-icon" aria-hidden="true">${icon}</span>
-    <span class="sg-settings-action-copy">
-      <span class="sg-settings-action-title">${title}</span>
-      ${descriptionMarkup}
-    </span>
-  `
-}
-
 class SocialGameInputImage extends HTMLElement {
   constructor() {
     super()
@@ -67,24 +57,33 @@ class SocialGameInputImage extends HTMLElement {
       <section class="sg-settings-section">
         <h3 class="sg-settings-heading">Bild</h3>
         <div class="sg-settings-actions">
-          <button type="button" data-action="toggle-autogenerate" class="sg-settings-action" aria-pressed="true" aria-label="Automatische Bildgenerierung">
-            ${renderActionContent(CHECKBOX_CHECKED_ICON, "Automatische Bildgenerierung", "Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten")}
-          </button>
-          <button type="button" data-action="refresh-image" class="sg-settings-action" aria-label="Neues Bild generieren">
-            ${renderActionContent(REFRESH_ICON, "Neues Bild generieren", "Erzeugt eine neues Bild aus dem aktuellen Chat-Kontext")}
-          </button>
-          <button type="button" data-action="revert-image" class="sg-settings-action" aria-label="Vorheriges Bild laden">
-            ${renderActionContent(REVERT_ICON, "Vorheriges Bild laden", "Stellt vorheriges Bild wieder her und löscht aktuelles")}
-          </button>
-          <button type="button" data-action="delete-image" class="sg-settings-action sg-settings-action-danger" aria-label="Bild zurücksetzen">
-            ${renderActionContent(DELETE_ICON, "Bild zurücksetzen", "Setzt das Bild auf initial Zustand")}
-          </button>
+          <sg-settings-action data-action="toggle-autogenerate" aria-pressed="true" aria-label="Automatische Bildgenerierung">
+              <span slot="icon" data-element="autogenerate-action-icon">${CHECKBOX_CHECKED_ICON}</span>
+              <span>Automatische Bildgenerierung</span>
+              <span slot="description">Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten</span>
+          </sg-settings-action>
+          <sg-settings-action data-action="refresh-image" aria-label="Neues Bild generieren">
+              ${REFRESH_ICON}
+              <span>Neues Bild generieren</span>
+              <span slot="description">Erzeugt ein neues Bild aus dem aktuellen Chat-Kontext</span>
+          </sg-settings-action>
+          <sg-settings-action data-action="revert-image" aria-label="Vorheriges Bild laden">
+              ${REVERT_ICON}
+              <span>Vorheriges Bild laden</span>
+              <span slot="description">Stellt vorheriges Bild wieder her und löscht aktuelles</span>
+          </sg-settings-action>
+          <sg-settings-action data-action="delete-image" danger aria-label="Bild zurücksetzen">
+              ${DELETE_ICON}
+              <span>Bild zurücksetzen</span>
+              <span slot="description">Setzt das Bild auf initial Zustand</span>
+          </sg-settings-action>
         </div>
       </section>
     `
 
     this.$ = {
       autogenerateButton: this.querySelector('[data-action="toggle-autogenerate"]'),
+      autogenerateActionIcon: this.querySelector('[data-element="autogenerate-action-icon"]'),
       refreshButton: this.querySelector('[data-action="refresh-image"]'),
       revertButton: this.querySelector('[data-action="revert-image"]'),
       deleteButton: this.querySelector('[data-action="delete-image"]'),
@@ -157,9 +156,9 @@ class SocialGameInputImage extends HTMLElement {
   _renderAutogenerateButton() {
     const checked = this._state.imageAutogenerate
     const icon = checked ? CHECKBOX_CHECKED_ICON : CHECKBOX_UNCHECKED_ICON
-    this.$.autogenerateButton.innerHTML = renderActionContent(icon, "Automatische Bildgenerierung", "Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten")
+    this.$.autogenerateActionIcon.innerHTML = icon
     this.$.autogenerateButton.setAttribute("aria-pressed", String(checked))
-    this.$.autogenerateButton.classList.toggle("sg-settings-action-inactive", !checked)
+    this.$.autogenerateButton.toggleAttribute("inactive", !checked)
   }
 
   render() {

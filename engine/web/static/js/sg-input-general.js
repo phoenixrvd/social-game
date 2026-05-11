@@ -1,5 +1,6 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
+import "./sg-settings-action.js"
 
 const THEME_DARK_ICON = /*html*/ `
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
@@ -22,7 +23,7 @@ const THEME_LIGHT_ICON = /*html*/ `
 `
 
 const DELETE_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <polyline points="3 6 5 6 21 6"></polyline>
     <path d="M19 6l-1 14H6L5 6"></path>
     <path d="M10 11v6"></path>
@@ -33,17 +34,6 @@ const DELETE_ICON = /*html*/ `
 
 function getThemeToggleIcon(theme) {
   return theme === "dark" ? THEME_DARK_ICON : THEME_LIGHT_ICON
-}
-
-function renderActionContent(icon, title, description = "") {
-  const descriptionMarkup = description ? `<span class="sg-settings-action-text">${description}</span>` : ""
-  return /*html*/ `
-    <span class="sg-settings-action-icon" aria-hidden="true">${icon}</span>
-    <span class="sg-settings-action-copy">
-      <span class="sg-settings-action-title">${title}</span>
-      ${descriptionMarkup}
-    </span>
-  `
 }
 
 class SocialGameInputGeneral extends HTMLElement {
@@ -65,10 +55,16 @@ class SocialGameInputGeneral extends HTMLElement {
       <section class="sg-settings-section">
         <h3 class="sg-settings-heading">Allgemein</h3>
         <div class="sg-settings-actions">
-          <button type="button" data-action="toggle-theme" class="sg-settings-action" aria-label="Theme wechseln"></button>
-          <button type="button" data-action="reset-active-npc" class="sg-settings-action sg-settings-action-danger" aria-label="Verlauf löschen">
-            ${renderActionContent(DELETE_ICON, "Verlauf löschen", "Entfernt Nachrichten und Bilder der aktiven Konversation")}
-          </button>
+          <sg-settings-action data-action="toggle-theme" aria-label="Theme wechseln">
+              <span slot="icon" data-element="theme-action-icon">${THEME_DARK_ICON}</span>
+              <span>Theme wechseln</span>
+              <span slot="description">Zwischen hellem und dunklem Design wechseln</span>
+          </sg-settings-action>
+          <sg-settings-action data-action="reset-active-npc" danger aria-label="Verlauf löschen">
+              ${DELETE_ICON}
+              <span>Verlauf löschen</span>
+              <span slot="description">Entfernt Nachrichten und Bilder der aktiven Konversation</span>
+          </sg-settings-action>
           <label class="sg-settings-checkbox">
             <input type="checkbox" data-action="delete-active-npc" />
             <span>Erstellten NPC mit löschen</span>
@@ -95,6 +91,7 @@ class SocialGameInputGeneral extends HTMLElement {
 
     this.$ = {
       themeButton: this.querySelector('[data-action="toggle-theme"]'),
+      themeActionIcon: this.querySelector('[data-element="theme-action-icon"]'),
       resetButton: this.querySelector('[data-action="reset-active-npc"]'),
       deleteNpcCheckbox: this.querySelector('[data-action="delete-active-npc"]'),
       deleteSceneCheckbox: this.querySelector('[data-action="delete-active-scene"]'),
@@ -189,11 +186,7 @@ class SocialGameInputGeneral extends HTMLElement {
   }
 
   render() {
-    this.$.themeButton.innerHTML = renderActionContent(
-      getThemeToggleIcon(this._state.theme),
-      "Theme wechseln",
-      "Zwischen hellem und dunklem Design wechseln"
-    )
+    this.$.themeActionIcon.innerHTML = getThemeToggleIcon(this._state.theme)
     this.$.themeButton.disabled = this._state.disabled
     this.$.resetButton.disabled = this._state.disabled
     this.$.deleteNpcCheckbox.disabled = this._state.disabled || !this._state.isDynamicNpc

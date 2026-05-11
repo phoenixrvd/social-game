@@ -1,8 +1,9 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
+import "./sg-settings-action.js"
 
 const SAVE_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
+  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
     <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
     <polyline points="17 21 17 13 7 13 7 21"></polyline>
     <polyline points="7 3 7 8 15 8"></polyline>
@@ -62,17 +63,14 @@ class SocialGameInputHistory extends HTMLElement {
           </div>
         </div>
         <div class="sg-checkpoint-error sg-hidden"></div>
-        <button
-          type="button"
-          class="sg-settings-action"
+        <sg-settings-action
           data-action="save-history"
           aria-label="Zwischenstand speichern"
         >
-          <span class="sg-settings-action-icon" aria-hidden="true">${SAVE_ICON}</span>
-          <span class="sg-settings-action-copy">
-            <span class="sg-settings-action-title">Zwischenstand speichern</span>
-          </span>
-        </button>
+            ${SAVE_ICON}
+            <span>Zwischenstand speichern</span>
+            <span slot="description">Speichert den aktuellen Stand als wiederherstellbaren Checkpoint</span>
+        </sg-settings-action>
       </section>
     `
 
@@ -163,4 +161,3 @@ class SocialGameInputHistory extends HTMLElement {
 }
 
 customElements.get("sg-input-history") || customElements.define("sg-input-history", SocialGameInputHistory)
-

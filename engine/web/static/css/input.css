@@ -70,7 +70,7 @@
 
 .sg-options-tab:focus-visible,
 .sg-context-gallery-item:focus-visible,
-.sg-settings-action:focus-visible,
+.sg-settings-action-button:focus-visible,
 .sg-settings-checkbox input:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--primary) 45%, transparent);
   outline-offset: 2px;
@@ -279,8 +279,7 @@
   line-height: 1.35;
 }
 
-.sg-send-button,
-.sg-settings-action {
+.sg-send-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -309,7 +308,17 @@
   animation: path-draw 1.2s ease-in-out infinite alternate;
 }
 
-.sg-settings-action {
+sg-settings-action {
+  display: block;
+  width: 100%;
+}
+
+.sg-settings-action-button {
+  margin: 0;
+  font: inherit;
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
   width: 100%;
   justify-content: flex-start;
   gap: 0.7rem;
@@ -320,9 +329,23 @@
   border: 1px solid color-mix(in srgb, var(--border-soft) 72%, transparent);
   border-radius: 12px;
   text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, filter 120ms ease, background-color 120ms ease, border-color 120ms ease;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
   outline: none;
+}
+
+.sg-settings-action-button:hover {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+}
+
+.sg-settings-action-button:active {
+  filter: brightness(1.04);
+  transform: translateY(0);
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
 }
 
 .sg-settings-action-icon {
@@ -341,22 +364,35 @@
 }
 
 .sg-settings-action-title {
+  display: block;
   font-size: 0.94rem;
   font-weight: 600;
+  line-height: 1.2;
   color: inherit;
 }
 
 .sg-settings-action-text {
+  display: block;
   font-size: 0.78rem;
+  line-height: 1.3;
   color: var(--text-muted);
 }
 
-.sg-settings-action-danger {
+sg-settings-action[danger] .sg-settings-action-button {
   color: var(--text-error);
 }
 
-.sg-settings-action-danger .sg-settings-action-text {
+sg-settings-action[danger] .sg-settings-action-text {
   color: color-mix(in srgb, var(--text-error) 82%, var(--text-muted));
+}
+
+sg-settings-action[inactive] .sg-settings-action-icon {
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+sg-settings-action[inactive] .sg-settings-action-title {
+  color: var(--text-muted);
 }
 
 .sg-settings-checkbox {
@@ -379,15 +415,6 @@
 .sg-settings-checkbox:has(input:disabled) {
   opacity: 0.48;
   cursor: not-allowed;
-}
-
-.sg-settings-action-inactive .sg-settings-action-icon {
-  color: var(--text-muted);
-  opacity: 0.55;
-}
-
-.sg-settings-action-inactive .sg-settings-action-title {
-  color: var(--text-muted);
 }
 
 .sg-options-toggle {
@@ -433,20 +460,8 @@
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
-.sg-settings-action:hover {
-  filter: brightness(1.08);
-  transform: translateY(-1px);
-  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
-}
-
-.sg-settings-action:active {
-  filter: brightness(1.04);
-  transform: translateY(0);
-  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
-}
-
 .sg-send-button:disabled,
-.sg-settings-action:disabled,
+.sg-settings-action-button:disabled,
 .sg-options-toggle:disabled {
   opacity: 0.48;
   cursor: not-allowed;
