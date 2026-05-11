@@ -1,216 +1,81 @@
 from __future__ import annotations
 
-import sqlite3
 from types import SimpleNamespace
 
 import engine.services.etm_service as etm_service_module
-from engine.storage.models import Episode
-from engine.storage.nodes import EtmNode
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 
 
-def _set_embed_client(monkeypatch, embed_fn):
-    monkeypatch.setattr(etm_service_module, "client", SimpleNamespace(embed_texts=embed_fn))
+class FakeLightRagMemory:
+    inserted: list[str] = []
+    queries: list[tuple[str, int]] = []
+    context = ""
+
+    def __init__(self, working_dir):
+        self.working_dir = working_dir
+
+    def insert(self, text: str) -> None:
+        self.inserted.append(text)
+
+    def query_context(self, query: str, top_k: int) -> str:
+        self.queries.append((query, top_k))
+        return self.context
 
 
-def test_etm_service_uses_client_embedding_fn(monkeypatch) -> None:
-    def fake_embedding_fn(_text: str) -> list[float]:
-        return [0.1, 0.2, 0.3]
-
-    _set_embed_client(monkeypatch, fake_embedding_fn)
-    service = EtmService()
-
-    first = service._embed_texts("Hallo Welt")
-    second = service._embed_texts("Hallo Welt")
-
-    assert first == [0.1, 0.2, 0.3]
-    assert first == second
+def _use_fake_memory(monkeypatch, tmp_path):
+    FakeLightRagMemory.inserted = []
+    FakeLightRagMemory.queries = []
+    FakeLightRagMemory.context = ""
+    fake_storage = SimpleNamespace(npc=SimpleNamespace(etm_dir=tmp_path / "etm_lightrag"))
+    monkeypatch.setattr(etm_service_module, "storage", fake_storage)
+    monkeypatch.setattr(etm_service_module, "LightRagMemory", FakeLightRagMemory)
 
 
-def test_etm_service_embed_texts_trims_before_client_call(monkeypatch) -> None:
-    captured: dict[str, str] = {}
+def test_store_etm_text_inserts_cleaned_text_into_lightrag(monkeypatch, tmp_path) -> None:
+    _use_fake_memory(monkeypatch, tmp_path)
 
-    def fake_embedding_fn(text: str) -> list[float]:
-        captured["text"] = text
-        return [0.4, 0.5]
+    EtmService()._store_etm_text(" Hallo ")
 
-    _set_embed_client(monkeypatch, fake_embedding_fn)
-
-    result = EtmService()._embed_texts("  Hallo  ")
-
-    assert result == [0.4, 0.5]
-    assert captured["text"] == "Hallo"
+    assert FakeLightRagMemory.inserted == ["Hallo"]
 
 
-def test_etm_service_returns_empty_for_blank_input(monkeypatch) -> None:
-    service = EtmService()
-    _set_embed_client(
-        monkeypatch,
-        lambda _text: (_ for _ in ()).throw(AssertionError("should not run")),
-    )
+def test_store_etm_text_skips_blank_text(monkeypatch, tmp_path) -> None:
+    _use_fake_memory(monkeypatch, tmp_path)
 
-    assert service._embed_texts("   ") == []
+    EtmService()._store_etm_text("   ")
+
+    assert FakeLightRagMemory.inserted == []
 
 
-def test_store_etm_text_persists_embedding_and_text(monkeypatch, tmp_path) -> None:
-    service = EtmService()
-    _set_embed_client(monkeypatch, lambda _text: [0.1, 0.2, 0.3])
-    store_path = tmp_path / "etm.sqlite"
-    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
-    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
+def test_query_etm_text_uses_lightrag_context(monkeypatch, tmp_path) -> None:
+    _use_fake_memory(monkeypatch, tmp_path)
+    FakeLightRagMemory.context = "relevanter Kontext"
+    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_TOP_K", 2)
 
-    service._store_etm_text(" Hallo ")
+    result = EtmService()._query_etm_text("frage")
 
-    connection = sqlite3.connect(store_path)
-    row = connection.execute("SELECT id, text, embedding, created_at FROM etm_entries").fetchone()
-    connection.close()
-
-    assert row is not None
-    assert row[0]
-    assert row[1] == "Hallo"
-    assert row[2] == "[0.1, 0.2, 0.3]"
-    assert row[3]
+    assert result == "relevanter Kontext"
+    assert FakeLightRagMemory.queries == [("frage", 2)]
 
 
-def test_query_etm_texts_filters_by_max_distance(monkeypatch, tmp_path) -> None:
-    service = EtmService()
-    vectors = {
-        "frage": [1.0, 0.0],
-        "fern": [1.0, 0.0],
-        "nah": [0.0, 1.0],
-    }
-    _set_embed_client(monkeypatch, lambda text: vectors[text])
-    store_path = tmp_path / "etm.sqlite"
-    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
-    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
+def test_query_etm_text_returns_empty_for_empty_lightrag_context(monkeypatch, tmp_path) -> None:
+    _use_fake_memory(monkeypatch, tmp_path)
 
-    service._store_etm_text("nah")
-    service._store_etm_text("fern")
-    results = service._query_etm_texts("frage")
-
-    assert results == ["fern"]
+    assert EtmService()._query_etm_text("frage") == ""
 
 
-def test_query_etm_texts_deduplicates_semantically_by_embedding_distance(monkeypatch, tmp_path) -> None:
-    service = EtmService()
-    vectors = {
-        "frage": [1.0, 0.0],
-        "nahe1": [1.0, 0.0],
-        "nahe2": [0.999, 0.001],
-        "anders": [0.0, 1.0],
-    }
-    _set_embed_client(monkeypatch, lambda text: vectors[text])
-    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_MAX_DISTANCE", 1.0)
-    monkeypatch.setattr(etm_service_module.config, "ETM_DEDUPLICATION_MAX_DISTANCE", 0.01)
-    store_path = tmp_path / "etm.sqlite"
-    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
-    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
-
-    service._store_etm_text("nahe1")
-    service._store_etm_text("nahe2")
-    service._store_etm_text("anders")
-
-    results = service._query_etm_texts("frage")
-
-    assert results == ["nahe1", "anders"]
-
-
-def test_query_etm_texts_deduplication_uses_existing_embeddings_only(monkeypatch, tmp_path) -> None:
-    service = EtmService()
-    calls: list[str] = []
-    vectors = {
-        "frage": [1.0, 0.0],
-        "nahe1": [1.0, 0.0],
-        "nahe2": [0.999, 0.001],
-    }
-
-    def fake_embedding_fn(text: str) -> list[float]:
-        calls.append(text)
-        return vectors[text]
-
-    _set_embed_client(monkeypatch, fake_embedding_fn)
-    monkeypatch.setattr(etm_service_module.config, "ETM_RETRIEVAL_MAX_DISTANCE", 1.0)
-    monkeypatch.setattr(etm_service_module.config, "ETM_DEDUPLICATION_MAX_DISTANCE", 0.01)
-    store_path = tmp_path / "etm.sqlite"
-    monkey_storage = SimpleNamespace(npc=SimpleNamespace(etm=EtmNode(path=store_path)))
-    monkeypatch.setattr(etm_service_module, "storage", monkey_storage)
-
-    service._store_etm_text("nahe1")
-    service._store_etm_text("nahe2")
-
-    service._query_etm_texts("frage")
-
-    assert calls == ["nahe1", "nahe2", "frage"]
-
-
-def test_etm_node_get_returns_episode_models(tmp_path) -> None:
-    node = EtmNode(path=tmp_path / "etm.sqlite")
-
-    node.append(text="Episode A", embedding=[0.1, 0.2])
-    episodes = node.get()
-
-    assert len(episodes) == 1
-    assert isinstance(episodes[0], Episode)
-    assert episodes[0].text == "Episode A"
-    assert episodes[0].embedding == [0.1, 0.2]
-    assert episodes[0].id
-    assert episodes[0].created_at
-
-
-
-def test_query_etm_texts_skips_blank_query_without_embedding_call(monkeypatch) -> None:
-    service = EtmService()
-    _set_embed_client(
-        monkeypatch,
-        lambda _text: (_ for _ in ()).throw(AssertionError("should not run")),
-    )
-
-    assert service._query_etm_texts("   ") == []
-
-
-def test_load_relevant_skips_embedding_without_store(monkeypatch, tmp_path):
-    monkeypatch.setattr(etm_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
-    monkeypatch.setattr(
-        EtmService,
-        "_embed_texts",
-        lambda _self, _text: (_ for _ in ()).throw(
-            AssertionError("Ohne ETM-Speicher darf kein Embedding-Call erfolgen")
-        ),
-    )
+def test_load_relevant_returns_empty_placeholder_without_matches(monkeypatch, tmp_path) -> None:
+    _use_fake_memory(monkeypatch, tmp_path)
 
     result = EtmService().load_relevant("Hallo")
 
     assert result == EMPTY_ETM_TEXT
 
 
-def test_load_relevant_skips_embedding_for_empty_query(monkeypatch):
-    monkeypatch.setattr(
-        EtmService,
-        "_embed_texts",
-        lambda _self, _text: (_ for _ in ()).throw(AssertionError("Ohne Query darf kein Embedding-Call erfolgen")),
-    )
-
-    result = EtmService().load_relevant("   ")
-
-    assert result == EMPTY_ETM_TEXT
-
-
-def test_load_relevant_returns_formatted_matches(monkeypatch, tmp_path):
-    store_path = tmp_path / ".data" / "npcs" / "vika" / "office" / "etm.sqlite"
-    store_path.parent.mkdir(parents=True)
-    store_path.touch()
-
-    def fake_query(self, query_text: str) -> list[str]:
-        assert query_text == "Wollen wir wieder in eine Bar gehen?"
-        return [
-            "Er erinnert sich an eine ruhige Bar mit guten Gläsern.",
-            "Kennt den Spieler",
-        ]
-
-    monkeypatch.setattr(etm_service_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
-    monkeypatch.setattr(EtmService, "_query_etm_texts", fake_query)
-
+def test_load_relevant_returns_formatted_lightrag_context(monkeypatch, tmp_path) -> None:
+    _use_fake_memory(monkeypatch, tmp_path)
+    FakeLightRagMemory.context = "Er erinnert sich an eine ruhige Bar."
 
     result = EtmService().load_relevant("Wollen wir wieder in eine Bar gehen?")
 
-    assert result == "- Er erinnert sich an eine ruhige Bar mit guten Gläsern.\n- Kennt den Spieler"
+    assert result == "Er erinnert sich an eine ruhige Bar."

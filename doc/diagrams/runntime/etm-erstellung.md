@@ -9,7 +9,7 @@ ETM speichert ältere STM-Nachrichten als abrufbare Episoden aus Sicht des NPC.
 
 - `engine/tools/scheduler.py`: stößt periodisch `execute_pending_jobs()` an
 - `engine/tools/etm_job.py`: führt ETM-Update fachlich aus
-- `engine/services/etm_service.py`: erzeugt ETM-Episoden, speichert und liest Embeddings in SQLite, räumt verarbeitete STM-Nachrichten auf
+- `engine/services/etm_service.py`: erzeugt ETM-Episoden, speichert sie in LightRAG und räumt verarbeitete STM-Nachrichten auf
 - `engine/storage.py`: liefert NPC-, Szenen- und STM-Kontext über `storage.npc`/`storage.scene`
 - `engine/llm/client.py`: ruft Textmodell auf
 
@@ -24,8 +24,8 @@ Die ETM-Erstellung läuft batch-orientiert:
 5. Es werden alle STM-Nachrichten außer den letzten `config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP` ausgewählt.
 6. Wenn die Anzahl dieser älteren Nachrichten `<= config.UPDATER_ETM_BATCH_SIZE_THRESHOLD` ist, endet der Lauf.
 7. `prompts/etm_update.md` verdichtet den Batch zu einer ETM-Episode aus Sicht des NPC.
-8. Die Episode wird ueber den OpenAI-kompatiblen Embedding-Client vektorisiert (`MODEL_EMBEDDING`).
-9. Die Episode wird unter `.data/npcs/<npc_id>/<scene_id>/etm.sqlite` gespeichert.
+8. Die Episode wird mit den konfigurierten LLM- und Embedding-Modellen in LightRAG indexiert.
+9. Die Episode wird unter `.data/npcs/<npc_id>/<scene_id>/etm_lightrag/` gespeichert.
 10. Die verarbeiteten STM-Nachrichten werden aus `stm.jsonl` entfernt.
 
 LLM-Tool-/Function-Calling wird dafür nicht verwendet. Hintergrund: In diesem Modus liefert das Modell typischerweise keine normale Antwort. Ein Twice-Call-Pattern würde für dieselbe fachliche Wirkung unnötige Kosten und zusätzliche Komplexität verursachen.
@@ -59,11 +59,10 @@ Ohne vorhandenen ETM-Speicher, bei leerem Query-Text oder in Kontexten ohne ETM-
 - `UPDATER_ETM_BATCH_SIZE_THRESHOLD`: `7`
 - `UPDATER_ETM_CHECK_INTERVAL_SECONDS`: `350`
 - `ETM_RETRIEVAL_TOP_K`: `4`
-- `ETM_RETRIEVAL_MAX_DISTANCE`: `0.75`
 - `MODEL_EMBEDDING`: `text-embedding-3-small`
 
 ## Artefakte
 
 - `.data/npcs/<npc_id>/<scene_id>/stm.jsonl`
-- `.data/npcs/<npc_id>/<scene_id>/etm.sqlite`
+- `.data/npcs/<npc_id>/<scene_id>/etm_lightrag/`
 - `prompts/etm_update.md`

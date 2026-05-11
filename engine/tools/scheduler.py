@@ -10,7 +10,6 @@ from engine.tools.etm_job import EtmJob
 from engine.tools.image_job import ImageJob
 from engine.tools.scene_job import SceneJob
 from engine.tools.state_job import StateJob
-from engine.tools.user_profile_job import UserProfileJob
 
 
 class Scheduler:
@@ -21,7 +20,6 @@ class Scheduler:
             "state": StateJob(),
             "scene": SceneJob(),
             "image": ImageJob(),
-            "user_profile": UserProfileJob(),
         }
         self._pending_jobs: set[str] = set()
         self._last_execution_time: dict[str, float] = {}

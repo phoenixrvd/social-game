@@ -5,6 +5,8 @@ fastapi
 uvicorn
 httpx
 markdown
+lightrag-hku[api]
+numpy
 Pillow
 pydantic
 pydantic-settings

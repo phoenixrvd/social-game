@@ -57,6 +57,80 @@ def test_web_command_reports_error(monkeypatch):
     assert "kaputt" in str(result.exception)
 
 
+def test_etm_ui_starts_lightrag_server_for_active_context(monkeypatch, tmp_path):
+    etm_dir = tmp_path / "etm_lightrag"
+    captured: dict[str, object] = {}
+
+    class FakeSession:
+        npc_id = "ben"
+        scene_id = "office"
+
+    class FakeStorage:
+        session = FakeSession()
+        npc = type("FakeNpc", (), {"etm_dir": etm_dir})()
+
+    def fake_run(command, check, env):
+        captured["command"] = command
+        captured["check"] = check
+        captured["env"] = env
+
+    monkeypatch.setattr(cli_module, "storage", FakeStorage())
+    monkeypatch.setattr(cli_module.config, "MODEL_BASE_URL", "https://models.example/v1")
+    monkeypatch.setattr(cli_module.config, "MODEL_API_KEY", "test-key")
+    monkeypatch.setattr(cli_module.config, "MODEL_LLM_SMALL", "small-model")
+    monkeypatch.setattr(cli_module.config, "MODEL_EMBEDDING", "embedding-model")
+    monkeypatch.setattr(cli_module.config, "MODEL_EMBEDDING_DIMENSIONS", 42)
+    monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+    result = runner.invoke(app, ["etm-ui", "--host", "0.0.0.0", "--port", "9721"])
+
+    assert result.exit_code == 0
+    assert captured["command"] == ["lightrag-server"]
+    assert captured["check"] is True
+    env = captured["env"]
+    assert env["WORKING_DIR"] == str(etm_dir)
+    assert env["HOST"] == "0.0.0.0"
+    assert env["PORT"] == "9721"
+    assert env["LLM_BINDING"] == "openai"
+    assert env["EMBEDDING_BINDING"] == "openai"
+    assert env["LLM_BINDING_HOST"] == "https://models.example/v1"
+    assert env["LLM_MODEL"] == "small-model"
+    assert env["EMBEDDING_MODEL"] == "embedding-model"
+    assert env["EMBEDDING_DIM"] == "42"
+    assert etm_dir.is_dir()
+    assert "ETM-UI: http://0.0.0.0:9721" in result.output
+
+
+def test_etm_ui_watch_mode_uses_watch_runner(monkeypatch, tmp_path):
+    etm_dir = tmp_path / "etm_lightrag"
+    captured: dict[str, object] = {}
+
+    class FakeSession:
+        npc_id = "ben"
+        scene_id = "office"
+
+    class FakeStorage:
+        session = FakeSession()
+        npc = type("FakeNpc", (), {"etm_dir": etm_dir})()
+
+    def fake_watch(host: str, port: int, interval_seconds: float) -> None:
+        captured["host"] = host
+        captured["port"] = port
+        captured["interval_seconds"] = interval_seconds
+
+    def fake_run(*_args, **_kwargs) -> None:
+        raise AssertionError("subprocess.run must not be used in watch mode")
+
+    monkeypatch.setattr(cli_module, "storage", FakeStorage())
+    monkeypatch.setattr(cli_module, "_run_etm_ui_watch", fake_watch)
+    monkeypatch.setattr(cli_module.subprocess, "run", fake_run)
+
+    result = runner.invoke(app, ["etm-ui", "--watch", "--watch-interval", "1.5", "--host", "0.0.0.0", "--port", "9721"])
+
+    assert result.exit_code == 0
+    assert captured == {"host": "0.0.0.0", "port": 9721, "interval_seconds": 1.5}
+
+
 def test_root_help_uses_normal_descriptions():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
@@ -70,6 +144,7 @@ def test_root_help_uses_normal_descriptions():
 def test_group_help_uses_normal_descriptions():
     checks = [
         (["web", "--help"], "Startet die browserbasierte GUI."),
+        (["etm-ui", "--help"], "Startet die LightRAG-WebUI"),
     ]
 
     for command, expected_text in checks:

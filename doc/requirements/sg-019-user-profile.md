@@ -5,7 +5,8 @@ state: implemented
 # SG-019: User Profile
 
 ## Kontext
-Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf den Spieler. Es bündelt stabile Fakten, direkt erkennbare Fähigkeiten und Kenntnisse, Präferenzen, Grenzen, Eindrücke und wiederkehrende Verhaltensmuster für konsistente soziale Interaktionen.
+Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf den Spieler. Das Profil
+enthaelt manuell hinterlegte, stabile Informationen und wird als Kontext im Dialog verwendet.
 
 ## Annahmen
 - Keine
@@ -17,7 +18,7 @@ Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf
 
 ### Bereitstellung und Nutzung im Dialogkontext
 **Typ:** Funktional  
-**Beschreibung:** Das System muss ein User Profile als optionalen Langzeitkontext über den Spieler im Dialogkontext bereitstellen und verwenden.  
+**Beschreibung:** Das System muss ein User Profile als optionalen Langzeitkontext ueber den Spieler im Dialogkontext bereitstellen und ueber RAG nutzen.  
 **Akzeptanzkriterien:**
 - Ein User Profile kann leer sein.
 - Das System funktioniert auch ohne vorhandenes User Profile.
@@ -46,15 +47,13 @@ Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf
 - Fehlende Ebenen werden auf die jeweils nächste verfügbare Ebene zurückgeführt.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
 
-### Fortschreibung aus Dialogen
+### Manuelle statische Profilpflege
 **Typ:** Funktional  
-**Beschreibung:** Das System muss neue stabile Informationen über den Spieler aus Dialogen in das User Profile übernehmen können.  
+**Beschreibung:** Das System muss das User Profile ausschliesslich als manuell gepflegte, statische Hinterlegung fuehren.  
 **Akzeptanzkriterien:**
-- Relevante Fakten über den Spieler können übernommen werden.
-- Direkt erkennbare Fähigkeiten und Kenntnisse des Spielers können übernommen werden.
-- Präferenzen, Grenzen und wiederkehrende Muster können übernommen werden.
-- Kurzfristige oder irrelevante Details werden nicht übernommen.
-- Fortschreibungen werden unter `.data/npcs/<npc_id>/<scene_id>/user_profile.md` gespeichert.
+- Profilinhalte aendern sich nur durch manuelle Bearbeitung.
+- Ein Dialog allein erzeugt keinen neuen Profilinhalt.
+- Ein Dialog allein veraendert keinen vorhandenen Profilinhalt.
 
 ### Profilgröße
 **Typ:** Randbedingung  
@@ -68,14 +67,6 @@ Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf
 - Das User Profile enthält in der Regel maximal 25 Einträge.
 - Jeder Eintrag entspricht einem stabilen, eigenständigen Fakt im Format `- schluessel: wert`.
 - Duplikate oder überholte Einträge werden bei der Fortschreibung entfernt.
-
-### Zeitgesteuerte Aktualisierung
-**Typ:** Funktional  
-**Beschreibung:** Das System muss die Fortschreibung des User Profiles periodisch prüfen.  
-**Akzeptanzkriterien:**
-- Die Prüfung erfolgt in einem Intervall von 60 Sekunden.
-- Eine Fortschreibung erfolgt nur, wenn seit der letzten Prüfung neue Nachrichten vorliegen.
-- Ohne neue Nachrichten erfolgt kein Schreibzugriff.
 
 ### NPC-Perspektive
 **Typ:** Randbedingung  

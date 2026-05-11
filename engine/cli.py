@@ -1,6 +1,8 @@
+import os
 from pathlib import Path
 import subprocess
 import tempfile
+import time
 
 import typer
 from PIL import Image
@@ -35,6 +37,112 @@ def web(
     from engine.web.app import run as run_web
 
     run_web(host=host, port=port, reload=reload)
+
+
+def _etm_ui_env(host: str, port: int) -> dict[str, str]:
+    env = os.environ.copy()
+    env.update(
+        {
+            "WORKING_DIR": str(storage.npc.etm_dir),
+            "LOG_DIR": str(storage.npc.etm_dir),
+            "HOST": host,
+            "PORT": str(port),
+            "LLM_BINDING": "openai",
+            "EMBEDDING_BINDING": "openai",
+            "LLM_BINDING_HOST": config.MODEL_BASE_URL,
+            "EMBEDDING_BINDING_HOST": config.MODEL_BASE_URL,
+            "LLM_BINDING_API_KEY": config.MODEL_API_KEY,
+            "EMBEDDING_BINDING_API_KEY": config.MODEL_API_KEY,
+            "LLM_MODEL": config.MODEL_LLM_SMALL,
+            "EMBEDDING_MODEL": config.MODEL_EMBEDDING,
+            "EMBEDDING_DIM": str(config.MODEL_EMBEDDING_DIMENSIONS),
+            "WEBUI_TITLE": f"Social Game ETM: {storage.session.npc_id}/{storage.session.scene_id}",
+        }
+    )
+    return env
+
+
+def _etm_watch_signature(etm_dir: Path) -> tuple[tuple[str, int, int], ...]:
+    tracked = (
+        "graph_chunk_entity_relation.graphml",
+        "kv_store_text_chunks.json",
+        "kv_store_full_docs.json",
+        "kv_store_doc_status.json",
+        "vdb_chunks.json",
+    )
+    signature: list[tuple[str, int, int]] = []
+    for name in tracked:
+        path = etm_dir / name
+        if not path.exists():
+            signature.append((name, -1, -1))
+            continue
+        stat = path.stat()
+        signature.append((name, int(stat.st_mtime_ns), stat.st_size))
+    return tuple(signature)
+
+
+def _stop_process(process: subprocess.Popen) -> None:
+    process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+
+
+def _run_etm_ui_watch(host: str, port: int, interval_seconds: float) -> None:
+    env = _etm_ui_env(host, port)
+    baseline = _etm_watch_signature(storage.npc.etm_dir)
+
+    while True:
+        process = subprocess.Popen(["lightrag-server"], env=env)
+        typer.echo("ETM-UI Watch aktiv. Bei ETM-Indexaenderungen wird der Server neu gestartet.")
+        try:
+            restarted = _poll_until_change_or_exit(process, interval_seconds, baseline)
+        except KeyboardInterrupt:
+            if process.poll() is None:
+                _stop_process(process)
+            raise
+
+        if not restarted:
+            if process.returncode == 0:
+                return
+            raise subprocess.CalledProcessError(process.returncode, ["lightrag-server"])
+
+        baseline = _etm_watch_signature(storage.npc.etm_dir)
+        typer.echo("ETM-Indexaenderung erkannt, starte ETM-UI neu...")
+        _stop_process(process)
+
+
+def _poll_until_change_or_exit(
+    process: subprocess.Popen,
+    interval_seconds: float,
+    baseline: tuple,
+) -> bool:
+    """Wartet bis sich der ETM-Index ändert (True) oder der Prozess beendet (False)."""
+    while process.poll() is None:
+        time.sleep(interval_seconds)
+        current = _etm_watch_signature(storage.npc.etm_dir)
+        if current != baseline:
+            return True
+    return False
+
+
+@app.command("etm-ui")
+def etm_ui(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host fuer die LightRAG ETM-UI."),
+    port: int = typer.Option(9621, "--port", help="Port fuer die LightRAG ETM-UI."),
+    watch: bool = typer.Option(False, "--watch", help="Startet ETM-UI im Watch-Modus mit Auto-Neustart bei ETM-Indexaenderungen."),
+    watch_interval_seconds: float = typer.Option(2.0, "--watch-interval", min=0.2, help="Polling-Intervall fuer --watch in Sekunden."),
+):
+    """Startet die LightRAG-WebUI fuer den aktiven ETM-Kontext."""
+    storage.npc.etm_dir.mkdir(parents=True, exist_ok=True)
+    typer.echo(f"ETM-UI: http://{host}:{port}")
+    typer.echo(f"ETM-Daten: {storage.npc.etm_dir}")
+    if watch:
+        _run_etm_ui_watch(host, port, watch_interval_seconds)
+        return
+    subprocess.run(["lightrag-server"], check=True, env=_etm_ui_env(host, port))
 
 
 @app.command("icons")

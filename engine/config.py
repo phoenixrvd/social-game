@@ -26,8 +26,6 @@ class Config(BaseSettings):
     UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP: int = 20
     UPDATER_ETM_BATCH_SIZE_THRESHOLD: int = 7
     ETM_RETRIEVAL_TOP_K: int = 4
-    ETM_RETRIEVAL_MAX_DISTANCE: float = 0.75
-    ETM_DEDUPLICATION_MAX_DISTANCE: float = 0.08
 
     # Short-Term Memory (STM)
     STM_LATEST_MESSAGES: int = 5
@@ -37,7 +35,6 @@ class Config(BaseSettings):
     UPDATER_SCENE_CHECK_INTERVAL_SECONDS: int = 30
     UPDATER_STATE_CHECK_INTERVAL_SECONDS: int = 30
     UPDATER_IMAGE_CHECK_INTERVAL_SECONDS: int = 60
-    UPDATER_USER_PROFILE_CHECK_INTERVAL_SECONDS: int = 60
 
     # Web
     WEB_DEBUG: bool = False
@@ -49,6 +46,8 @@ class Config(BaseSettings):
     MODEL_LLM_SMALL: str = "gpt-5.4-mini"
     MODEL_IMAGE: str = "gpt-image-1.5"
     MODEL_EMBEDDING: str = "text-embedding-3-small"
+    MODEL_EMBEDDING_DIMENSIONS: int = 1536
+    MODEL_EMBEDDING_MAX_TOKENS: int = 8192
     MODEL_VERIFY_SSL: bool = True
 
     model_config = SettingsConfigDict(

@@ -142,6 +142,11 @@ class Client:
         user_message = cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": cleaned}))
         return self._request_small([user_message])
 
+    def run_messages_small(self, messages: list[ChatCompletionMessageParam]) -> str:
+        if not messages:
+            return ""
+        return self._request_small(messages)
+
     def run_prompt_small_model(self, prompt: str, response_model: type[ModelT]) -> ModelT:
         cleaned = prompt.strip()
         if not cleaned:

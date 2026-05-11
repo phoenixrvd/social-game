@@ -40,7 +40,7 @@ implemented
 ## Annahmen
 - `npcs/` und `scenes/` bleiben die versionierte Ausgangsbasis.
 - Laufzeitdaten liegen weiterhin unter Pfaden wie `.data/npcs/<npc_id>/<scene_id>/state.md`, `.data/npcs/<npc_id>/<scene_id>/stm.jsonl`, `.data/npcs/<npc_id>/<scene_id>/img.png`, `.data/npcs/<npc_id>/<scene_id>/img_backup/img-<ts>.png` und `.data/npcs/<npc_id>/<scene_id>/scene.md`.
-- Die SQLite-Datei für ETM liegt pro Spielinstanz unter `.data/npcs/<npc_id>/<scene_id>/etm.sqlite` und unterliegt demselben `.data/`-Prinzip.
+- Die LightRAG-Daten fuer ETM liegen pro Spielinstanz unter `.data/npcs/<npc_id>/<scene_id>/etm_lightrag/` und unterliegen demselben `.data/`-Prinzip.
 
 ## Offene Fragen
 - Keine

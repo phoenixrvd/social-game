@@ -23,13 +23,6 @@ class Message(BaseModel):
         return f"{self.role}: {self.content.strip()}"
 
 
-class Episode(BaseModel):
-    id: str
-    text: str
-    embedding: list[float]
-    created_at: str
-
-
 class SessionState(BaseModel):
     npc_id: str = Field(default_factory=lambda: config.DEFAULT_NPC_ID)
     scene_id: str = Field(default_factory=lambda: config.DEFAULT_SCENE_ID)
@@ -50,4 +43,3 @@ class SessionState(BaseModel):
         if not path_resolver.scene_exists(value):
             raise ValueError(f"Scene '{value}' existiert nicht.")
         return value
-

@@ -13,8 +13,8 @@ def test_config_uses_int_env_overrides(monkeypatch):
     monkeypatch.setenv("SG_UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP", "25")
     monkeypatch.setenv("SG_UPDATER_ETM_BATCH_SIZE_THRESHOLD", "9")
     monkeypatch.setenv("SG_ETM_RETRIEVAL_TOP_K", "6")
-    monkeypatch.setenv("SG_ETM_RETRIEVAL_MAX_DISTANCE", "0.25")
-    monkeypatch.setenv("SG_ETM_DEDUPLICATION_MAX_DISTANCE", "0.09")
+    monkeypatch.setenv("SG_MODEL_EMBEDDING_DIMENSIONS", "3072")
+    monkeypatch.setenv("SG_MODEL_EMBEDDING_MAX_TOKENS", "4096")
     monkeypatch.setenv("SG_STM_LATEST_MESSAGES", "8")
     monkeypatch.setenv("SG_UPDATER_ETM_CHECK_INTERVAL_SECONDS", "500")
     monkeypatch.setenv("SG_UPDATER_SCENE_CHECK_INTERVAL_SECONDS", "45")
@@ -28,8 +28,8 @@ def test_config_uses_int_env_overrides(monkeypatch):
     assert cfg.config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP == 25
     assert cfg.config.UPDATER_ETM_BATCH_SIZE_THRESHOLD == 9
     assert cfg.config.ETM_RETRIEVAL_TOP_K == 6
-    assert cfg.config.ETM_RETRIEVAL_MAX_DISTANCE == 0.25
-    assert cfg.config.ETM_DEDUPLICATION_MAX_DISTANCE == 0.09
+    assert cfg.config.MODEL_EMBEDDING_DIMENSIONS == 3072
+    assert cfg.config.MODEL_EMBEDDING_MAX_TOKENS == 4096
     assert cfg.config.STM_LATEST_MESSAGES == 8
     assert cfg.config.UPDATER_ETM_CHECK_INTERVAL_SECONDS == 500
     assert cfg.config.UPDATER_SCENE_CHECK_INTERVAL_SECONDS == 45
@@ -44,8 +44,8 @@ def test_config_uses_defaults_when_env_missing(monkeypatch):
     monkeypatch.delenv("SG_UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP", raising=False)
     monkeypatch.delenv("SG_UPDATER_ETM_BATCH_SIZE_THRESHOLD", raising=False)
     monkeypatch.delenv("SG_ETM_RETRIEVAL_TOP_K", raising=False)
-    monkeypatch.delenv("SG_ETM_RETRIEVAL_MAX_DISTANCE", raising=False)
-    monkeypatch.delenv("SG_ETM_DEDUPLICATION_MAX_DISTANCE", raising=False)
+    monkeypatch.delenv("SG_MODEL_EMBEDDING_DIMENSIONS", raising=False)
+    monkeypatch.delenv("SG_MODEL_EMBEDDING_MAX_TOKENS", raising=False)
     monkeypatch.delenv("SG_STM_LATEST_MESSAGES", raising=False)
     monkeypatch.delenv("SG_UPDATER_ETM_CHECK_INTERVAL_SECONDS", raising=False)
     monkeypatch.delenv("SG_UPDATER_SCENE_CHECK_INTERVAL_SECONDS", raising=False)
@@ -59,8 +59,8 @@ def test_config_uses_defaults_when_env_missing(monkeypatch):
     assert cfg.config.UPDATER_ETM_SHORT_MEMORY_MESSAGES_TO_KEEP == 20
     assert cfg.config.UPDATER_ETM_BATCH_SIZE_THRESHOLD == 7
     assert cfg.config.ETM_RETRIEVAL_TOP_K == 4
-    assert cfg.config.ETM_RETRIEVAL_MAX_DISTANCE == 0.75
-    assert cfg.config.ETM_DEDUPLICATION_MAX_DISTANCE == 0.08
+    assert cfg.config.MODEL_EMBEDDING_DIMENSIONS == 1536
+    assert cfg.config.MODEL_EMBEDDING_MAX_TOKENS == 8192
     assert cfg.config.STM_LATEST_MESSAGES == 5
     assert cfg.config.UPDATER_ETM_CHECK_INTERVAL_SECONDS == 350
     assert cfg.config.UPDATER_SCENE_CHECK_INTERVAL_SECONDS == 30
@@ -102,4 +102,3 @@ def test_config_uses_default_embeddings_model(monkeypatch, tmp_path):
     cfg = importlib.reload(config_module)
 
     assert cfg.config.MODEL_EMBEDDING == "text-embedding-3-small"
-

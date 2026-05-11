@@ -10,7 +10,7 @@ Dazu werden ältere Gesprächsabschnitte als kompakte Episoden festgehalten und 
 Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht des aktiven NPC festgehalten.
 
 ## Annahmen
-- ETM-Episoden werden pro Spielinstanz in einer lokalen SQLite-Datei gespeichert.
+- ETM-Episoden werden ueber LightRAG als Retrieval-Basis verwaltet.
 - Episoden werden pro `npc_id` und `scene_id` isoliert gespeichert.
 - State und Scene werden aktuell nicht als Kontext für Episodenbildung oder Antwortgenerierung genutzt.
 - ETM ist kein direkter Bildgenerierungs-Kontext.
@@ -34,9 +34,9 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 
 **Referenzen:** `doc/requirements/sg-003-short-term-memory.md`
 
-### Speicherung in SQLite
+### Speicherung in LightRAG
 **Typ:** Funktional
-**Beschreibung:** Das System muss ETM-Episoden vektorisieren und pro aktiver Spielinstanz in SQLite speichern.
+**Beschreibung:** Das System muss ETM-Episoden vektorisieren und ueber LightRAG pro aktiver Spielinstanz isoliert verwalten.
 **Akzeptanzkriterien:**
 - Jede gespeicherte Episode wird mit einem Embedding abgelegt.
 - Embeddings werden im `EtmService` erzeugt.
@@ -44,12 +44,11 @@ Statische Beziehungsgrundlagen bleiben davon getrennt; Episoden werden aus Sicht
 - Das Embedding-Service nutzt einen OpenAI-kompatiblen Embedding-Endpunkt.
 - Wenn ein eigenes Embedding-Modell genutzt werden soll, kann ein OpenAI-kompatibler Gateway wie LiteLLM verwendet werden.
 - Die Speicherung erfolgt isoliert pro `npc_id` und `scene_id`.
-- Das Retrieval berechnet Cosine-Distanzen nativ in Python auf den gespeicherten Embeddings.
+- Das Retrieval erfolgt ueber LightRAG.
 - Episoden anderer NPCs oder Szenen werden nicht im selben Retrieval-Kontext verwendet.
 - Ein Reset der aktiven Spielinstanz entfernt auch die zugehörigen Episoden.
-- Fuer ETM ist keine externe Vector-DB-Abhaengigkeit erforderlich.
 
-**Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`, `doc/adr/008-sqlite-als-etm-store.md`
+**Referenzen:** `doc/adr/002-datenspeicherung-data-verzeichnis.md`, `doc/adr/011-memory-mit-lightrag.md`
 
 ### ETM-Retrieval vor NPC-Antworten
 **Typ:** Funktional

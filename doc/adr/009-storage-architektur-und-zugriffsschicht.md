@@ -11,7 +11,7 @@ accepted
 ## Kontext
 
 * Die aktuelle Implementierung mischt Datenzugriff, Pfadauflösung, Formatierung und Fachlogik innerhalb einzelner Klassen.
-* Das System nutzt überwiegend dateibasierte Speicherung (Markdown, YAML, JSONL, Images), ergänzt durch lokale SQLite-Datenbanken (z. B. für ETM).
+* Das System nutzt überwiegend dateibasierte Speicherung (Markdown, YAML, JSONL, Images), ergänzt durch LightRAG-Artefakte für ETM.
 * Die Nutzungsschnittstelle (`storage.*`) ist ergonomisch, jedoch droht bei weiterer Entwicklung eine zunehmende Vermischung von Verantwortlichkeiten.
 * Zukünftig soll es möglich sein, einzelne Speichermechanismen (z. B. STM, ETM) durch alternative Implementierungen (z. B. Datenbank) zu ersetzen, ohne die Applikationslogik anzupassen.
 
@@ -195,6 +195,6 @@ Die Storage-Architektur folgt folgenden Prinzipien:
 * ADR-002: Datenspeicherung im .data-Verzeichnis
 * ADR-003: Synchroner Update-Orchestrator
 * ADR-006: Rolling-Releases ohne Kompatibilitätsschichten
-* ADR-008: SQLite als lokal eingebetteter ETM-Store
+* ADR-008: LightRAG als ETM-Store
 * engine/storage.py
 * engine/services/*

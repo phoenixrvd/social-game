@@ -25,7 +25,7 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 
 **Laufzeitdaten (`.data/`, nicht versioniert):**
 - `.data/session.yaml` – aktiver NPC/Szene-Kontext mit Keys `npc_id` und `scene_id`
-- `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm.sqlite, img.png)
+- `.data/npcs/<npc_id>/<scene_id>/` – überschreibt Initialzustand und hält Laufzeitgedächtnis (state.md, scene.md, stm.jsonl, etm_lightrag/, img.png)
 - `.data/npcs/<npc_id>/<scene_id>/orchestrator/` – orchestrator-spezifische Laufzeitartefakte (z. B. gespeicherte Bildprompts)
 
 **Priorität beim Laden:** Laufzeitdatei → `.overrides`-Datei → szenenspezifisches NPC-Asset → statisches Default.

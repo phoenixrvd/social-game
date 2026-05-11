@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from uuid import uuid4
 
 from engine.config import config
 from engine.storage.files import ImageFile, TextFile, VideoFile, YamlFile
-from engine.storage.models import Episode, Message, SessionState
+from engine.storage.models import Message, SessionState
 from engine.storage.paths import path_resolver
-from engine.storage.stores import _EtmSqliteStore, _StmJsonlStore
+from engine.storage.stores import _StmJsonlStore
 
 
 @dataclass(frozen=True)
@@ -86,31 +84,6 @@ class StmNode:
         if not batch:
             return ""
         return "\n".join(message.text_short for message in batch)
-
-
-@dataclass(frozen=True)
-class EtmNode:
-    path: Path
-
-    @property
-    def _store(self) -> _EtmSqliteStore:
-        return _EtmSqliteStore(self.path)
-
-    def append(self, text: str, embedding: list[float]) -> str:
-        episode_id = str(uuid4())
-        self._store.append(
-            id=episode_id,
-            text=text,
-            embedding=embedding,
-            created_at=datetime.now(timezone.utc).isoformat(),
-        )
-        return episode_id
-
-    def delete(self, ids: list[str]) -> None:
-        self._store.delete(ids)
-
-    def get(self) -> list[Episode]:
-        return self._store.get()
 
 
 @dataclass(frozen=True)
@@ -225,10 +198,6 @@ class PromptsNode:
     def scene_update(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("scene_update.md"))
 
-    @property
-    def user_profile_update(self) -> TextFile:
-        return TextFile(path_resolver.prompt_file("user_profile_update.md"))
-
 
 @dataclass(frozen=True)
 class NpcNode(_StorageNodeBase):
@@ -291,8 +260,8 @@ class NpcNode(_StorageNodeBase):
         return StmNode(self.base_runtime / "stm.jsonl")
 
     @property
-    def etm(self) -> EtmNode:
-        return EtmNode(path=self.base_runtime / "etm.sqlite")
+    def etm_dir(self) -> Path:
+        return self.base_runtime / "etm_lightrag"
 
     @property
     def img_runtime(self) -> ImageFile:

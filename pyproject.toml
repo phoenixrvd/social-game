@@ -11,7 +11,9 @@ dependencies = [
 	"apscheduler",
 	"fastapi",
 	"httpx",
+	"lightrag-hku[api]",
 	"markdown",
+	"numpy",
 	"openai",
 	"Pillow",
 	"pydantic",
@@ -37,4 +39,3 @@ engine = [
 	"web/static/js/*.js",
 	"web/static/icons/*",
 ]
-
