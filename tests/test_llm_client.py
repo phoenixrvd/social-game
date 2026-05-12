@@ -353,5 +353,3 @@ def test_embed_texts_skips_blank_input_without_request(monkeypatch):
 
     assert client.embed_texts("   ") == []
 
-
-

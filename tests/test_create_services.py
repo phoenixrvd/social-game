@@ -20,18 +20,21 @@ def _fake_npc_model(response_model):
     if response_model.__name__ == "NpcDescriptionDraft":
         return response_model(
             character_name="Alex",
-            description_markdown=(
-                "# Charakter\n\n"
-                "Alex, 28, arbeitet als Koch.\n\n"
-                "Außen:\n\n- freundlich\n\n"
-                "Innen:\n\n- aufmerksam\n\n"
-                "Kerndynamik:\n\n- sucht Verbindung\n\n"
-                "# Verhalten\n\n- spricht ruhig\n\n"
-                "# Subtext\n\n- beobachtet genau"
-            ),
+            grounding_sentence="Alex, 28, arbeitet als Koch.",
+            external_traits=["freundlich", "warm", "aufmerksam"],
+            inner_traits=["neugierig", "vorsichtig", "zugewandt"],
+            core_dynamics=["sucht Verbindung", "prüft Vertrauen", "bleibt bodenständig"],
+            behavior_rules=["spricht ruhig", "fragt nach", "bleibt konkret", "reagiert direkt"],
+            stress_reactions=["wird stiller", "weicht kurz aus", "sortiert sich"],
+            subtext_rules=["beobachtet genau", "sucht Sicherheit", "testet Nähe"],
         )
     return response_model(
-        state_markdown="---\ntrust: 50\ncomfort: 50\ninterest: 35\nmood: neutral\nrelationship_stage: stranger\n---\n\n- Alex ist vorsichtig.",
+        trust=50,
+        comfort=50,
+        interest=35,
+        mood="neutral",
+        relationship_stage="stranger",
+        state_bullets=["Alex ist vorsichtig.", "Alex beobachtet aufmerksam.", "Alex bleibt offen."],
     )
 
 
@@ -94,18 +97,26 @@ def test_npc_service_create_override_normalizes_name_to_snake_case(tmp_path, mon
         lambda _prompt, response_model: (
             response_model(
                 character_name="Anna Maria!!!",
-                description_markdown=(
-                    "# Charakter\n\nAnna Maria ist aufmerksam.\n\n"
-                    "Außen:\n\n- freundlich\n\n"
-                    "Innen:\n\n- neugierig\n\n"
-                    "Kerndynamik:\n\n- sucht Klarheit\n\n"
-                    "# Verhalten\n\n- fragt direkt\n\n"
-                    "# Subtext\n\n- bleibt aufmerksam"
-                ),
+                grounding_sentence="Anna Maria ist aufmerksam.",
+                external_traits=["freundlich", "klar", "wach"],
+                inner_traits=["neugierig", "vorsichtig", "direkt"],
+                core_dynamics=["sucht Klarheit", "prüft Nähe", "bleibt aufmerksam"],
+                behavior_rules=["fragt direkt", "hört genau zu", "bleibt ruhig", "ordnet schnell ein"],
+                stress_reactions=["wird knapper", "stellt Rückfragen", "zieht sich kurz zurück"],
+                subtext_rules=["bleibt aufmerksam", "will Sicherheit", "testet Ehrlichkeit"],
             )
             if response_model.__name__ == "NpcDescriptionDraft"
             else response_model(
-                state_markdown="---\ntrust: 50\ncomfort: 50\ninterest: 35\nmood: neutral\nrelationship_stage: stranger\n---\n\n- Anna Maria ist vorsichtig."
+                trust=50,
+                comfort=50,
+                interest=35,
+                mood="neutral",
+                relationship_stage="stranger",
+                state_bullets=[
+                    "Anna Maria ist vorsichtig.",
+                    "Anna Maria beobachtet genau.",
+                    "Anna Maria bleibt offen.",
+                ],
             )
         ),
     )
@@ -130,18 +141,22 @@ def test_npc_service_create_override_rejects_invalid_name(tmp_path, monkeypatch)
         lambda _prompt, response_model: (
             response_model(
                 character_name="!!!",
-                description_markdown=(
-                    "# Charakter\n\nBeschreibung.\n\n"
-                    "Außen:\n\n- ruhig\n\n"
-                    "Innen:\n\n- wach\n\n"
-                    "Kerndynamik:\n\n- bleibt vorsichtig\n\n"
-                    "# Verhalten\n\n- reagiert knapp\n\n"
-                    "# Subtext\n\n- testet Grenzen"
-                ),
+                grounding_sentence="Beschreibung.",
+                external_traits=["ruhig", "wach", "zurückhaltend"],
+                inner_traits=["vorsichtig", "klar", "aufmerksam"],
+                core_dynamics=["bleibt vorsichtig", "prüft Grenzen", "sucht Halt"],
+                behavior_rules=["reagiert knapp", "fragt nach", "bleibt ruhig", "weicht aus"],
+                stress_reactions=["wird still", "hält Abstand", "sortiert sich"],
+                subtext_rules=["testet Grenzen", "sucht Sicherheit", "bleibt wach"],
             )
             if response_model.__name__ == "NpcDescriptionDraft"
             else response_model(
-                state_markdown="---\ntrust: 50\ncomfort: 50\ninterest: 35\nmood: neutral\nrelationship_stage: stranger\n---"
+                trust=50,
+                comfort=50,
+                interest=35,
+                mood="neutral",
+                relationship_stage="stranger",
+                state_bullets=["Bleibt vorsichtig.", "Beobachtet genau.", "Hält Abstand."],
             )
         ),
     )
@@ -160,16 +175,27 @@ def test_npc_service_create_override_rejects_invalid_description_format(tmp_path
         "run_prompt_small_model",
         lambda _prompt, response_model: response_model(
             character_name="Kira",
-            description_markdown="# Charakter 1?? Kira mit Leidenschaft f�r KI.",
+            grounding_sentence="Kira mit Leidenschaft f�r KI.",
+            external_traits=["ruhig", "wach", "klar"],
+            inner_traits=["neugierig", "vorsichtig", "fokussiert"],
+            core_dynamics=["sucht Tiefe", "bleibt vorsichtig", "prüft Vertrauen"],
+            behavior_rules=["fragt direkt", "hört zu", "bleibt ruhig", "ordnet ein"],
+            stress_reactions=["wird still", "zieht sich zurück", "analysiert"],
+            subtext_rules=["testet Grenzen", "sucht Sicherheit", "bleibt wach"],
         )
         if response_model.__name__ == "NpcDescriptionDraft"
         else response_model(
-            state_markdown="---\ntrust: 50\ncomfort: 50\ninterest: 35\nmood: neutral\nrelationship_stage: stranger\n---"
+            trust=50,
+            comfort=50,
+            interest=35,
+            mood="neutral",
+            relationship_stage="stranger",
+            state_bullets=["Kira bleibt vorsichtig.", "Kira beobachtet genau.", "Kira hält Abstand."],
         ),
     )
     monkeypatch.setattr(npc_module.client, "generate_scene_img", lambda _prompt: b"png-bytes")
 
-    with pytest.raises(ValueError, match="Markdown-Format|ungueltige Zeichen"):
+    with pytest.raises(ValueError, match="ungueltige Zeichen"):
         NpcService().create_override("Kira, Designerin")
 
 
@@ -182,16 +208,18 @@ def test_npc_service_create_override_rejects_invalid_state_format(tmp_path, monk
         if response_model.__name__ == "NpcDescriptionDraft":
             return _fake_npc_model(response_model)
         return response_model(
-            state_markdown=(
-                "--- trusted: 20 comfort: 25 interest: 30 mood: calm relationship_stage: stranger -- "
-                "- Kira beobachtet die Gespr�che."
-            ),
+            trust=20,
+            comfort=25,
+            interest=30,
+            mood="Calm Mood",
+            relationship_stage="stranger",
+            state_bullets=["Kira beobachtet die Gespräche.", "Kira wartet ab.", "Kira hält Abstand."],
         )
 
     monkeypatch.setattr(npc_module.client, "run_prompt_small_model", fake_run_prompt_small_model)
     monkeypatch.setattr(npc_module.client, "generate_scene_img", lambda _prompt: b"png-bytes")
 
-    with pytest.raises(ValueError, match="Markdown-Format|YAML-Keys|ungueltige Zeichen"):
+    with pytest.raises(ValueError, match="lowercase"):
         NpcService().create_override("Kira, Designerin")
 
 

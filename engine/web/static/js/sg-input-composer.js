@@ -61,7 +61,6 @@ class SocialGameInputComposer extends HTMLElement {
 
           <div class="sg-composer-footer">
             <div class="sg-composer-meta" role="status" aria-live="polite">
-              <span class="sg-composer-error sg-hidden"></span>
               <span class="sg-composer-status sg-hidden">
                 <span class="sg-visually-hidden">Antwort wird geladen</span>
                 <span class="typing-dots" aria-hidden="true"><span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span></span>
@@ -84,7 +83,9 @@ class SocialGameInputComposer extends HTMLElement {
           </div>
         </div>
       </div>
-
+      <div class="sg-composer-error-container" role="alert" aria-live="assertive">
+        <span class="sg-composer-error sg-hidden"></span>
+      </div>
     `
   }
 
@@ -93,7 +94,7 @@ class SocialGameInputComposer extends HTMLElement {
       thumbnail: this.querySelector(".sg-composer-thumb"),
       textarea: this.querySelector(".sg-chat-input"),
       sendButton: this.querySelector(".sg-send-button"),
-      meta: this.querySelector(".sg-composer-meta"),
+      errorContainer: this.querySelector(".sg-composer-error-container"),
       metaError: this.querySelector(".sg-composer-error"),
       typingStatus: this.querySelector(".sg-composer-status"),
       keyboardHint: this.querySelector(".sg-keyboard-hint"),
@@ -224,7 +225,7 @@ class SocialGameInputComposer extends HTMLElement {
     const hasError = Boolean(this._state.errorMessage)
     const showTyping = this._state.isAssistantTyping && !hasError
 
-    this.$.meta.className = hasError ? "sg-composer-meta sg-composer-meta-error" : "sg-composer-meta"
+    this.$.errorContainer.classList.toggle("sg-hidden", !hasError)
     this.$.metaError.textContent = this._state.errorMessage
     this.$.metaError.classList.toggle("sg-hidden", !hasError)
     this.$.typingStatus.classList.toggle("sg-hidden", !showTyping)
@@ -247,4 +248,3 @@ class SocialGameInputComposer extends HTMLElement {
 }
 
 customElements.get("sg-input-composer") || customElements.define("sg-input-composer", SocialGameInputComposer)
-

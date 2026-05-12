@@ -12,51 +12,105 @@ from engine.storage import storage
 
 class NpcDescriptionDraft(BaseModel):
     character_name: str = Field(min_length=1, max_length=48)
-    description_markdown: str = Field(min_length=1)
+    grounding_sentence: str = Field(min_length=1)
+    external_traits: list[str] = Field(min_length=3, max_length=5)
+    inner_traits: list[str] = Field(min_length=3, max_length=5)
+    core_dynamics: list[str] = Field(min_length=3, max_length=5)
+    behavior_rules: list[str] = Field(min_length=4, max_length=6)
+    stress_reactions: list[str] = Field(min_length=3, max_length=5)
+    subtext_rules: list[str] = Field(min_length=3, max_length=5)
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("description_markdown")
+    @field_validator("grounding_sentence")
     @classmethod
-    def validate_description_markdown(cls, value: str) -> str:
-        required_lines = ("# Charakter", "Außen:", "Innen:", "Kerndynamik:", "# Verhalten", "# Subtext")
-        missing_lines = [line for line in required_lines if line not in value.splitlines()]
-        if missing_lines:
-            raise ValueError("NPC-Beschreibung hat nicht das erwartete Markdown-Format.")
+    def validate_description_text(cls, value: str) -> str:
         if "�" in value or "1??" in value:
             raise ValueError("NPC-Beschreibung enthaelt ungueltige Zeichen.")
         return value
 
+    @field_validator(
+        "external_traits",
+        "inner_traits",
+        "core_dynamics",
+        "behavior_rules",
+        "stress_reactions",
+        "subtext_rules",
+    )
+    @classmethod
+    def validate_description_list(cls, values: list[str]) -> list[str]:
+        if any("�" in value or "1??" in value for value in values):
+            raise ValueError("NPC-Beschreibung enthaelt ungueltige Zeichen.")
+        return values
+
+    @property
+    def description_markdown(self) -> str:
+        lines = ["# Charakter", "", self.grounding_sentence]
+        sections = [
+            ("Außen:", self.external_traits),
+            ("Innen:", self.inner_traits),
+            ("Kerndynamik:", self.core_dynamics),
+            ("# Verhalten", self.behavior_rules),
+            ("# Stressreaktion", self.stress_reactions),
+            ("# Subtext", self.subtext_rules),
+        ]
+        for heading, values in sections:
+            lines.extend(["", heading, "", *self._bullets(values)])
+        return "\n".join(lines)
+
+    @staticmethod
+    def _bullets(values: list[str]) -> list[str]:
+        return [f"- {value}" for value in values]
+
 
 class NpcStateDraft(BaseModel):
-    state_markdown: str = Field(min_length=1)
+    trust: int = Field(ge=0, le=100)
+    comfort: int = Field(ge=0, le=100)
+    interest: int = Field(ge=0, le=100)
+    mood: str = Field(min_length=1, max_length=24)
+    relationship_stage: str = Field(min_length=1, max_length=48)
+    state_bullets: list[str] = Field(min_length=3, max_length=5)
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    @field_validator("state_markdown")
+    @field_validator("mood")
     @classmethod
-    def validate_state_markdown(cls, value: str) -> str:
-        lines = value.splitlines()
-        if len(lines) < 8 or lines[0] != "---" or "---" not in lines[1:]:
-            raise ValueError("NPC-State hat nicht das erwartete Markdown-Format.")
-        yaml_lines = lines[1:lines[1:].index("---") + 1]
-        required_keys = {"trust", "comfort", "interest", "mood", "relationship_stage"}
-        actual_keys = {line.split(":", 1)[0].strip() for line in yaml_lines if ":" in line}
-        if actual_keys != required_keys or "trusted" in actual_keys:
-            raise ValueError("NPC-State hat nicht die erwarteten YAML-Keys.")
+    def validate_mood(cls, value: str) -> str:
+        if value != value.lower() or " " in value:
+            raise ValueError("NPC-State mood muss ein kurzer lowercase-Wert sein.")
         if "�" in value:
             raise ValueError("NPC-State enthaelt ungueltige Zeichen.")
-        if not any(line.startswith("- ") for line in lines):
-            raise ValueError("NPC-State enthaelt keine Markdown-Liste.")
         return value
+
+    @field_validator("relationship_stage")
+    @classmethod
+    def validate_relationship_stage(cls, value: str) -> str:
+        if "�" in value:
+            raise ValueError("NPC-State enthaelt ungueltige Zeichen.")
+        return value
+
+    @field_validator("state_bullets")
+    @classmethod
+    def validate_state_bullets(cls, values: list[str]) -> list[str]:
+        if any("�" in value for value in values):
+            raise ValueError("NPC-State enthaelt ungueltige Zeichen.")
+        return values
+
+    @property
+    def state_markdown(self) -> str:
+        bullets = [f"- {value}" for value in self.state_bullets]
+        return "\n".join([
+            "---",
+            f"trust: {self.trust}",
+            f"comfort: {self.comfort}",
+            f"interest: {self.interest}",
+            f"mood: {self.mood}",
+            f"relationship_stage: {self.relationship_stage}",
+            "---",
+            "",
+            *bullets,
+        ])
 
 
 class NpcService:
-    @staticmethod
-    def _normalize_description(character_description: str) -> str:
-        cleaned_description = character_description.strip()
-        if not cleaned_description:
-            raise ValueError("Charakterbeschreibung darf nicht leer sein.")
-        return cleaned_description
-
     @staticmethod
     def _normalize_name(character_name: str) -> tuple[str, str]:
         cleaned_name = character_name.strip()
@@ -66,7 +120,9 @@ class NpcService:
         return cleaned_name, npc_id
 
     def create_override(self, character_description: str) -> Path:
-        orientation = self._normalize_description(character_description)
+        orientation = character_description.strip()
+        if not orientation:
+            raise ValueError("Charakterbeschreibung darf nicht leer sein.")
         description_draft = self._create_description_draft(orientation)
         state_draft = self._create_state_draft(description_draft.description_markdown)
         cleaned_name, npc_id = self._normalize_name(description_draft.character_name)
@@ -123,8 +179,7 @@ class NpcService:
     ) -> None:
         payload = yaml.safe_dump({"name": character_name}, allow_unicode=True, sort_keys=False)
         (target_dir / "character.yaml").write_text(payload, encoding="utf-8")
-        (target_dir / "description.md").write_text(description_draft.description_markdown.strip() + "\n",
-                                                   encoding="utf-8")
+        (target_dir / "description.md").write_text(description_draft.description_markdown.strip() + "\n", encoding="utf-8")
         (target_dir / "state.md").write_text(state_draft.state_markdown.strip() + "\n", encoding="utf-8")
 
     def _save_npc_image(self, target_dir: Path, npc_description: str) -> None:

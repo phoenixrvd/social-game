@@ -86,19 +86,18 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 - Wenn technische Details unvermeidbar sind, diese bevorzugt als `Randbedingung` oder als separaten weiterführenden Hinweis dokumentieren, nicht als Kern der funktionalen Anforderung.
 - Akzeptanzkriterien stets beobachtbares Verhalten beschreiben; interne Flags, Jobnamen, Klassen oder Endpunkte nur in begründeten Ausnahmefällen nennen.
 
-## Git-Workflow
-
-- Arbeit in `v1.x`-Branches, kein direkter Push auf `main`
-- Manueller Release-Workflow: `git checkout main`, `git merge --squash --ff v1.x`, `git commit`, `git push origin main`
-- Vor jedem Commit `doc/guidelines/git-workflow.md` beachten
-- Commit-Format: `<type>: <description>`
-- Erlaubte Commit-Typen: `refactor:`, `feature:`, `fix:`, `add:`
-- Commit-Typen klein schreiben; Beschreibung kurz, klar und beschreibend formulieren
-- Ausnahme: Release-Commits auf `main` nutzen das Format `v1.x: <release summary>`
-
 ## OpenCode-Agenten
 
 Projekt-Agenten sind in `.opencode/agents/` definiert. `AGENTS.md` enthält nur globale Projektanweisungen; agentenspezifische Aktivierung, Regeln, Modelle und Berechtigungen stehen ausschließlich in den jeweiligen Agent-Dateien.
+
+Verfügbare Agenten:
+- `commit` – lokale Git-Commits erstellen
+- `release` – lokalen Release-/Squash-Workflow ausführen
+- `test` – Tests ausführen und Fehler korrigieren
+- `review-code` – Code gegen Projektguidelines prüfen
+- `requirements` – Anforderungen erstellen/überarbeiten
+- `refactoring` – gezielte Refactorings ausführen
+- `adr` – Architecture Decision Records erstellen
 
 ## Externe Abhängigkeiten
 

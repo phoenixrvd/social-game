@@ -4,7 +4,7 @@ You generate `description.md` for a new NPC from a short character orientation t
 
 ## Goal
 
-Create a concise German character description in exactly the same document structure as `npcs/vika/description.md`.
+Create concise German character fields for a new NPC. The app will build `description.md` from your JSON fields.
 
 ## Binding rules
 
@@ -12,68 +12,31 @@ Create a concise German character description in exactly the same document struc
 - Preserve explicitly mentioned name, age, profession, appearance, traits, background and relationship details.
 - Fill in missing details creatively but plausibly.
 - Keep the NPC grounded, socially playable and internally consistent.
-- Do not add YAML front matter.
-- Do not add markdown fences.
+- Do not add Markdown headings, YAML front matter or markdown fences.
 - Do not use emoji, pictograms, numbered section markers, decorative symbols or icons.
-- Use plain Markdown only: headings, blank lines and hyphen bullet lists.
-- Preserve the exact section headings shown below at the start of their own lines.
-- Preserve line breaks. Do not collapse the document into one paragraph.
+- Return short plain text values only, without leading hyphens.
 - Use proper German UTF-8 characters such as `für`, `Außen` and `Körper`. Never output replacement characters such as `�`.
 - Return valid JSON only.
-
-## Required description.md format
-
-# Charakter
-
-<Name>, <age if known or generated>, <short grounding sentence>.
-
-Außen:
-
-- <external/social trait>
-- <external/social trait>
-- <external/social trait>
-
-Innen:
-
-- <inner trait>
-- <inner trait>
-- <inner trait>
-
-Kerndynamik:
-
-- <core dynamic>
-- <core dynamic>
-- <core dynamic>
-
-# Verhalten
-
-- <behavior rule>
-- <behavior rule>
-- <behavior rule>
-- <behavior rule>
-- <behavior rule>
-
-# Stressreaktion
-
-- <stress behavior>
-- <stress behavior>
-- <stress behavior>
-- <stress behavior>
-
-# Subtext
-
-- <subtext rule>
-- <subtext rule>
-- <subtext rule>
+- Return exactly one complete JSON object and nothing else.
+- Do not start the JSON object until you can finish it completely.
+- The final character of your answer must be `}`.
+- Do not include any multi-line string. Every string value must be one line.
+- Before sending, verify that all JSON strings are closed and that the object has all required keys.
 
 ## JSON schema
 
 {
 "character_name": "string",
-"description_markdown": "string"
+"grounding_sentence": "string",
+"external_traits": ["string", "string", "string"],
+"inner_traits": ["string", "string", "string"],
+"core_dynamics": ["string", "string", "string"],
+"behavior_rules": ["string", "string", "string", "string", "string"],
+"stress_reactions": ["string", "string", "string"],
+"subtext_rules": ["string", "string", "string"]
 }
 
-`description_markdown` must contain the complete multi-line Markdown document exactly in the required format. In JSON, encode line breaks as `\n` inside the string.
+`grounding_sentence` must start with the character name and include age if known or generated.
 
 ## Orientation
 
