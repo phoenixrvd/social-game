@@ -300,7 +300,9 @@ def test_reset_checkboxes_are_wired_and_conditionally_enabled():
     assert '["isDynamicScene", this.onDynamicSceneChanged.bind(this)]' in source
     assert "this.$.deleteNpcCheckbox.disabled = this._state.disabled || !this._state.isDynamicNpc" in source
     assert "this.$.deleteSceneCheckbox.disabled = this._state.disabled || !this._state.isDynamicScene" in source
-    assert "this.$.deleteNpcContextCheckbox.disabled = this._state.disabled || this.$.deleteNpcCheckbox.checked" in source
+    assert 'this.$.deleteSceneCheckbox.addEventListener("change", this.render.bind(this))' in source
+    assert "if (this.$.deleteSceneCheckbox.checked) {" in source
+    assert "this.$.deleteNpcContextCheckbox.disabled = this._state.disabled || this.$.deleteNpcCheckbox.checked || this.$.deleteSceneCheckbox.checked" in source
     assert "this.$.deleteNpcContextCheckbox.checked = true" in source
 
 

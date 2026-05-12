@@ -37,11 +37,11 @@ class SocialGameInputScene extends HTMLElement {
         </div>
 
         <label class="sg-settings-checkbox">
-          <input type="checkbox" data-option="create-scene" checked />
+          <input id="create-scene-option" name="create-scene" type="checkbox" data-option="create-scene" checked />
           <span>Scene Erstellen</span>
         </label>
         <label class="sg-settings-checkbox">
-          <input type="checkbox" data-option="create-npc-context" checked />
+          <input id="create-npc-context-option" name="create-npc-context" type="checkbox" data-option="create-npc-context" checked />
           <span>NPC Kontext erstellen</span>
         </label>
 

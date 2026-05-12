@@ -22,6 +22,9 @@ class Storage:
     def list_scenes(self) -> list[SceneNode]:
         return [self.scene_view(npc_id="", scene_id=scene_id) for scene_id in path_resolver.list_scene_ids()]
 
+    def scene_override_dir(self, scene_id: str) -> Path:
+        return config.OVERRIDES_SCENE_DIR / scene_id
+
     @property
     def data(self) -> Path:
         return config.DATA_DIR
@@ -45,4 +48,3 @@ class Storage:
 
 
 storage = Storage()
-

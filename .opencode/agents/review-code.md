@@ -1,5 +1,5 @@
 ---
-description: Reviews code against project guidelines. Usage: "review-code: <file>" or "review: <file>"
+description: 'Reviews code against project guidelines. Usage: "review-code: <file>" or "review: <file>"'
 mode: subagent
 model: github-copilot/claude-sonnet-4.6
 temperature: 0.1

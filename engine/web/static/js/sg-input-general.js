@@ -66,15 +66,15 @@ class SocialGameInputGeneral extends HTMLElement {
               <span slot="description">Entfernt Nachrichten und Bilder der aktiven Konversation</span>
           </sg-settings-action>
           <label class="sg-settings-checkbox">
-            <input type="checkbox" data-action="delete-active-npc" />
+            <input id="delete-active-npc" name="delete-active-npc" type="checkbox" data-action="delete-active-npc" />
             <span>Erstellten NPC mit löschen</span>
           </label>
           <label class="sg-settings-checkbox">
-            <input type="checkbox" data-action="delete-active-scene" />
+            <input id="delete-active-scene" name="delete-active-scene" type="checkbox" data-action="delete-active-scene" />
             <span>Erstellte Szene mit löschen</span>
           </label>
           <label class="sg-settings-checkbox">
-            <input type="checkbox" data-action="delete-active-npc-context" />
+            <input id="delete-active-npc-context" name="delete-active-npc-context" type="checkbox" data-action="delete-active-npc-context" />
             <span>Erstellten NPC-Kontext löschen</span>
           </label>
         </div>
@@ -82,6 +82,8 @@ class SocialGameInputGeneral extends HTMLElement {
       <section class="sg-settings-section">
         <h3 class="sg-selector-legend">Dein Profil</h3>
         <textarea
+          id="user-profile-textarea"
+          name="user-profile"
           data-element="user-profile-textarea"
           class="sg-settings-textarea chat-scrollbar"
           placeholder="Was soll der NPC über dich wissen? (Name, Beruf, Geschlecht)"
@@ -101,7 +103,8 @@ class SocialGameInputGeneral extends HTMLElement {
 
     this.$.themeButton.addEventListener("click", this.handleThemeClick.bind(this))
     this.$.resetButton.addEventListener("click", this.handleResetClick.bind(this))
-    this.$.deleteNpcCheckbox.addEventListener("change", this.handleDeleteNpcChange.bind(this))
+    this.$.deleteNpcCheckbox.addEventListener("change", this.render.bind(this))
+    this.$.deleteSceneCheckbox.addEventListener("change", this.render.bind(this))
     this.$.userProfileTextarea.addEventListener("blur", this.handleUserProfileBlur.bind(this))
     this.registerSubscriptions()
     this.syncFromStore()
@@ -181,10 +184,6 @@ class SocialGameInputGeneral extends HTMLElement {
     await appActions.updateUserProfile(content)
   }
 
-  handleDeleteNpcChange() {
-    this.render()
-  }
-
   render() {
     this.$.themeActionIcon.innerHTML = getThemeToggleIcon(this._state.theme)
     this.$.themeButton.disabled = this._state.disabled
@@ -200,7 +199,10 @@ class SocialGameInputGeneral extends HTMLElement {
     if (this.$.deleteNpcCheckbox.checked) {
       this.$.deleteNpcContextCheckbox.checked = true
     }
-    this.$.deleteNpcContextCheckbox.disabled = this._state.disabled || this.$.deleteNpcCheckbox.checked
+    if (this.$.deleteSceneCheckbox.checked) {
+      this.$.deleteNpcContextCheckbox.checked = true
+    }
+    this.$.deleteNpcContextCheckbox.disabled = this._state.disabled || this.$.deleteNpcCheckbox.checked || this.$.deleteSceneCheckbox.checked
     this.$.userProfileTextarea.value = this._state.userProfile
     this.$.userProfileTextarea.disabled = this._state.disabled
   }

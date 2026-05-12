@@ -5,19 +5,7 @@ class SocialGameSettingsAction extends HTMLElement {
 
   constructor() {
     super()
-    this._isRendered = false
-  }
-
-  connectedCallback() {
-    if (!this._isRendered) {
-      this._render()
-      this._isRendered = true
-    }
-    this._syncButtonAttributes()
-  }
-
-  attributeChangedCallback() {
-    this._syncButtonAttributes()
+    this.$ = {}
   }
 
   get disabled() {
@@ -28,19 +16,7 @@ class SocialGameSettingsAction extends HTMLElement {
     this.toggleAttribute("disabled", Boolean(value))
   }
 
-  focus(options) {
-    this._button()?.focus(options)
-  }
-
-  click() {
-    this._button()?.click()
-  }
-
-  _button() {
-    return this.querySelector(".sg-settings-action-button")
-  }
-
-  _render() {
+  connectedCallback() {
     const iconNode = this.querySelector('[slot="icon"]')
     const descriptionNode = this.querySelector('[slot="description"]')
     const titleNode = Array.from(this.children).find((node) => !node.hasAttribute("slot"))
@@ -60,27 +36,36 @@ class SocialGameSettingsAction extends HTMLElement {
         </span>
       </button>
     `
+
+    this.$ = {
+      button: this.querySelector(".sg-settings-action-button"),
+    }
+
+    this._syncButtonAttributes()
+  }
+
+  attributeChangedCallback() {
+    if (!this.isConnected || !this.$.button) {
+      return
+    }
+    this._syncButtonAttributes()
   }
 
   _syncButtonAttributes() {
-    const button = this._button()
-    if (!button) {
+    const button = this.$.button
+
+    button.disabled = this.disabled
+    this._syncOptionalAttribute(button, "aria-label")
+    this._syncOptionalAttribute(button, "aria-pressed")
+  }
+
+  _syncOptionalAttribute(target, name) {
+    if (this.hasAttribute(name)) {
+      target.setAttribute(name, this.getAttribute(name))
       return
     }
 
-    button.disabled = this.disabled
-
-    if (this.hasAttribute("aria-label")) {
-      button.setAttribute("aria-label", this.getAttribute("aria-label"))
-    } else {
-      button.removeAttribute("aria-label")
-    }
-
-    if (this.hasAttribute("aria-pressed")) {
-      button.setAttribute("aria-pressed", this.getAttribute("aria-pressed"))
-    } else {
-      button.removeAttribute("aria-pressed")
-    }
+    target.removeAttribute(name)
   }
 
   _getIconMarkup(iconNode) {

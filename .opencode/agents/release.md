@@ -27,5 +27,5 @@ Lokaler OpenCode-Release-Workflow nach `doc/guidelines/git-workflow.md`, aber oh
 ## Output
 - Commit-Subject
 - Kurzbeschreibung (1 Zeile, Englisch)
-- Release-Notes (strukturiert, Format-Referenz von letztem Release auf `main`)
+- Release-Notes (strukturiert, Format-Referenz von `v1.22` Release auf `main`)
 - Branch, Commit, Dateianzahl

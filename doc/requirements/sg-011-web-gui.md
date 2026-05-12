@@ -210,6 +210,7 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 - Unter `Verlauf löschen` werden die Checkboxen `Erstellten NPC mit löschen`, `Erstellte Szene mit löschen` und `Erstellten NPC-Kontext löschen` angezeigt.
 - Vor der Ausführung kann für die Löschoptionen entschieden werden, ob sie berücksichtigt werden sollen.
 - Wird `Erstellten NPC mit löschen` aktiviert, wird `Erstellten NPC-Kontext löschen` automatisch aktiviert und ist nicht separat änderbar.
+- Wird `Erstellte Szene mit löschen` aktiviert, wird `Erstellten NPC-Kontext löschen` automatisch aktiviert und ist nicht separat änderbar.
 
 **Referenzen:** `doc/requirements/sg-009-git-basierte-spielstandshistorie.md`, `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
 

@@ -9,6 +9,7 @@ from engine.config import config
 from engine.client import client
 from engine.services.etm_service import EtmService
 from engine.services.id_normalizer import normalize_to_snake_id
+from engine.services.npc_scene_service import NpcSceneService
 from engine.storage import storage
 
 
@@ -99,6 +100,7 @@ class SceneService:
     @staticmethod
     def delete_dynamic_scene_artifacts(scene_id: str) -> None:
         SceneService._delete_dynamic_scene_overrides(scene_id)
+        SceneService._delete_dynamic_scene_runtime(scene_id)
 
     @staticmethod
     def _delete_dynamic_scene_overrides(scene_id: str) -> None:
@@ -106,12 +108,12 @@ class SceneService:
         if scene_override_dir.exists():
             shutil.rmtree(scene_override_dir)
 
-        if not config.OVERRIDES_NPC_DIR.exists():
-            return
-        for npc_override_dir in config.OVERRIDES_NPC_DIR.iterdir():
-            if not npc_override_dir.is_dir():
-                continue
-            npc_scene_override_dir = npc_override_dir / "scenes" / scene_id
-            if npc_scene_override_dir.exists():
-                shutil.rmtree(npc_scene_override_dir)
+        for npc in storage.list_npcs:
+            NpcSceneService.delete_override(npc_id=npc.npc_id, scene_id=scene_id)
 
+    @staticmethod
+    def _delete_dynamic_scene_runtime(scene_id: str) -> None:
+        for npc in storage.list_npcs:
+            scene_runtime_dir = storage.npc_view(npc_id=npc.npc_id, scene_id=scene_id).base_runtime
+            if scene_runtime_dir.exists():
+                shutil.rmtree(scene_runtime_dir)

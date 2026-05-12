@@ -501,7 +501,7 @@ def test_reset_active_npc_can_delete_dynamic_scene_and_reset_session(tmp_path, m
     assert calls == ["clear_pending_jobs"]
     assert not dynamic_scene_dir.exists()
     assert not active_runtime.exists()
-    assert other_runtime.exists()
+    assert not other_runtime.exists()
     assert not active_npc_scene_override.exists()
     assert not other_npc_scene_override.exists()
     assert storage.session.npc_id == "vika"

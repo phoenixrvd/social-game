@@ -401,6 +401,7 @@ def test_scene_service_dynamic_scene_detection_and_cleanup(tmp_path, monkeypatch
     monkeypatch.setattr(scene_module.config, "SCENE_DIR", tmp_path / "scenes")
     monkeypatch.setattr(scene_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
     monkeypatch.setattr(scene_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(scene_module.config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
     scene_id = "created_alley"
     dynamic_scene_dir = tmp_path / ".overrides" / "scenes" / scene_id
     dynamic_scene_dir.mkdir(parents=True)
@@ -413,8 +414,17 @@ def test_scene_service_dynamic_scene_detection_and_cleanup(tmp_path, monkeypatch
     (vika_override / "scene.md").write_text("vika\n", encoding="utf-8")
     (mira_override / "scene.md").write_text("mira\n", encoding="utf-8")
 
+    vika_runtime = tmp_path / ".data" / "npcs" / "vika" / scene_id
+    mira_runtime = tmp_path / ".data" / "npcs" / "mira" / scene_id
+    vika_runtime.mkdir(parents=True, exist_ok=True)
+    mira_runtime.mkdir(parents=True, exist_ok=True)
+    (vika_runtime / "stm.jsonl").write_text("{}\n", encoding="utf-8")
+    (mira_runtime / "stm.jsonl").write_text("{}\n", encoding="utf-8")
+
     scene_module.SceneService.delete_dynamic_scene_artifacts(scene_id)
 
     assert not dynamic_scene_dir.exists()
     assert not vika_override.exists()
     assert not mira_override.exists()
+    assert not vika_runtime.exists()
+    assert not mira_runtime.exists()

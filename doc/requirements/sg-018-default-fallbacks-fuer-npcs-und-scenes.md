@@ -155,6 +155,7 @@ SG-018 ergänzt `doc/requirements/sg-016-overrides-verzeichnis.md` um Regeln fü
 - Wird `Verlauf löschen` mit aktivierter Checkbox `Erstellten NPC-Kontext löschen` bestätigt, ist der NPC-szenenspezifische Kontext für den aktiven NPC in der aktiven Szene danach nicht mehr vorhanden.
 - Wird nur `Erstellten NPC-Kontext löschen` aktiviert, bleiben aktiver NPC und aktive Scene erhalten.
 - Wird `Erstellten NPC mit löschen` aktiviert, wird die Löschung des NPC-szenenspezifischen Kontexts automatisch mit ausgewählt.
+- Wird `Erstellte Szene mit löschen` aktiviert, wird die Löschung des NPC-szenenspezifischen Kontexts automatisch mit ausgewählt.
 - Ist `Erstellten NPC mit löschen` nicht aktivierbar, kann die Löschung des NPC-szenenspezifischen Kontexts separat ausgewählt werden.
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/requirements/sg-016-overrides-verzeichnis.md`
 
