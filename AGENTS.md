@@ -93,13 +93,14 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 Projekt-Agenten sind in `.opencode/agents/` definiert. `AGENTS.md` enthält nur globale Projektanweisungen; agentenspezifische Aktivierung, Regeln, Modelle und Berechtigungen stehen ausschließlich in den jeweiligen Agent-Dateien.
 
 Verfügbare Agenten:
-- `commit` – lokale Git-Commits erstellen
-- `release` – lokalen Release-/Squash-Workflow ausführen
-- `test` – Tests ausführen und Fehler korrigieren
-- `review-code` – Code gegen Projektguidelines prüfen
-- `requirements` – Anforderungen erstellen/überarbeiten
-- `refactoring` – gezielte Refactorings ausführen
-- `adr` – Architecture Decision Records erstellen
+- `doc-requirements-writer` – Anforderungen erstellen/überarbeiten
+- `doc-adr-writer` – Architecture Decision Records erstellen
+- `code-reviewer` – Code gegen Projektguidelines prüfen
+- `code-refactorer` – gezielte Refactorings ausführen
+- `code-test-fixer` – Tests ausführen und Fehler korrigieren
+- `release-starter` – Arbeitsbranch für eine neue Version vorbereiten
+- `release-committer` – lokale Git-Commits erstellen
+- `release-finisher` – lokalen Release-/Squash-Workflow ausführen
 
 ## Externe Abhängigkeiten
 
@@ -107,6 +108,5 @@ Verfügbare Agenten:
 - **APScheduler** – Background-Scheduler für den periodischen `execute_pending_jobs()`-Loop (10s Intervall)
 - **FastAPI + uvicorn** – Web-Backend
 - **pydantic-settings** – Konfiguration
-- **rapidfuzz** – Prompt-Ähnlichkeitsprüfung im `ImageService`
 - **Pillow** – Bildkomprimierung vor LLM-Upload (PNG → JPEG)
 - **LiteLLM (optional)** – kann für eigene Embedding-Modelle oder weitere OpenAI-kompatible Modellanbieter genutzt werden

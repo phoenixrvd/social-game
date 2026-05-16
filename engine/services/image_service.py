@@ -3,8 +3,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from rapidfuzz import fuzz
-
 from engine.client import client
 from engine.storage import storage
 from engine.storage.files import ImageFile
@@ -160,21 +158,20 @@ class ImageService:
         return client.run_prompt_small(optimization_prompt).strip()
 
     @staticmethod
-    def _token_overlap(a: str, b: str) -> float:
-        a_tokens = {t.strip() for t in a.split(",") if t.strip()}
-        b_tokens = {t.strip() for t in b.split(",") if t.strip()}
-        if not a_tokens:
-            return 0.0
-        return len(a_tokens & b_tokens) / len(a_tokens)
+    def _visual_tokens(prompt: str) -> list[str]:
+        tokens = []
+        for token in prompt.split(","):
+            normalized = " ".join(token.lower().split())
+            if normalized:
+                tokens.append(normalized)
+        return sorted(tokens)
 
-    def _should_skip_prompt_update(self, new_prompt: str, old_prompt: str, force: bool) -> bool:
+    @staticmethod
+    def _should_skip_prompt_update(new_prompt: str, old_prompt: str, force: bool) -> bool:
         if force:
             return False
-        if new_prompt == old_prompt:
-            return True
-        if fuzz.ratio(new_prompt, old_prompt) / 100 > 0.95:
-            return True
-        return self._token_overlap(new_prompt, old_prompt) > 0.85
+
+        return ImageService._visual_tokens(new_prompt) == ImageService._visual_tokens(old_prompt)
 
     @staticmethod
     def _latest_backup_path(backup_dir: Path) -> Path | None:

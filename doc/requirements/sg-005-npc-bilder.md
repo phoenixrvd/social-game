@@ -63,6 +63,16 @@ SG-005 beschreibt Verfügbarkeit, Auswahl und Zuordnung von NPC-Bildern; die ini
 
 **Referenzen:** `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`
 
+### Vermeidung unwesentlicher Bildfortschreibungen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss das aktuelle NPC-Bild beibehalten, wenn die neue Bildbeschreibung praktisch dasselbe Motiv beschreibt wie die zuletzt verwendete Bildbeschreibung.  
+**Akzeptanzkriterien:**
+- Beschreibt die neue Bildbeschreibung praktisch dasselbe Motiv wie die zuletzt verwendete Bildbeschreibung, bleibt das aktuelle Bild unverändert.
+- Enthält die neue Bildbeschreibung eine klar erkennbare visuelle Änderung, wird ein neues Bild erzeugt und als aktives Laufzeitbild verwendet.
+- Kleine sprachliche Abweichungen in der Bildbeschreibung führen nicht allein zu einem Bildwechsel.
+
+**Referenzen:** `doc/requirements/sg-007-dreistufige-bildgenerierung.md`, `doc/adr/002-datenspeicherung-data-verzeichnis.md`
+
 ### Kontextgerechte Zuordnung von NPC-Bildern
 **Typ:** Randbedingung  
 **Beschreibung:** Das System muss NPC-Bilder dem jeweils passenden NPC-Szenen-Kontext zuordnen.  

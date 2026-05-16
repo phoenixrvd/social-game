@@ -1,6 +1,7 @@
 # Git Workflow
 
-Git- und Commit-Regeln sind agentenspezifisch definiert:
+Die Git-Regeln sind nach Arbeitsschritt in Agent-Dateien definiert:
 
-* Lokale Commits: `.opencode/agents/commit.md`
-* Releases: `.opencode/agents/release.md`
+* Arbeit an einer neuen Version starten: `.opencode/agents/release-starter.md`
+* Zwischenstaende waehrend der Arbeit einchecken: `.opencode/agents/release-committer.md`
+* Release bauen und fuer die Veroeffentlichung vorbereiten: `.opencode/agents/release-finisher.md`

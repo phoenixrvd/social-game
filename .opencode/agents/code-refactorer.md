@@ -1,5 +1,5 @@
 ---
-description: 'Refactoring executor. Aktiv NUR bei: "refactor:", "refactoring:", "überarbeite:", "verbessere:"'
+description: 'Refactoring executor. Aktiv NUR bei: "code-refactorer:", "refactor:", "refactoring:", "überarbeite:", "verbessere:"'
 mode: subagent
 model: github-copilot/claude-sonnet-4.6
 permission:

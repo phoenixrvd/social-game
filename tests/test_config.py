@@ -6,7 +6,7 @@ import dotenv
 import engine.config as config_module
 
 
-def test_config_uses_int_env_overrides(monkeypatch):
+def test_config_uses_env_overrides(monkeypatch):
     monkeypatch.setenv("SG_MODEL_API_KEY", "test-openai-key")
     monkeypatch.setenv("SG_DEFAULT_NPC_ID", "mira")
     monkeypatch.setenv("SG_DEFAULT_SCENE_ID", "cafe")

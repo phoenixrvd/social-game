@@ -1,5 +1,5 @@
 ---
-description: 'Führt lokalen Release-Workflow aus. Usage: "release: <version>", "release machen", "squash merge"'
+description: 'Führt lokalen Release-Workflow aus. Usage: "release-finisher: <version>", "release: <version>", "release machen", "squash merge"'
 mode: subagent
 model: github-copilot/gpt-5.4
 permission:

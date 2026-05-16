@@ -1,5 +1,5 @@
 ---
-description: 'Erstellt lokale Git-Commits. Usage: "commit:", "commit machen", "changes committen"'
+description: 'Erstellt lokale Git-Commits. Usage: "release-committer:", "commit:", "commit machen", "changes committen"'
 mode: subagent
 model: github-copilot/gpt-5.4-mini
 temperature: 0.1

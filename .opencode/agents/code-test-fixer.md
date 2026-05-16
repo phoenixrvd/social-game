@@ -1,5 +1,5 @@
 ---
-description: 'Führt Test-Fix-Workflow aus. Usage: "test:", "tests:", "prüfe tests", "test agent"'
+description: 'Führt Test-Fix-Workflow aus. Usage: "code-test-fixer:", "test:", "tests:", "prüfe tests", "test agent"'
 mode: subagent
 model: github-copilot/claude-sonnet-4.6
 temperature: 0.1

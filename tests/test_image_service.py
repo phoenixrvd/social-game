@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 import engine.services.image_service as image_service_module
 from engine.services.image_service import ImageService
 from engine.storage.files import ImageFile, TextFile
@@ -78,4 +80,99 @@ def test_initial_scene_description_falls_back_to_scene_description_when_sources_
     assert ImageService._initial_scene_description(scene) == "Fallback Beschreibung"  # type: ignore[arg-type]
 
 
+def test_update_from_context_skips_same_normalized_visual_tokens(monkeypatch, tmp_path) -> None:
+    image_path = ImageFile(tmp_path / "data" / "img.png")
+    image_path.save(b"current")
+    old_prompt = "portrait, red dress, standing by a window"
+    new_prompt = "  standing   by a window, PORTRAIT, red dress "
+    refreshed: list[str] = []
 
+    fake_storage = SimpleNamespace(
+        npc=SimpleNamespace(
+            img_runtime=image_path,
+            image_prompt=SimpleNamespace(exists=lambda: True, get=lambda: old_prompt),
+        ),
+        scene=SimpleNamespace(),
+    )
+
+    monkeypatch.setattr(image_service_module, "storage", fake_storage)
+    monkeypatch.setattr(
+        ImageService,
+        "_generate_update_prompt",
+        lambda self, npc, scene, old_prompt: new_prompt,
+    )
+    monkeypatch.setattr(
+        ImageService,
+        "_refresh_from_prompt",
+        lambda self, npc, image_path, new_prompt: refreshed.append(new_prompt),
+    )
+
+    ImageService().update_from_context()
+
+    assert refreshed == []
+    assert image_path.get().read_bytes() == b"current"
+
+
+def test_update_from_context_refreshes_for_changed_prompt(monkeypatch, tmp_path) -> None:
+    image_path = ImageFile(tmp_path / "data" / "img.png")
+    image_path.save(b"current")
+    old_prompt = "portrait, red dress, standing by a window"
+    new_prompt = "wide shot, blue coat, running through heavy rain"
+    refreshed: list[str] = []
+
+    fake_storage = SimpleNamespace(
+        npc=SimpleNamespace(
+            img_runtime=image_path,
+            image_prompt=SimpleNamespace(exists=lambda: True, get=lambda: old_prompt),
+        ),
+        scene=SimpleNamespace(),
+    )
+
+    monkeypatch.setattr(image_service_module, "storage", fake_storage)
+    monkeypatch.setattr(
+        ImageService,
+        "_generate_update_prompt",
+        lambda self, npc, scene, old_prompt: new_prompt,
+    )
+    monkeypatch.setattr(
+        ImageService,
+        "_refresh_from_prompt",
+        lambda self, npc, image_path, new_prompt: refreshed.append(new_prompt),
+    )
+
+    ImageService().update_from_context()
+
+    assert refreshed == [new_prompt]
+
+
+@pytest.mark.parametrize(
+    ("old_prompt", "new_prompt", "expected"),
+    [
+        (
+            "portrait, red dress, standing by a window",
+            "  standing   by a window, PORTRAIT, red dress ",
+            True,
+        ),
+        (
+            "portrait, red dress, standing by a window, soft light",
+            "portrait, red dress, standing by a window, soft light, scar on cheek",
+            False,
+        ),
+        (
+            "portrait, red dress, silver necklace, standing by a window, soft light",
+            "portrait, standing by a window, soft light",
+            False,
+        ),
+        (
+            "portrait, red dress, soft light, standing by a window with city view",
+            "portrait, red dress, soft light, standing by the window with city view",
+            False,
+        ),
+    ],
+)
+def test_prompt_skip_uses_exact_normalized_visual_tokens(
+    old_prompt: str,
+    new_prompt: str,
+    expected: bool,
+) -> None:
+    assert ImageService._should_skip_prompt_update(new_prompt, old_prompt, force=False) is expected

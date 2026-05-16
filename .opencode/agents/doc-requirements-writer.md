@@ -1,5 +1,5 @@
 ---
-description: 'Erstellt/überarbeitet Anforderungen. Usage: "requirements: <thema>", "anforderung: <thema>"'
+description: 'Erstellt/überarbeitet Anforderungen. Usage: "doc-requirements-writer: <thema>", "requirements: <thema>", "anforderung: <thema>"'
 mode: subagent
 model: github-copilot/gpt-5.4
 permission:

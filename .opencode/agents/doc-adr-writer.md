@@ -1,5 +1,5 @@
 ---
-description: 'Erstellt Architecture Decision Records. Usage: "adr: <titel>", "architekturentscheidung: <titel>"'
+description: 'Erstellt Architecture Decision Records. Usage: "doc-adr-writer: <titel>", "adr: <titel>", "architekturentscheidung: <titel>"'
 mode: subagent
 model: github-copilot/gpt-5.4
 permission:

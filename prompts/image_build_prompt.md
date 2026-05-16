@@ -150,6 +150,7 @@ Wenn etwas nicht explizit beschrieben ist:
 - kurze, komma-separierte visuelle Tokens
 - keine Erzählform
 - keine Wiederholungen
+- bestehende Tokens nicht umformulieren, umbenennen oder neu ordnen, wenn sich ihr visueller Inhalt nicht zwingend ändern muss
 
 {{IMAGE_STYLE_RULES}}
 

@@ -218,8 +218,6 @@ pytz==2026.2
     #   pandas
 pyyaml==6.0.3
     # via -r requirements.in
-rapidfuzz==3.14.5
-    # via -r requirements.in
 regex==2026.5.9
     # via tiktoken
 requests==2.34.2
