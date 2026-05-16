@@ -3,11 +3,6 @@
 Integration test für SG-009: Git-basierte Spielstandshistorie
 """
 
-import tempfile
-import shutil
-from pathlib import Path
-
-from engine.config import config
 from engine.services.history_service import HistoryService
 from engine.storage import storage
 
@@ -21,7 +16,7 @@ def test_git_history_workflow():
     print("1. Git-Repo wird initialisiert...")
     history = HistoryService()
     history._ensure_git_repo()
-    assert (storage.data / ".git").exists()
+    assert (storage.npc.base_runtime / ".git").exists()
     print("   ✓ Git-Repo existiert")
 
     # 2. Listen (sollte leer sein)
@@ -36,7 +31,7 @@ def test_git_history_workflow():
     scene_id = storage.session.scene_id
     npc_data_path = storage.data / f"npcs/{npc_id}/{scene_id}"
     print(f"   NPC-Daten-Pfad: {npc_data_path}")
-    print(f"   Git-dir: {storage.data / '.git'}")
+    print(f"   Git-dir: {storage.npc.base_runtime / '.git'}")
 
     # 4. Error handling
     print("\n4. Error-Handling überprüfen...")
@@ -51,4 +46,3 @@ def test_git_history_workflow():
 
 if __name__ == "__main__":
     test_git_history_workflow()
-
