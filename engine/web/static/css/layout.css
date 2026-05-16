@@ -38,21 +38,35 @@
   overflow: hidden;
 }
 
+/* Top fade — below desktop panel border (z-index: 10) */
 .sg-chat-pane::before {
   content: "";
   position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
+  inset: 0 0 auto 0;
   height: 1.4rem;
   pointer-events: none;
   z-index: 10;
   background: linear-gradient(
     to bottom,
-    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 58%, transparent) 0%,
-    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 34%, transparent) 34%,
-    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 14%, transparent) 66%,
+    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 90%, transparent) 0%,
+    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 62%, transparent) 34%,
+    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 34%, transparent) 66%,
     transparent 100%
+  );
+}
+
+/* Bottom fade — on mobile above .sg-input-component (z-index: 45); on desktop overridden to z-index: 9 */
+.sg-chat-pane::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 180px;
+  pointer-events: none;
+  z-index: 44;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    color-mix(in srgb, var(--sg-chat-pane-fade-color, var(--bg-app)) 90%, transparent) 100%
   );
 }
 

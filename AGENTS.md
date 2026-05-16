@@ -53,6 +53,8 @@ microsoft-edge \
 
 **Guidelines** – vor Codeänderungen die passenden Dateien unter `doc/guidelines/` beachten:
 - `doc/guidelines/coding-rules.md` – verbindliche Coding-Regeln, insbesondere alle `[BLOCKER]`
+- `doc/guidelines/dependencies.md` – Regeln für Python-Dependency-Management mit pip-tools
+- `doc/guidelines/deployment.md` – Regeln für produktionsnahe Container- und Runtime-Härtung
 - `doc/guidelines/error-handling.md` – Fehlerbehandlung
 - `doc/guidelines/refactoring.md` – Refactoring-Vorgehen
 - `doc/guidelines/principles.md` – allgemeine Entwicklungsprinzipien

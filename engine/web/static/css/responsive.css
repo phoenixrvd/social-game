@@ -32,6 +32,11 @@
     --sg-chat-pane-fade-color: var(--bg-panel);
   }
 
+  /* Bottom fade sits below desktop panel content; input-component (z-index: 45) is in its own stacking context */
+  .sg-chat-pane::after {
+    z-index: 9;
+  }
+
   .sg-chat-component {
     height: 100%;
   }
@@ -41,11 +46,9 @@
   }
 
   .sg-input-component {
-    background: transparent;
     right: 1rem;
     bottom: 1rem;
     left: 1rem;
-    padding: 0;
   }
 
   .sg-input-component .sg-chat-form {

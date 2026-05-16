@@ -1,23 +1,46 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
-WORKDIR /app
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+WORKDIR /build
+
+COPY requirements.txt ./
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --upgrade pip \
+    && /opt/venv/bin/pip install --requirement requirements.txt
+
+FROM python:3.12-slim AS runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PATH="/opt/venv/bin:${PATH}"
+
+RUN groupadd --system --gid 10001 app \
+    && useradd --system --uid 10001 --gid app --no-create-home --home /nonexistent --shell /usr/sbin/nologin app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
-    && rm -rf /var/lib/apt/lists/* \
-    && git config --global user.name "Social Game" \
-    && git config --global user.email "social-game@local" \
-    && git config --global init.defaultBranch main \
-    && git config --global safe.directory /app
+    && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
 
-COPY . .
+COPY --from=builder /opt/venv /opt/venv
+COPY --chown=root:root . /app
 
-# WICHTIG: registriert "sg"
-RUN pip install --no-cache-dir -e .
+RUN mkdir -p /app/.data \
+    && chown -R app:app /app/.data \
+    && chmod 0750 /app/.data
+
+USER app:app
 
 EXPOSE 8000
 
-CMD ["sg", "web", "--host", "0.0.0.0"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=3).read()" || exit 1
+
+CMD ["python", "/app/sg", "web", "--host", "0.0.0.0"]

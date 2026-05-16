@@ -167,13 +167,12 @@ git config core.hooksPath .githooks
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.dev.txt
-python -m pip install -e .
 ```
 
 Start:
 
 ```bash
-sg web
+./sg web
 ```
 
 Im Browser öffnen:

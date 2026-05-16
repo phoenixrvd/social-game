@@ -1,4 +1,4 @@
--r requirements.txt
+-r requirements.in
 
-pytest
-coverage
+pytest>=9.0.3
+coverage>=7.14.0

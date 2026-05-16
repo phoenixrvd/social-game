@@ -552,12 +552,17 @@ sg-settings-action[inactive] .sg-settings-action-title {
 
 .sg-input-component {
   position: absolute;
+  isolation: isolate;
   right: 0.75rem;
   bottom: 0.75rem;
   left: 0.75rem;
   z-index: 45;
   background: transparent;
   box-shadow: none;
+}
+
+.sg-input-component::before {
+  content: none;
 }
 
 .sg-settings-textarea {

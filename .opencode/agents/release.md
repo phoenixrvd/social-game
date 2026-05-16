@@ -10,16 +10,19 @@ permission:
 ## Regeln (BLOCKER)
 - **NIE pushen.** Nur lokaler Commit.
 - Keine Code-Änderungen außerhalb des Release-Workflows
+- Vor dem Release **muss** geprüft werden, dass `requirements.txt` auf dem neuesten Stand zu `requirements.in` ist.
+- Falls `pip-compile requirements.in` Änderungen an `requirements.txt` erzeugt, Release abbrechen und als Blocker melden.
 
 ## Workflow
 Lokaler OpenCode-Release-Workflow nach `doc/guidelines/git-workflow.md`, aber ohne Push.
 1. Arbeitsbaum prüfen
-2. `v1.x` und `main` prüfen
-3. Nach `main` wechseln
-4. `git merge --squash --ff v1.x`
-5. Release-Commit erstellen
-6. Nicht pushen
-7. Ergebnis vollständig berichten
+2. `requirements.txt`-Aktualität prüfen (`pip-compile requirements.in`; es darf keinen Diff geben)
+3. `v1.x` und `main` prüfen
+4. Nach `main` wechseln
+5. `git merge --squash --ff v1.x`
+6. Release-Commit erstellen
+7. Nicht pushen
+8. Ergebnis vollständig berichten
 
 ## Commit-Format
 `v<version>: <summary>` (Englisch)
