@@ -93,14 +93,14 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 Projekt-Agenten sind in `.opencode/agents/` definiert. `AGENTS.md` enthält nur globale Projektanweisungen; agentenspezifische Aktivierung, Regeln, Modelle und Berechtigungen stehen ausschließlich in den jeweiligen Agent-Dateien.
 
 Verfügbare Agenten:
-- `doc-requirements-writer` – Anforderungen erstellen/überarbeiten
-- `doc-adr-writer` – Architecture Decision Records erstellen
-- `code-reviewer` – Code gegen Projektguidelines prüfen
-- `code-refactorer` – gezielte Refactorings ausführen
+- `doc/requirements-writer` – Anforderungen erstellen/überarbeiten
+- `doc/adr-writer` – Architecture Decision Records erstellen
+- `code/reviewer` – Code gegen Projektguidelines prüfen
+- `code/refactorer` – gezielte Refactorings ausführen
 - `code-test-fixer` – Tests ausführen und Fehler korrigieren
-- `release-starter` – Arbeitsbranch für eine neue Version vorbereiten
-- `release-committer` – lokale Git-Commits erstellen
-- `release-finisher` – lokalen Release-/Squash-Workflow ausführen
+- `release/starter` – Arbeitsbranch für eine neue Version vorbereiten
+- `release/committer` – lokale Git-Commits erstellen
+- `release/finisher` – lokalen Release-/Squash-Workflow ausführen
 
 ## Externe Abhängigkeiten
 
