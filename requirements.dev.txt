@@ -1,4 +1,5 @@
 -r requirements.in
 
+lightrag-hku[api]>=1.4.16
 pytest>=9.0.3
 coverage>=7.14.0

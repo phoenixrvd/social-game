@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -14,13 +13,12 @@ from engine.config import config
 try:
     from lightrag import LightRAG, QueryParam
     from lightrag.kg.shared_storage import finalize_share_data
-    from lightrag.utils import EmbeddingFunc, setup_logger
+    from lightrag.utils import EmbeddingFunc
 except ImportError:  # pragma: no cover
     finalize_share_data = None
     LightRAG = None
     QueryParam = None
     EmbeddingFunc = None
-    setup_logger = None
 
 
 class LightRagMemory:
@@ -68,8 +66,6 @@ class LightRagMemory:
                 "LightRAG ist nicht installiert. Bitte `lightrag-hku` installieren."
             )
 
-        self._configure_logging()
-
         rag = LightRAG(
             working_dir=str(self.working_dir),
             llm_model_func=self._llm_model_func,
@@ -84,15 +80,6 @@ class LightRagMemory:
         )
         await rag.initialize_storages()
         return rag
-
-    def _configure_logging(self) -> None:
-        log_dir = self.working_dir
-        log_file = log_dir / "lightrag.log"
-        os.environ["LOG_DIR"] = str(log_dir)
-        if setup_logger is None:
-            return
-        setup_logger("lightrag", log_file_path=str(log_file), add_filter=True)
-        setup_logger("nano-vectordb", log_file_path=str(log_file), add_filter=True)
 
     @staticmethod
     async def _llm_model_func(

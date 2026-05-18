@@ -1,5 +1,5 @@
 ---
-state: abgelehnt
+state: rejected
 ---
 
 # SG-017: Grok-Provider verworfen
@@ -20,7 +20,7 @@ Aktuell werden `MODEL_LLM_BIG=gpt-5.4`, `MODEL_LLM_SMALL=gpt-5.4-mini` und `MODE
 **Typ:** Randbedingung  
 **Beschreibung:** Die Grok-Provider-Anforderungen aus SG-017 sind verworfen.  
 **Akzeptanzkriterien:**
-- SG-017 ist mit `state: abgelehnt` gekennzeichnet.
+- SG-017 ist mit `state: rejected` gekennzeichnet.
 - Eine Grok-Provider-Unterstützung ist in SG-017 nicht als Projektanforderung festgelegt.
 - Die Bildgenerierung mit Grok ist in diesem Projekt nicht lauffaehig, da im verwendeten OpenAI-kompatiblen Pfad kein `images.edit`-Aequivalent fuer Grok zur Verfuegung steht.
 

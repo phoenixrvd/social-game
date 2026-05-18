@@ -1,5 +1,5 @@
 ---
-state: defined
+state: implemented
 ---
 
 # SG-011: Web-GUI
@@ -76,12 +76,12 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 ### Sichtbares Szenenbild und Zustandsinformationen
 **Typ:** Funktional  
-**Beschreibung:** Das System muss in der Web-GUI das aktuelle Szenenbild sowie sichtbare Zustandsinformationen der aktiven Sitzung bereitstellen.  
+**Beschreibung:** Das System muss in der Web-GUI das aktuelle Szenenbild sowie sichtbare Zustandsinformationen zur Orientierung in der aktiven Sitzung bereitstellen.  
 **Akzeptanzkriterien:**
 - Das zur aktiven Sitzung gehörende Szenenbild wird in der Web-GUI angezeigt.
-- Die Character-Beschreibung wird in der Web-GUI angezeigt.
-- Die Szenenbeschreibung wird in der Web-GUI angezeigt.
-- Änderungen durch Interaktionen aktualisieren Szenenbild und sichtbare Zustandsinformationen innerhalb derselben aktiven Sitzung.
+- Wenn für die aktive Sitzung noch kein Dialogverlauf angezeigt wird, werden Character-Beschreibung, Szenenbeschreibung und Zustandsinformationen als Startkontext angezeigt.
+- Sobald ein Dialogverlauf vorhanden ist, steht dieser im Vordergrund der Anzeige.
+- Änderungen durch Interaktionen aktualisieren das Szenenbild innerhalb derselben aktiven Sitzung.
 
 **Referenzen:** `doc/requirements/sg-002-long-term-memory.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`, `doc/requirements/sg-007-dreistufige-bildgenerierung.md`
 
@@ -183,7 +183,7 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 **Beschreibung:** Das System muss das Anlegen neuer Szenen in der Web-GUI ermöglichen.  
 **Akzeptanzkriterien:**
 - Eine neue Szene kann in der Web-GUI angelegt werden.
-- Die Auslöseaktion für das Anlegen heißt `Erstellen`.
+- Die Auslöseaktion für das Anlegen heißt `Szene erstellen`.
 - Die Web-GUI bietet beim Erstellen die Optionen `Scene Erstellen` und `NPC Kontext erstellen` an.
 - Beide Optionen sind standardmäßig aktiviert.
 - Die Erstellung ist nur ausführbar, wenn eine Beschreibung vorhanden ist und mindestens eine der beiden Optionen aktiviert ist.
@@ -197,8 +197,9 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 **Akzeptanzkriterien:**
 - Eine neue NPC-Erstellung kann in der Web-GUI aus demselben fachlichen Kontext wie die Szenen-Erstellung gestartet werden.
 - Für die NPC-Erstellung kann eine Beschreibung eingegeben und abgesendet werden.
-- Nach erfolgreichem Anlegen steht der neue NPC für die Nutzung in der Sitzung zur Verfügung.
-- Die Oberfläche zeigt Erfolg oder Fehlschlag des Anlegens nachvollziehbar an.
+- Nach erfolgreichem Anlegen kehrt die Oberfläche zur Kontextauswahl zurück.
+- Der neue NPC ist dort sichtbar und für die Nutzung in der Sitzung auswählbar.
+- Fehlschläge des Anlegens werden nachvollziehbar angezeigt.
 
 **Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
 

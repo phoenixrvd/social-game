@@ -1,5 +1,5 @@
 ---
-state: draft | defined | implemented
+state: draft | defined | implemented | removed | rejected
 ---
 
 # SG-XXX: <Titel>

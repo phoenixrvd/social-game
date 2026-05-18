@@ -397,6 +397,75 @@ def test_npc_scene_service_create_override_rejects_blank_llm_result(tmp_path, mo
         NpcSceneService().create_override("Kurz")
 
 
+def test_npc_scene_service_adapts_default_fallback_for_active_npc(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DEFAULT_NPC_ID", "vika")
+
+    (tmp_path / "session.yaml").write_text("npc_id: mira\nscene_id: cafe\n", encoding="utf-8")
+    (tmp_path / "npcs" / "mira").mkdir(parents=True)
+    (tmp_path / "npcs" / "mira" / "description.md").write_text("Mira ist konzentriert.", encoding="utf-8")
+    (tmp_path / "npcs" / "vika" / "scenes" / "cafe").mkdir(parents=True)
+    (tmp_path / "npcs" / "vika" / "scenes" / "cafe" / "scene.md").write_text("Vika sitzt am Tresen.", encoding="utf-8")
+    (tmp_path / "scenes" / "cafe").mkdir(parents=True)
+    (tmp_path / "scenes" / "cafe" / "scene.md").write_text("Ein ruhiges Cafe.", encoding="utf-8")
+    (tmp_path / "prompts").mkdir(parents=True)
+    (tmp_path / "prompts" / "npc_scene_adapt_default_text.md").write_text(
+        "{{NPC_DESCRIPTION}}|{{SCENE_DESCRIPTION}}|{{DEFAULT_NPC_SCENE_DESCRIPTION}}",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr("engine.services.npc_scene_service.client.run_prompt_small", lambda prompt: f"## Mira\n\n{prompt}")
+
+    target_file = NpcSceneService().adapt_default_fallback()
+
+    assert target_file == tmp_path / ".overrides" / "npcs" / "mira" / "scenes" / "cafe" / "scene.md"
+    assert target_file.read_text(encoding="utf-8") == (
+        "## Mira\n\nMira ist konzentriert.|Ein ruhiges Cafe.|Vika sitzt am Tresen.\n"
+    )
+
+
+def test_npc_scene_service_does_not_replace_existing_npc_scene_context(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DEFAULT_NPC_ID", "vika")
+    (tmp_path / "session.yaml").write_text("npc_id: mira\nscene_id: cafe\n", encoding="utf-8")
+    existing = tmp_path / "npcs" / "mira" / "scenes" / "cafe" / "scene.md"
+    existing.parent.mkdir(parents=True)
+    existing.write_text("Mira bleibt am Fenster.", encoding="utf-8")
+
+    def fail_prompt(_prompt: str) -> str:
+        raise AssertionError("LLM should not be called")
+
+    monkeypatch.setattr("engine.services.npc_scene_service.client.run_prompt_small", fail_prompt)
+
+    assert NpcSceneService().adapt_default_fallback() is None
+    assert existing.read_text(encoding="utf-8") == "Mira bleibt am Fenster."
+
+
+def test_npc_scene_service_skips_adapt_without_default_context(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(config, "SCENE_DIR", tmp_path / "scenes")
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DEFAULT_NPC_ID", "vika")
+    (tmp_path / "session.yaml").write_text("npc_id: mira\nscene_id: cafe\n", encoding="utf-8")
+    (tmp_path / "npcs" / "mira").mkdir(parents=True)
+    (tmp_path / "scenes" / "cafe").mkdir(parents=True)
+
+    def fail_prompt(_prompt: str) -> str:
+        raise AssertionError("LLM should not be called")
+
+    monkeypatch.setattr("engine.services.npc_scene_service.client.run_prompt_small", fail_prompt)
+
+    assert NpcSceneService().adapt_default_fallback() is None
+
+
 def test_npc_service_reset_active_runtime_deletes_active_scene_runtime(tmp_path, monkeypatch):
     import engine.services.npc_service as npc_module
 

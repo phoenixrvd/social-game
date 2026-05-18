@@ -29,7 +29,6 @@ class Storage:
     def data(self) -> Path:
         return config.DATA_DIR
 
-
     @property
     def prompts(self) -> PromptsNode:
         return PromptsNode()

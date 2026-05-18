@@ -1,8 +1,11 @@
 .data
 .githooks
 .github
+.idea
+.opencode
 .overrides
 .venv
+.vscode
 doc
 tests
 .dockerignore

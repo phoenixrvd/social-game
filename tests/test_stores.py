@@ -41,7 +41,7 @@ def test_storage_loads_and_saves_scene(tmp_path, monkeypatch):
     assert storage.scene.scene_id == "default"
     assert "Default Szene" in storage.scene.description
 
-    storage.scene.scene_runtime.save("# Testbeschreibung\nDie Szene wurde aktualisiert.")
+    storage.scene.location.runtime.save("# Testbeschreibung\nDie Szene wurde aktualisiert.")
     assert "Testbeschreibung" in storage.scene.description
 
 
@@ -114,7 +114,7 @@ def test_storage_runtime_scene_and_state_bootstrap(tmp_path, monkeypatch):
     (npc_dir / "character.yaml").write_text("name: Vika\n", encoding="utf-8")
     (npc_dir / "state.md").write_text("mood: neutral", encoding="utf-8")
 
-    storage.scene.scene_runtime.save("Runtime Szene")
+    storage.scene.location.runtime.save("Runtime Szene")
     assert "Runtime Szene" in storage.scene.description
     assert storage.npc.state == "mood: neutral"
 

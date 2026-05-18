@@ -38,9 +38,9 @@ def test_storage_npc_and_scene_use_session_and_priority(tmp_path, monkeypatch):
     assert storage.npc.state_original.path == tmp_path / ".overrides" / "npcs" / "vika" / "state.md"
     assert storage.npc.state == "runtime"
 
-    assert storage.scene.scene.path == tmp_path / ".data" / "npcs" / "vika" / "office" / "scene.md"
-    assert storage.scene.scene_original.path == tmp_path / ".overrides" / "scenes" / "office" / "scene.md"
-    assert storage.scene.scene.get() == "runtime-scene"
+    assert storage.scene.location.current.path == tmp_path / ".data" / "npcs" / "vika" / "office" / "scene.md"
+    assert storage.scene.location.original.path == tmp_path / ".overrides" / "scenes" / "office" / "scene.md"
+    assert storage.scene.location.current.get() == "runtime-scene"
 
 
 def test_storage_base_paths_exposed(tmp_path, monkeypatch):
@@ -98,6 +98,23 @@ def test_prompt_npc_scene_create_text_prefers_override_over_default(tmp_path, mo
     item = storage.prompts.npc_scene_create_text
     assert item.path == override_prompt
     assert item.get() == "override-npc-scene"
+
+
+def test_prompt_npc_scene_adapt_default_text_prefers_override_over_default(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(config, "OVERRIDES_PROMPTS_DIR", tmp_path / ".overrides" / "prompts")
+
+    default_prompt = tmp_path / "prompts" / "npc_scene_adapt_default_text.md"
+    default_prompt.parent.mkdir(parents=True, exist_ok=True)
+    default_prompt.write_text("default-adapt", encoding="utf-8")
+
+    override_prompt = tmp_path / ".overrides" / "prompts" / "npc_scene_adapt_default_text.md"
+    override_prompt.parent.mkdir(parents=True, exist_ok=True)
+    override_prompt.write_text("override-adapt", encoding="utf-8")
+
+    item = storage.prompts.npc_scene_adapt_default_text
+    assert item.path == override_prompt
+    assert item.get() == "override-adapt"
 
 
 def test_prompt_npc_create_description_prefers_override_over_default(tmp_path, monkeypatch):
@@ -172,8 +189,8 @@ def test_storage_falls_back_to_default_npc_and_scene_files(tmp_path, monkeypatch
 
     assert storage.npc.state_original.path == tmp_path / "npcs" / "vika" / "state.md"
     assert storage.npc.state == "default-npc-state"
-    assert storage.scene.scene.path == tmp_path / "scenes" / "office" / "scene.md"
-    assert storage.scene.scene.get() == "default-scene"
+    assert storage.scene.location.current.path == tmp_path / "scenes" / "office" / "scene.md"
+    assert storage.scene.location.current.get() == "default-scene"
 
 
 def test_storage_description_uses_default_path_when_runtime_file_is_missing(tmp_path, monkeypatch):
@@ -215,6 +232,9 @@ def test_storage_npc_video_prefers_override_over_default(tmp_path, monkeypatch):
 
     assert storage.npc.video.path == override_video
     assert storage.npc.video.get() == override_video
+    assert storage.npc.video_override.path == override_video
+    assert storage.npc.video_default.path == default_video
+    assert [video.path for video in storage.npc.video_candidates] == [override_video, default_video]
 
 
 def test_storage_npc_img_backup_returns_image_files_newest_first(tmp_path, monkeypatch):

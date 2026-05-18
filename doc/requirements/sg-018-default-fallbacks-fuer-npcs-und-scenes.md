@@ -1,5 +1,5 @@
 ---
-state: defined
+state: implemented
 ---
 
 # SG-018: Neue NPCs und Scenes mit Default-Fallbacks

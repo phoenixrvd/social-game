@@ -10,7 +10,20 @@ WORKDIR /build
 COPY requirements.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install --requirement requirements.txt
+    && /opt/venv/bin/pip install --no-compile --requirement requirements.txt \
+    && find /opt/venv -type d \( -name __pycache__ -o -name test -o -name tests \) -prune -exec rm -rf '{}' + \
+    && find /opt/venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete \
+    && rm -rf /opt/venv/lib/python3.12/site-packages/lightrag/api \
+        /opt/venv/lib/python3.12/site-packages/lightrag/tools \
+        /opt/venv/lib/python3.12/site-packages/pip \
+        /opt/venv/lib/python3.12/site-packages/pip-* \
+        /opt/venv/lib/python3.12/site-packages/pkg_resources \
+        /opt/venv/lib/python3.12/site-packages/setuptools \
+        /opt/venv/lib/python3.12/site-packages/setuptools-* \
+        /opt/venv/bin/lightrag-server \
+        /opt/venv/bin/pip \
+        /opt/venv/bin/pip3 \
+        /opt/venv/bin/pip3.12
 
 FROM python:3.12-slim AS runtime
 

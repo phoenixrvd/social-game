@@ -280,7 +280,7 @@ def _messages_signature(npc) -> str:
 
 def _read_scene_label(scene_view) -> str:
     scene_id = scene_view.scene_id
-    scene_item = scene_view.scene_original
+    scene_item = scene_view.location.original
     for line in scene_item.get().splitlines():
         if (stripped := line.strip()).startswith("#"):
             return stripped.lstrip("#").strip() or scene_id
@@ -294,7 +294,7 @@ def _npc_option_image_path(npc_id: str) -> Path:
 
 def _scene_option_image_path(scene_id: str) -> Path:
     npc_id = storage.session.npc_id
-    return storage.scene_view(npc_id=npc_id, scene_id=scene_id).img_original.get()
+    return storage.scene_view(npc_id=npc_id, scene_id=scene_id).location.img_original.get()
 
 
 def _npc_option_image_url(npc_id: str) -> str:
@@ -414,7 +414,7 @@ def _state_payload() -> dict[str, Any]:
         "default_npc_id": config.DEFAULT_NPC_ID,
         "default_scene_id": config.DEFAULT_SCENE_ID,
         "is_dynamic_npc": npc.is_dynamic_npc,
-        "is_dynamic_scene": scene.is_dynamic_scene,
+        "is_dynamic_scene": scene.location.is_dynamic,
     }
 
 
@@ -433,6 +433,8 @@ def update_session(request: SessionRequest) -> dict[str, Any]:
         storage.session.scene_id = request.scene_id
     if request.image_autogenerate is not None:
         storage.session.image_autogenerate = request.image_autogenerate
+    if request.npc_id is not None or request.scene_id is not None:
+        NpcSceneService().adapt_default_fallback()
     return _state_payload()
 
 
@@ -456,6 +458,7 @@ def create_scene(request: SceneCreateRequest) -> dict[str, Any]:
 
     if request.create_npc_context:
         NpcSceneService().create_override(scene_description)
+    NpcSceneService().adapt_default_fallback()
     if storage.session.image_autogenerate:
         _get_scheduler().enqueue("image")
     return _state_payload()
@@ -468,6 +471,7 @@ def create_npc(request: NpcCreateRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Charakterbeschreibung darf nicht leer sein.")
     target_dir = NpcService().create_override(character_description)
     storage.session.npc_id = target_dir.name
+    NpcSceneService().adapt_default_fallback()
     return _state_payload()
 
 
@@ -482,7 +486,7 @@ def reset_active_npc_runtime_data(
     scene_id = session.scene_id
     if delete_npc and not storage.npc.is_dynamic_npc:
         raise HTTPException(status_code=400, detail="Aktiver NPC ist kein erstellter NPC.")
-    if delete_scene and not session.scene.is_dynamic_scene:
+    if delete_scene and not session.scene.location.is_dynamic:
         raise HTTPException(status_code=400, detail="Aktive Szene ist keine erstellte Szene.")
 
     _get_scheduler().clear_pending_jobs()

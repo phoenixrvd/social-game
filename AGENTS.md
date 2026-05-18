@@ -32,6 +32,8 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 
 ## Developer-Workflows
 
+Das Projekt nutzt eine lokale virtuelle Umgebung unter `.venv`. Vor Python-, pip-, pytest- oder `sg`-Aufrufen zuerst `source .venv/bin/activate` ausfuehren oder direkt die Binaries aus `.venv/bin/` verwenden.
+
 ```bash
 # Setup
 git config core.hooksPath .githooks

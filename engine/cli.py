@@ -44,7 +44,6 @@ def _etm_ui_env(host: str, port: int) -> dict[str, str]:
     env.update(
         {
             "WORKING_DIR": str(storage.npc.etm_dir),
-            "LOG_DIR": str(storage.npc.etm_dir),
             "HOST": host,
             "PORT": str(port),
             "LLM_BINDING": "openai",
@@ -186,7 +185,7 @@ def icons(
 
 
 def _npc_video_paths() -> list[Path]:
-    return sorted(npc.video.get() for npc in storage.list_npcs if npc.video.is_file())
+    return sorted(video.get() for npc in storage.list_npcs for video in npc.video_candidates if video.is_file())
 
 
 def _remove_audio_track(video_path: Path) -> None:

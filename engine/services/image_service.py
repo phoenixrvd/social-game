@@ -55,7 +55,7 @@ class ImageService:
         merged_img = client.merge_character_scene_img(
             prompt,
             current_npc.img.get().read_bytes(),
-            current_scene.img.read_bytes(),
+            current_scene.location.img.read_bytes(),
         )
 
         self._write_image(image_path, current_npc.backup_dir, merged_img)
@@ -64,13 +64,13 @@ class ImageService:
 
     @staticmethod
     def _initial_scene_description(scene: SceneNode) -> str:
-        parts: list[str] = [scene.scene_original.get().strip()]
+        parts: list[str] = [scene.location.original.get().strip()]
 
-        npc_scene = scene.npc_scene_original
+        npc_scene = scene.npc_context.original
         if npc_scene.is_file():
             parts.append(npc_scene.get().strip())
 
-        runtime_scene = scene.scene_runtime
+        runtime_scene = scene.location.runtime
         if runtime_scene.is_file():
             parts.append(runtime_scene.get().strip())
 

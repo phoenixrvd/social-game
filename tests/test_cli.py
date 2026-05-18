@@ -370,7 +370,7 @@ def test_icons_command_reports_generation_failure(monkeypatch, tmp_path):
     assert "kaputt" in str(result.exception)
 
 
-def test_npc_videos_strip_audio_processes_videos_from_storage(monkeypatch, tmp_path):
+def test_npc_videos_strip_audio_processes_default_and_override_videos(monkeypatch, tmp_path):
     default_video = tmp_path / "npcs" / "vika" / "video.mp4"
     override_video = tmp_path / ".overrides" / "npcs" / "blacky" / "video.mp4"
     default_video.parent.mkdir(parents=True)
@@ -378,27 +378,33 @@ def test_npc_videos_strip_audio_processes_videos_from_storage(monkeypatch, tmp_p
     default_video.write_bytes(b"default")
     override_video.write_bytes(b"override")
 
-    class FakeVideo:
-        def __init__(self, path: Path):
-            self.path = path
+    processed: list[Path] = []
 
-        def is_file(self):
-            return self.path.is_file()
+    monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(cli_module.config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(cli_module, "_remove_audio_track", lambda path: processed.append(path))
 
-        def get(self):
-            return self.path
+    result = runner.invoke(app, ["npc-videos-strip-audio"])
 
-    class FakeNpc:
-        def __init__(self, video_path: Path):
-            self.video = FakeVideo(video_path)
+    assert result.exit_code == 0
+    assert processed == [override_video, default_video]
+    assert "Audiospuren aus 2 NPC-Video(s) entfernt." in result.output
 
-    class FakeStorage:
-        list_npcs = [FakeNpc(override_video), FakeNpc(default_video)]
+
+def test_npc_videos_strip_audio_processes_default_and_override_for_same_npc(monkeypatch, tmp_path):
+    default_video = tmp_path / "npcs" / "olga" / "video.mp4"
+    override_video = tmp_path / ".overrides" / "npcs" / "olga" / "video.mp4"
+    default_video.parent.mkdir(parents=True)
+    override_video.parent.mkdir(parents=True)
+    default_video.write_bytes(b"default")
+    override_video.write_bytes(b"override")
 
     processed: list[Path] = []
 
     monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(cli_module, "storage", FakeStorage())
+    monkeypatch.setattr(cli_module.config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
     monkeypatch.setattr(cli_module, "_remove_audio_track", lambda path: processed.append(path))
 
     result = runner.invoke(app, ["npc-videos-strip-audio"])
@@ -413,24 +419,12 @@ def test_npc_videos_strip_audio_reports_missing_ffmpeg(monkeypatch, tmp_path):
     video_path.parent.mkdir(parents=True)
     video_path.write_bytes(b"video")
 
-    class FakeVideo:
-        def is_file(self):
-            return True
-
-        def get(self):
-            return video_path
-
-    class FakeNpc:
-        video = FakeVideo()
-
-    class FakeStorage:
-        list_npcs = [FakeNpc()]
-
     def fail_remove_audio(_path):
         raise FileNotFoundError("ffmpeg")
 
     monkeypatch.setattr(cli_module.config, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(cli_module, "storage", FakeStorage())
+    monkeypatch.setattr(cli_module.config, "NPC_DIR", tmp_path / "npcs")
+    monkeypatch.setattr(cli_module.config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
     monkeypatch.setattr(cli_module, "_remove_audio_track", fail_remove_audio)
 
     result = runner.invoke(app, ["npc-videos-strip-audio"])

@@ -34,7 +34,7 @@ class SceneService:
         prompt = self._build_prompt()
         scene = client.run_prompt_small(prompt).strip()
 
-        storage.scene.scene_runtime.save(scene)
+        storage.scene.location.runtime.save(scene)
         return scene
 
     def create_override(self, short_description: str) -> Path:

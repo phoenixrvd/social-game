@@ -1,5 +1,5 @@
 ---
-state: defined
+state: implemented
 ---
 
 # SG-021: NPC-Videos in der Kontextgalerie

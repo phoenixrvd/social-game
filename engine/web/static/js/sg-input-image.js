@@ -67,15 +67,15 @@ class SocialGameInputImage extends HTMLElement {
               <span>Neues Bild generieren</span>
               <span slot="description">Erzeugt ein neues Bild aus dem aktuellen Chat-Kontext</span>
           </sg-settings-action>
-          <sg-settings-action data-action="revert-image" aria-label="Vorheriges Bild laden">
+          <sg-settings-action data-action="revert-image" aria-label="Vorheriges Bild wiederherstellen">
               ${REVERT_ICON}
-              <span>Vorheriges Bild laden</span>
-              <span slot="description">Stellt vorheriges Bild wieder her und löscht aktuelles</span>
+              <span>Vorheriges Bild wiederherstellen</span>
+              <span slot="description">Ersetzt das aktuelle Bild durch den vorherigen Bildstand</span>
           </sg-settings-action>
-          <sg-settings-action data-action="delete-image" danger aria-label="Bild zurücksetzen">
+          <sg-settings-action data-action="delete-image" danger aria-label="Aktuelles Bild löschen">
               ${DELETE_ICON}
-              <span>Bild zurücksetzen</span>
-              <span slot="description">Setzt das Bild auf initial Zustand</span>
+              <span>Aktuelles Bild löschen</span>
+              <span slot="description">Entfernt das aktuelle Bild, ohne ein früheres Bild wiederherzustellen</span>
           </sg-settings-action>
         </div>
       </section>

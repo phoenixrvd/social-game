@@ -343,7 +343,7 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
 def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     storage.npc.description.save("[link](javascript:alert('x'))")
-    storage.scene.scene_runtime.save("Szene [ok](https://example.com)")
+    storage.scene.location.runtime.save("Szene [ok](https://example.com)")
     storage.npc.stm.save([])
 
     payload = web_app_module.get_state()
@@ -1297,6 +1297,7 @@ def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
 
     created_scenes: list[str] = []
     created_npc_scenes: list[str] = []
+    adapted_scenes: list[str] = []
 
     def fake_scene_create(self, short_description: str):
         created_scenes.append(short_description)
@@ -1307,8 +1308,12 @@ def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
     def fake_npc_scene_create(self, short_description: str):
         created_npc_scenes.append(short_description)
 
+    def fake_adapt(self):
+        adapted_scenes.append(storage.session.scene_id)
+
     monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
     monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
+    monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", fake_adapt)
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
@@ -1319,6 +1324,7 @@ def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
     assert response.status_code == 200
     assert created_scenes == ["Ein neues Café"]
     assert created_npc_scenes == []
+    assert adapted_scenes == ["test_scene"]
     assert storage.session.scene_id == "test_scene"
 
 
@@ -1452,6 +1458,7 @@ def test_create_scene_rejects_missing_create_option(tmp_path, monkeypatch):
 
 def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
     from engine.services.npc_service import NpcService
 
     monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
@@ -1461,6 +1468,7 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
     (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
 
     created_npcs: list[str] = []
+    adapted_npcs: list[str] = []
 
     def fake_npc_create(self, character_description: str):
         created_npcs.append(character_description)
@@ -1472,6 +1480,9 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
         (npc_dir / "img.png").write_bytes(b"test-image-data")
         return npc_dir
 
+    def fake_adapt(self):
+        adapted_npcs.append(storage.session.npc_id)
+
     class FakeScheduler:
         def start(self) -> None:
             pass
@@ -1480,6 +1491,7 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
             pass
 
     monkeypatch.setattr(NpcService, "create_override", fake_npc_create)
+    monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", fake_adapt)
     monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
@@ -1492,6 +1504,7 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
 
     assert response.status_code == 200
     assert created_npcs == ["Alex, 28, arbeitet als Koch."]
+    assert adapted_npcs == ["alex"]
     assert response.json()["npc_id"] == "alex"
     assert storage.session.npc_id == "alex"
 

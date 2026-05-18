@@ -35,9 +35,12 @@ def test_update_from_context_without_runtime_image_uses_initial_scene_descriptio
         scene=SimpleNamespace(
             description="Nur Runtime",
             img=scene_path,
-            scene_original=TextFile(scene_original_path),
-            npc_scene_original=TextFile(npc_scene_path),
-            scene_runtime=TextFile(runtime_scene_path),
+            location=SimpleNamespace(
+                original=TextFile(scene_original_path),
+                runtime=TextFile(runtime_scene_path),
+                img=scene_path,
+            ),
+            npc_context=SimpleNamespace(original=TextFile(npc_scene_path)),
         ),
         prompts=SimpleNamespace(
             image_scene=SimpleNamespace(get=lambda: "{{IMAGE_STYLE_RULES}}\nSCENE\n{{SCENE_DESCRIPTION}}"),
@@ -71,9 +74,11 @@ def test_update_from_context_without_runtime_image_uses_initial_scene_descriptio
 def test_initial_scene_description_falls_back_to_scene_description_when_sources_are_empty(tmp_path) -> None:
     missing = tmp_path / "missing.md"
     scene = SimpleNamespace(
-        scene_original=TextFile(missing),
-        npc_scene_original=TextFile(tmp_path / "missing_npc.md"),
-        scene_runtime=TextFile(tmp_path / "missing_runtime.md"),
+        location=SimpleNamespace(
+            original=TextFile(missing),
+            runtime=TextFile(tmp_path / "missing_runtime.md"),
+        ),
+        npc_context=SimpleNamespace(original=TextFile(tmp_path / "missing_npc.md")),
         description="Fallback Beschreibung",
     )
 

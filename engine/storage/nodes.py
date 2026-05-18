@@ -171,6 +171,10 @@ class PromptsNode:
         return TextFile(path_resolver.prompt_file("npc_scene_create_text.md"))
 
     @property
+    def npc_scene_adapt_default_text(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_scene_adapt_default_text.md"))
+
+    @property
     def image_build(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("image_build_prompt.md"))
 
@@ -287,10 +291,22 @@ class NpcNode(_StorageNodeBase):
 
     @property
     def video(self) -> VideoFile:
-        override_video = VideoFile(config.OVERRIDES_NPC_DIR / self.npc_id / "video.mp4")
-        if override_video.is_file():
-            return override_video
+        for video in self.video_candidates:
+            if video.is_file():
+                return video
+        return self.video_default
+
+    @property
+    def video_override(self) -> VideoFile:
+        return VideoFile(config.OVERRIDES_NPC_DIR / self.npc_id / "video.mp4")
+
+    @property
+    def video_default(self) -> VideoFile:
         return VideoFile(config.NPC_DIR / self.npc_id / "video.mp4")
+
+    @property
+    def video_candidates(self) -> tuple[VideoFile, ...]:
+        return (self.video_override, self.video_default)
 
     @property
     def backup_dir(self) -> Path:
@@ -329,45 +345,18 @@ class NpcNode(_StorageNodeBase):
 
 
 @dataclass(frozen=True)
-class SceneNode(_StorageNodeBase):
+class SceneLocationNode(_StorageNodeBase):
     @property
-    def base(self) -> Path:
-        return config.SCENE_DIR / self.scene_id
+    def runtime(self) -> TextFile:
+        return TextFile(self.runtime_dir / "scene.md")
 
     @property
-    def base_runtime(self) -> Path:
-        return self.runtime_dir
-
-    @property
-    def default_base(self) -> Path:
-        return config.SCENE_DIR / config.DEFAULT_SCENE_ID
-
-    @property
-    def scene_runtime(self) -> TextFile:
-        return TextFile(self.base_runtime / "scene.md")
-
-    @property
-    def scene_original(self) -> TextFile:
+    def original(self) -> TextFile:
         return TextFile(path_resolver.scene_original_file(self.scene_id, "scene.md"))
 
     @property
-    def scene(self) -> TextFile:
+    def current(self) -> TextFile:
         return TextFile(path_resolver.scene_file(self.npc_id, self.scene_id, "scene.md"))
-
-    @property
-    def npc_scene_original(self) -> TextFile:
-        return TextFile(path_resolver.npc_scene_original_file(self.npc_id, self.scene_id, "scene.md"))
-
-    @property
-    def description(self) -> str:
-        runtime_scene = self.scene_runtime
-        if runtime_scene.is_file():
-            return runtime_scene.get()
-        description = self.scene_original.get()
-        npc_scene = self.npc_scene_original
-        if npc_scene.is_file():
-            return "\n".join([description, npc_scene.get()])
-        return description
 
     @property
     def img_original(self) -> ImageFile:
@@ -378,7 +367,49 @@ class SceneNode(_StorageNodeBase):
         return self.img_original.get()
 
     @property
-    def is_dynamic_scene(self) -> bool:
+    def is_dynamic(self) -> bool:
         is_default_scene = (config.SCENE_DIR / self.scene_id).is_dir()
         is_override_scene = (config.OVERRIDES_SCENE_DIR / self.scene_id).is_dir()
         return is_override_scene and not is_default_scene
+
+
+@dataclass(frozen=True)
+class NpcSceneContextNode(_StorageNodeBase):
+    @property
+    def original(self) -> TextFile:
+        return TextFile(path_resolver.npc_scene_original_file(self.npc_id, self.scene_id, "scene.md"))
+
+    @property
+    def override(self) -> TextFile:
+        return TextFile(config.OVERRIDES_NPC_DIR / self.npc_id / "scenes" / self.scene_id / "scene.md")
+
+    @property
+    def static(self) -> TextFile:
+        return TextFile(config.NPC_DIR / self.npc_id / "scenes" / self.scene_id / "scene.md")
+
+    @property
+    def existing_file(self) -> TextFile | None:
+        preferred = path_resolver.first_existing_file((self.override.path, self.static.path))
+        return TextFile(preferred) if preferred is not None else None
+
+
+@dataclass(frozen=True)
+class SceneNode(_StorageNodeBase):
+    @property
+    def location(self) -> SceneLocationNode:
+        return SceneLocationNode(npc_id=self.npc_id, scene_id=self.scene_id)
+
+    @property
+    def npc_context(self) -> NpcSceneContextNode:
+        return NpcSceneContextNode(npc_id=self.npc_id, scene_id=self.scene_id)
+
+    @property
+    def description(self) -> str:
+        runtime_scene = self.location.runtime
+        if runtime_scene.is_file():
+            return runtime_scene.get()
+        description = self.location.original.get()
+        npc_scene = self.npc_context.original
+        if npc_scene.is_file():
+            return "\n".join([description, npc_scene.get()])
+        return description
