@@ -83,6 +83,7 @@ function mapStatePayload(payload = {}) {
     isDynamicNpc: Boolean(payload.is_dynamic_npc),
     isDynamicScene: Boolean(payload.is_dynamic_scene),
     userProfile: typeof payload.user_profile === "string" ? payload.user_profile : "",
+    sceneContext: typeof payload.scene_context === "string" ? payload.scene_context : "",
     imageAutogenerate: typeof payload.image_autogenerate === "boolean" ? payload.image_autogenerate : true,
     videoUrl: typeof payload.video_url === "string" ? payload.video_url : null,
     imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : true,
@@ -180,7 +181,6 @@ async function pollImageSignature(force = false) {
     videoUrl: typeof payload.video_url === "string" ? payload.video_url : null,
   })
 }
-
 
 
 async function loadInitialState() {
@@ -504,6 +504,10 @@ function toggleSelectorPanel() {
   appStore.setState({ isSelectorPanelOpen: !appStore.getState().isSelectorPanelOpen })
 }
 
+function openSceneContextEditor() {
+  appStore.setState({ isSelectorPanelOpen: true, activeOptionsPanel: "scene-context", sceneContextError: "" })
+}
+
 function toggleImageExpand(expanded = false) {
   const nextExpanded = Boolean(expanded)
   document.body.classList.toggle("sg-overflow-y-hidden", nextExpanded && window.matchMedia("(max-width: 1023px)").matches)
@@ -541,15 +545,9 @@ async function createScene(payload = {}) {
   }
 
   const sceneDescription = typeof payload.scene_description === "string" ? payload.scene_description.trim() : ""
-  const createScene = payload.create_scene !== false
-  const createNpcContext = payload.create_npc_context !== false
 
   if (!sceneDescription) {
     appStore.setState({ sceneCreatorError: "Szenenbeschreibung ist erforderlich." })
-    return
-  }
-  if (!createScene && !createNpcContext) {
-    appStore.setState({ sceneCreatorError: "Mindestens eine Erstellungsoption muss aktiv sein." })
     return
   }
 
@@ -562,8 +560,8 @@ async function createScene(payload = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_description: sceneDescription,
-        create_scene: createScene,
-        create_npc_context: createNpcContext,
+        scene_image_data_url: typeof payload.scene_image_data_url === "string" ? payload.scene_image_data_url : null,
+        reference_image_data_url: typeof payload.reference_image_data_url === "string" ? payload.reference_image_data_url : null,
       }),
     })
     const responsePayload = await readJsonResponse(response)
@@ -580,6 +578,32 @@ async function createScene(payload = {}) {
   } finally {
     appStore.setState({ isSceneCreatorLoading: false })
   }
+}
+
+async function describeSceneReference(imageDataUrl) {
+  const response = await fetch("/api/scenes/describe-reference", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_data_url: imageDataUrl }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, "Beschreibung aus Bild konnte nicht erstellt werden."))
+  }
+  return typeof payload.scene_description === "string" ? payload.scene_description : ""
+}
+
+async function createScenePreviewImage(sceneDescription, referenceImageDataUrl = null) {
+  const response = await fetch("/api/scenes/preview-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scene_description: sceneDescription, reference_image_data_url: referenceImageDataUrl }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, "Bild aus Beschreibung konnte nicht erstellt werden."))
+  }
+  return typeof payload.image_data_url === "string" ? payload.image_data_url : ""
 }
 
 async function createNpc(payload = {}) {
@@ -604,6 +628,8 @@ async function createNpc(payload = {}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         character_description: characterDescription,
+        npc_image_data_url: typeof payload.npc_image_data_url === "string" ? payload.npc_image_data_url : null,
+        reference_image_data_url: typeof payload.reference_image_data_url === "string" ? payload.reference_image_data_url : null,
       }),
     })
     const responsePayload = await readJsonResponse(response)
@@ -620,6 +646,32 @@ async function createNpc(payload = {}) {
   } finally {
     appStore.setState({ isNpcCreatorLoading: false })
   }
+}
+
+async function describeNpcReference(imageDataUrl) {
+  const response = await fetch("/api/npcs/describe-reference", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_data_url: imageDataUrl }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, "Beschreibung aus Bild konnte nicht erstellt werden."))
+  }
+  return typeof payload.character_description === "string" ? payload.character_description : ""
+}
+
+async function createNpcPreviewImage(characterDescription, referenceImageDataUrl = null) {
+  const response = await fetch("/api/npcs/preview-image", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ character_description: characterDescription, reference_image_data_url: referenceImageDataUrl }),
+  })
+  const payload = await readJsonResponse(response)
+  if (!response.ok) {
+    throw new Error(getErrorMessage(payload, "Bild aus Beschreibung konnte nicht erstellt werden."))
+  }
+  return typeof payload.image_data_url === "string" ? payload.image_data_url : ""
 }
 
 async function updateUserProfile(content = "") {
@@ -642,6 +694,66 @@ async function updateUserProfile(content = "") {
     appStore.setState({ ...mapStatePayload(payload), errorMessage: "" })
   } catch (error) {
     appStore.setState({ errorMessage: error instanceof Error ? error.message : "User Profile konnte nicht aktualisiert werden." })
+  }
+}
+
+async function generateSceneContext(content = "") {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isSceneContextLoading) {
+    return null
+  }
+
+  appStore.setState({ isSceneContextLoading: true, sceneContextError: "" })
+  await waitForNextPaint()
+
+  try {
+    const response = await fetch("/api/scene-context/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ sceneContextError: getErrorMessage(payload, "Scene Context konnte nicht generiert werden.") })
+      return null
+    }
+    appStore.setState({ sceneContextError: "" })
+    return typeof payload.scene_context === "string" ? payload.scene_context : ""
+  } catch (error) {
+    appStore.setState({ sceneContextError: error instanceof Error ? error.message : "Scene Context konnte nicht generiert werden." })
+    return null
+  } finally {
+    appStore.setState({ isSceneContextLoading: false })
+  }
+}
+
+async function updateSceneContext(content = "") {
+  const state = appStore.getState()
+  if (state.isSending || state.isSessionLoading || state.isSceneContextLoading) {
+    return false
+  }
+
+  appStore.setState({ isSceneContextLoading: true, sceneContextError: "" })
+  await waitForNextPaint()
+
+  try {
+    const response = await fetch("/api/scene-context", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content }),
+    })
+    const payload = await readJsonResponse(response)
+    if (!response.ok) {
+      appStore.setState({ sceneContextError: getErrorMessage(payload, "Scene Context konnte nicht gespeichert werden.") })
+      return false
+    }
+    appStore.setState({ ...mapStatePayload(payload), sceneContextError: "", isSelectorPanelOpen: false })
+    return true
+  } catch (error) {
+    appStore.setState({ sceneContextError: error instanceof Error ? error.message : "Scene Context konnte nicht gespeichert werden." })
+    return false
+  } finally {
+    appStore.setState({ isSceneContextLoading: false })
   }
 }
 
@@ -724,7 +836,6 @@ async function restoreCheckpoint(commitHash) {
       return false
     }
 
-    // Neu laden nach erfolgreicher Wiederherstellung
     window.location.reload()
     return true
   } catch (error) {
@@ -746,12 +857,19 @@ export const appActions = {
   setInput,
   toggleTheme,
   toggleSelectorPanel,
+  openSceneContextEditor,
   toggleImageExpand,
   setImageError,
   updateUserProfile,
+  generateSceneContext,
+  updateSceneContext,
   toggleImageAutogenerate,
   createScene,
+  describeSceneReference,
+  createScenePreviewImage,
   createNpc,
+  describeNpcReference,
+  createNpcPreviewImage,
   loadCheckpoints,
   saveCheckpoint,
   restoreCheckpoint,

@@ -134,6 +134,54 @@ def test_generate_scene_img_delegates_to_scene_request(monkeypatch):
     assert captured["prompt"] == "scene prompt"
 
 
+def test_generate_scene_img_from_reference_uses_high_fidelity(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeImageClient:
+        @staticmethod
+        def _request_image(prompt, images, input_fidelity="low"):
+            captured["prompt"] = prompt
+            captured["images"] = images
+            captured["input_fidelity"] = input_fidelity
+            return b"scene"
+
+    monkeypatch.setattr(llm_client_module.client, "_request_image", FakeImageClient()._request_image)
+    reference = BytesIO()
+    Image.new("RGB", (400, 300), (20, 40, 60)).save(reference, format="PNG")
+
+    result = llm_client_module.client.generate_scene_img_from_reference("  scene prompt  ", reference.getvalue())
+
+    assert result == b"scene"
+    assert captured["prompt"] == "scene prompt"
+    assert captured["input_fidelity"] == "high"
+    images = cast(list[tuple[str, bytes]], captured["images"])
+    assert [name for name, _ in images] == ["scene-reference.jpg"]
+
+
+def test_generate_npc_img_from_reference_uses_prompt_guided_fidelity(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeImageClient:
+        @staticmethod
+        def _request_image(prompt, images, input_fidelity="low"):
+            captured["prompt"] = prompt
+            captured["images"] = images
+            captured["input_fidelity"] = input_fidelity
+            return b"npc"
+
+    monkeypatch.setattr(llm_client_module.client, "_request_image", FakeImageClient()._request_image)
+    reference = BytesIO()
+    Image.new("RGB", (400, 300), (20, 40, 60)).save(reference, format="PNG")
+
+    result = llm_client_module.client.generate_npc_img_from_reference("  npc prompt  ", reference.getvalue())
+
+    assert result == b"npc"
+    assert captured["prompt"] == "npc prompt"
+    assert captured["input_fidelity"] == "low"
+    images = cast(list[tuple[str, bytes]], captured["images"])
+    assert [name for name, _ in images] == ["npc-reference.jpg"]
+
+
 def test_generate_scene_img_rejects_blank_prompt():
     try:
         llm_client_module.client.generate_scene_img("   ")
@@ -352,4 +400,3 @@ def test_embed_texts_skips_blank_input_without_request(monkeypatch):
     monkeypatch.setattr(client, "_request_embedding", lambda _text: (_ for _ in ()).throw(AssertionError("should not run")))
 
     assert client.embed_texts("   ") == []
-

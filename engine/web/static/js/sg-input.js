@@ -1,14 +1,17 @@
 import { appStore } from "./app-store.js"
+import { CONTEXT_ICON, GENERAL_ICON, IMAGE_ICON, SAVE_ICON } from "./icons.js"
 import "./sg-input-context.js"
 import "./sg-input-image.js"
 import "./sg-input-general.js"
 import "./sg-input-scene.js"
 import "./sg-input-npc.js"
+import "./sg-input-scene-context.js"
 import "./sg-input-composer.js"
 import "./sg-input-history.js"
 
 const SCENE_CREATOR_OPTION_ID = "scene-creator"
 const NPC_CREATOR_OPTION_ID = "npc-creator"
+const SCENE_CONTEXT_OPTION_ID = "scene-context"
 
 function renderTab(optionId, title, isSelected = false, ariaLabel = "") {
   const selected = isSelected ? "true" : "false"
@@ -60,11 +63,6 @@ function renderTabPanel(optionId, contentMarkup, isHidden = false, withAriaLabel
 }
 
 function renderOptionsTabs() {
-  const CONTEXT_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 17 0z"></path><path d="M8 10h8"></path><path d="M8 14h5"></path></svg>`
-  const SAVE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>`
-  const GENERAL_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.8-3.8a6 6 0 0 1-7.9 7.9l-6.9 6.9a2.1 2.1 0 0 1-3-3l6.9-6.9a6 6 0 0 1 7.9-7.9l-3.8 3.8z"></path></svg>`
-  const IMAGE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true"><path d="M3 3h18v18H3z"></path><path d="M8 15l3-3 2 2 3-3 5 5"></path><circle cx="9" cy="9" r="1.5"></circle></svg>`
-
   const tabs = [
     { optionId: "context", title: CONTEXT_ICON, ariaLabel: "Kontext", contentMarkup: "<sg-input-context></sg-input-context>", isSelected: true },
     { optionId: "image", title: IMAGE_ICON, ariaLabel: "Bild", contentMarkup: "<sg-input-image></sg-input-image>" },
@@ -79,12 +77,19 @@ function renderOptionsTabs() {
   // Creator panels without own tab buttons
   const sceneCreatorPanel = renderTabPanel(SCENE_CREATOR_OPTION_ID, "<sg-input-scene></sg-input-scene>", true, false)
   const npcCreatorPanel = renderTabPanel(NPC_CREATOR_OPTION_ID, "<sg-input-npc></sg-input-npc>", true, false)
+  const sceneContextPanel = renderTabPanel(
+    SCENE_CONTEXT_OPTION_ID,
+    "<sg-input-scene-context></sg-input-scene-context>",
+    true,
+    false,
+  )
 
   return /*html*/ `
     <div class="sg-options-tab-panels">
       ${panelsMarkup}
       ${sceneCreatorPanel}
       ${npcCreatorPanel}
+      ${sceneContextPanel}
     </div>
     <div class="sg-options-tabs-list" role="tablist" aria-label="Optionen">
       ${tabsMarkup}
@@ -124,6 +129,8 @@ class SocialGameInput extends HTMLElement {
       composer: this.querySelector("sg-input-composer"),
       sceneCreatorPanel: this.querySelector(`.sg-options-tab-panel[data-option="${SCENE_CREATOR_OPTION_ID}"]`),
       npcCreatorPanel: this.querySelector(`.sg-options-tab-panel[data-option="${NPC_CREATOR_OPTION_ID}"]`),
+      sceneContextPanel: this.querySelector(`.sg-options-tab-panel[data-option="${SCENE_CONTEXT_OPTION_ID}"]`),
+      sceneContextInput: this.querySelector("sg-input-scene-context"),
       tabEntries: this.collectTabEntries(),
     }
 
@@ -195,6 +202,7 @@ class SocialGameInput extends HTMLElement {
     }
 
     this._activeTabOption = nextOptionId
+    appStore.setState({ activeOptionsPanel: nextOptionId })
     this.syncTabState()
   }
 
@@ -203,11 +211,13 @@ class SocialGameInput extends HTMLElement {
       return
     }
     this._activeTabOption = SCENE_CREATOR_OPTION_ID
+    appStore.setState({ activeOptionsPanel: SCENE_CREATOR_OPTION_ID })
     this.syncTabState()
   }
 
   onSceneCreateFinished() {
     this._activeTabOption = "context"
+    appStore.setState({ activeOptionsPanel: "context" })
     this.syncTabState()
   }
 
@@ -216,23 +226,26 @@ class SocialGameInput extends HTMLElement {
       return
     }
     this._activeTabOption = NPC_CREATOR_OPTION_ID
+    appStore.setState({ activeOptionsPanel: NPC_CREATOR_OPTION_ID })
     this.syncTabState()
   }
 
   onNpcCreateFinished() {
     this._activeTabOption = "context"
+    appStore.setState({ activeOptionsPanel: "context" })
     this.syncTabState()
   }
 
   syncTabState() {
     const isSceneCreatorActive = this._activeTabOption === SCENE_CREATOR_OPTION_ID
     const isNpcCreatorActive = this._activeTabOption === NPC_CREATOR_OPTION_ID
-    const isCreatorActive = isSceneCreatorActive || isNpcCreatorActive
+    const isSceneContextActive = this._activeTabOption === SCENE_CONTEXT_OPTION_ID
+    const isHiddenPanelActive = isSceneCreatorActive || isNpcCreatorActive || isSceneContextActive
     for (const entry of this.$.tabEntries) {
-      const isSelected = !isCreatorActive && entry.optionId === this._activeTabOption
+      const isSelected = !isHiddenPanelActive && entry.optionId === this._activeTabOption
       this.setTabEntrySelectedState(entry, isSelected)
       if (entry.panel) {
-        entry.panel.hidden = isCreatorActive || !isSelected
+        entry.panel.hidden = isHiddenPanelActive || !isSelected
       }
     }
 
@@ -240,6 +253,11 @@ class SocialGameInput extends HTMLElement {
     this.$.sceneCreatorPanel.hidden = !isSceneCreatorActive
     this.$.npcCreatorPanel.classList.toggle("sg-hidden", !isNpcCreatorActive)
     this.$.npcCreatorPanel.hidden = !isNpcCreatorActive
+    this.$.sceneContextPanel.classList.toggle("sg-hidden", !isSceneContextActive)
+    this.$.sceneContextPanel.hidden = !isSceneContextActive
+    if (isSceneContextActive) {
+      this.$.sceneContextInput.prepare()
+    }
   }
 
   setTabEntrySelectedState(entry, isSelected) {
@@ -259,6 +277,7 @@ class SocialGameInput extends HTMLElement {
       ["isSending", this.onIsSendingChanged.bind(this)],
       ["isSessionLoading", this.onSessionLoadingChanged.bind(this)],
       ["isSelectorPanelOpen", this.onSelectorPanelChanged.bind(this)],
+      ["activeOptionsPanel", this.onActiveOptionsPanelChanged.bind(this)],
     ]
 
     for (const [key, listener] of subscriptions) {
@@ -279,6 +298,11 @@ class SocialGameInput extends HTMLElement {
   onSelectorPanelChanged(isSelectorPanelOpen) {
     this._state.isSelectorPanelOpen = Boolean(isSelectorPanelOpen)
     this.render()
+  }
+
+  onActiveOptionsPanelChanged(activeOptionsPanel) {
+    this._activeTabOption = typeof activeOptionsPanel === "string" && activeOptionsPanel ? activeOptionsPanel : "context"
+    this.syncTabState()
   }
 
   focusInput() {

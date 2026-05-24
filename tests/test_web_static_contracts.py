@@ -171,45 +171,74 @@ def test_sg_input_split_components_handle_actions_directly_without_parent_events
     assert "appActions.toggleSelectorPanel()" in composer_source
 
 
-def test_sg_input_scene_supports_separate_scene_and_npc_context_options():
+def test_sg_input_scene_always_creates_scene_and_npc_context():
     source = _read("engine/web/static/js/sg-input-scene.js")
     actions_source = _read("engine/web/static/js/app-actions.js")
 
-    assert "Scene Erstellen" in source
-    assert "NPC Kontext erstellen" in source
-    assert 'data-option="create-scene" checked' in source
-    assert 'data-option="create-npc-context" checked' in source
-    assert "create_scene: createScene" in source
-    assert "create_npc_context: createNpcContext" in source
-    assert "!hasDescription || !hasCreateOption" in source
-    assert "create_scene: createScene" in actions_source
-    assert "create_npc_context: createNpcContext" in actions_source
+    assert "Erzeugt Szene und NPC-Kontext" in source
+    assert "NPC Kontext erstellen" not in source
+    assert 'data-option="create-scene"' not in source
+    assert 'data-option="create-npc-context"' not in source
+    assert "create_scene" not in source
+    assert "create_npc_context" not in source
+    assert "hasCreateOption" not in source
+    assert "create_scene" not in actions_source
+    assert "create_npc_context" not in actions_source
 
 
-def test_sg_input_split_components_use_icon_constants_instead_of_render_functions():
+def test_reference_image_input_keeps_reference_separate_from_preview():
+    reference_source = _read("engine/web/static/js/sg-reference-image-input.js")
+    scene_source = _read("engine/web/static/js/sg-input-scene.js")
+    npc_source = _read("engine/web/static/js/sg-input-npc.js")
+    actions_source = _read("engine/web/static/js/app-actions.js")
+
+    set_preview_source = reference_source[
+        reference_source.find("setPreviewImage(imageDataUrl)"):reference_source.find("reset()")
+    ]
+    assert "this._state.previewImageDataUrl" in set_preview_source
+    assert "this._state.referenceImageDataUrl = null" not in set_preview_source
+    assert "get previewImageDataUrl()" in reference_source
+    assert "scene_image_data_url: this.$.referenceInput.previewImageDataUrl" in scene_source
+    assert "reference_image_data_url: this.$.referenceInput.referenceImageDataUrl" in scene_source
+    assert "npc_image_data_url: this.$.referenceInput.previewImageDataUrl" in npc_source
+    assert "reference_image_data_url: this.$.referenceInput.referenceImageDataUrl" in npc_source
+    assert "reference_image_data_url: typeof payload.reference_image_data_url" in actions_source
+
+
+def test_reference_image_input_opens_overlay_only_for_generated_preview():
+    reference_source = _read("engine/web/static/js/sg-reference-image-input.js")
+
+    assert 'class="sg-scene-preview" data-empty="true" role="button" tabindex="0"' in reference_source
+    assert 'class="sg-image-overlay" role="dialog" aria-modal="true"' in reference_source
+    assert "if (this._state.previewImageDataUrl)" in reference_source
+    assert "this.openOverlay()" in reference_source
+    assert "this.$.input.click()" in reference_source
+
+
+def test_sg_input_split_components_use_imported_icon_constants_instead_of_render_functions():
     image_source = _read("engine/web/static/js/sg-input-image.js")
     general_source = _read("engine/web/static/js/sg-input-general.js")
     composer_source = _read("engine/web/static/js/sg-input-composer.js")
     gallery_source = _read("engine/web/static/js/sg-context-gallery.js")
 
-    assert "const REFRESH_ICON" in image_source
-    assert "const REVERT_ICON" in image_source
-    assert "const DELETE_ICON" in image_source
+    assert "REFRESH_IMAGE_ICON" in image_source
+    assert "REVERT_ICON" in image_source
+    assert "DELETE_ICON" in image_source
     assert "function renderRefreshIcon" not in image_source
     assert "function renderRevertIcon" not in image_source
     assert "function renderDeleteIcon" not in image_source
 
-    assert "const THEME_DARK_ICON" in general_source
-    assert "const THEME_LIGHT_ICON" in general_source
+    assert "THEME_DARK_ICON" in general_source
+    assert "THEME_LIGHT_ICON" in general_source
     assert "function renderThemeDarkIcon" not in general_source
     assert "function renderThemeLightIcon" not in general_source
 
-    assert "const SEND_ICON" in composer_source
-    assert "const GEAR_ICON" in composer_source
+    assert "SEND_ICON" in composer_source
+    assert "GEAR_ICON" in composer_source
     assert "function renderSendIcon" not in composer_source
     assert "function renderGearIcon" not in composer_source
 
-    assert "const PLUS_ICON" in gallery_source
+    assert "PLUS_ICON" in gallery_source
     assert "${PLUS_ICON}" in gallery_source
 
 
@@ -395,8 +424,11 @@ def test_sg_app_is_thin_orchestrator_for_layout_initial_load_and_focus():
 
     assert "loadInitialState()" in source
     assert 'appStore.subscribe("focusRequestedAt", this.onInputFocusRequested.bind(this))' in source
-    assert 'this.$ = {\n      input: this.querySelector("sg-input"),' in source
+    assert 'chat: this.querySelector("sg-chat")' in source
+    assert 'input: this.querySelector("sg-input")' in source
+    assert 'this.$.chat.addEventListener("editSceneContextRequested", this.onEditSceneContextRequested.bind(this))' in source
     assert "this.$.input?.focusInput()" in source
+    assert "appActions.openSceneContextEditor()" in source
     assert "onImageExpandedChanged(" not in source
     assert "onInputChanged(" not in source
     assert "onThemeChanged(" not in source

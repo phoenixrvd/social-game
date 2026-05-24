@@ -1,89 +1,77 @@
 ---
-state: defined
+state: implemented
 ---
 
-# SG-012: Editierbarer Initialzustand
+# SG-012: Editierbarer Scene Context
 
 ## Kontext
-In der Web-GUI können die initialen Zustände einer aktiven Sitzung vor der ersten Nachricht bearbeitet werden.
-SG-012 beschreibt nur Platzierung, Bearbeitungsablauf und Betriebsverhalten dieser Bearbeitung; fachliche Zustände und allgemeine UI-Grundsätze werden referenziert.
+In der Web-GUI kann der NPC-szenenspezifische Scene Context der aktiven Sitzung bearbeitet werden.
+Der Scene Context ist die fuer den aktiven NPC und die aktive Szene gespeicherte Kontextdatei unter `.overrides/npcs/<npc>/scenes/<scene>/scene.md`.
 
 ## Annahmen
-- Keine
+- Die Bearbeitung bezieht sich ausschliesslich auf den NPC-szenenspezifischen Scene Context der aktiven Sitzung.
+- Character-Beschreibung, allgemeine Szenenbeschreibung und Zustandsdaten sind nicht Bestandteil dieser Anforderung.
+- Das Generieren eines neuen Contexts ist eine Vorschauaktion und speichert den erzeugten Inhalt nicht automatisch.
 
 ## Offene Fragen
 - Keine
 
 ## Anforderungen
 
-### Platzierung der editierbaren Bereiche
+### Bearbeitungszugang im Dialogkontext
 **Typ:** Funktional  
-**Beschreibung:** Das System muss Scene-State und Charakterzustand direkt im Context-Bereich bearbeitbar bereitstellen.  
+**Beschreibung:** Das System muss den Scene Context direkt aus der zugehoerigen Kontext-Message heraus zur Bearbeitung anbieten.  
 **Akzeptanzkriterien:**
-- Die Bearbeitung von Scene-State erfolgt im Context-Bereich.
-- Die Bearbeitung des Charakterzustands erfolgt im Context-Bereich.
+- In der Kontext-Message des Scene Contexts ist eine Bearbeiten-Aktion sichtbar.
+- Die Bearbeiten-Aktion wird als Icon-Button mit Pencil-Icon dargestellt.
+- Beim Ausloesen der Bearbeiten-Aktion oeffnet sich der Optionsdialog.
+- Der Optionsdialog zeigt direkt das Formular zur Bearbeitung des Scene Contexts.
+
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/adr/007-ui-architektur-mit-web-components.md`
 
-### Icon-Aktionen für die Bearbeitung
+### Formular zur Scene-Context-Bearbeitung
 **Typ:** Funktional  
-**Beschreibung:** Das System muss die Aktionen Bearbeiten, Speichern, Revert und Schließen als Icon-Aktionen bereitstellen.  
+**Beschreibung:** Das System muss in der Web-GUI ein eigenes Formular zur Bearbeitung des Scene Contexts bereitstellen.  
 **Akzeptanzkriterien:**
-- Bearbeiten wird als Icon-Aktion dargestellt.
-- Speichern wird als Icon-Aktion dargestellt.
-- Revert wird als Icon-Aktion dargestellt.
-- Schließen wird als Icon-Aktion dargestellt.
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`
+- Das Formular wird als eigenes Web Component `sg-input-scene-context` bereitgestellt.
+- Das Formular enthaelt eine Textarea fuer den Scene Context.
+- Beim Oeffnen ist die Textarea mit dem aktuell gespeicherten Scene Context der aktiven Sitzung vorbelegt.
+- Das Formular enthaelt die Aktion `Neuen Kontext aus Eingabe generieren`.
+- Das Formular enthaelt die Aktion `Kontext speichern`.
 
-### Sichtbarkeit der Revert-Aktion
+**Referenzen:** `engine/web/static/js/sg-input-scene-context.js`
+
+### Neuen Context aus Eingabe generieren
 **Typ:** Funktional  
-**Beschreibung:** Das System muss die Revert-Aktion nur im Bearbeitungsmodus des betroffenen Bereichs anzeigen.  
+**Beschreibung:** Das System muss aus der aktuellen Textarea-Eingabe einen neuen Scene Context erzeugen koennen, ohne ihn automatisch zu speichern.  
 **Akzeptanzkriterien:**
-- Außerhalb des Bearbeitungsmodus ist für den betroffenen Bereich keine Revert-Aktion sichtbar.
-- Im Bearbeitungsmodus ist für den betroffenen Bereich eine Revert-Aktion sichtbar.
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`
+- Die Aktion `Neuen Kontext aus Eingabe generieren` verwendet den aktuellen Textarea-Inhalt als Eingabe.
+- Die Aktion nutzt fachlich dieselbe LLM-gestuetzte Context-Erzeugung, die beim Anlegen einer Szene fuer den NPC-szenenspezifischen Scene Context verwendet wird.
+- Nach erfolgreicher Generierung ersetzt der erzeugte Scene Context den Inhalt der Textarea.
+- Die Generierung speichert den erzeugten Scene Context nicht dauerhaft.
+- Scheitert die Generierung, bleibt der bisherige Textarea-Inhalt unveraendert.
 
-### Bestätigung vor Revert bei ungespeicherten Änderungen
+**Referenzen:** `engine/services/npc_scene_service.py`, `prompts/npc_scene_create_text.md`
+
+### Scene Context speichern
 **Typ:** Funktional  
-**Beschreibung:** Das System muss vor einem Revert ungespeicherter Änderungen eine Bestätigung verlangen.  
+**Beschreibung:** Das System muss den bearbeiteten Scene Context fuer den aktiven NPC und die aktive Szene speichern koennen.  
 **Akzeptanzkriterien:**
-- Wenn der betroffene Bereich ungespeicherte Änderungen enthält, erscheint vor dem Revert ein Bestätigungsdialog.
-- Ohne Bestätigung bleibt der bearbeitete Inhalt unverändert.
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`
+- Die Aktion `Kontext speichern` speichert den aktuellen Textarea-Inhalt als Scene Context der aktiven Sitzung.
+- Der gespeicherte Scene Context wird unter `.overrides/npcs/<npc>/scenes/<scene>/scene.md` abgelegt.
+- Nach erfolgreichem Speichern wird der Optionsdialog geschlossen.
+- Nach erfolgreichem Speichern zeigt die Kontext-Message im Dialog den aktualisierten Scene Context an.
+- Bei einem Fehler bleibt der zuletzt erfolgreich gespeicherte Scene Context erhalten.
 
-### Ende des Bearbeitungsmodus nach Speichern
+**Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
+
+### Fehler- und Ladezustand
 **Typ:** Funktional  
-**Beschreibung:** Das System muss den Bearbeitungsmodus des betroffenen Bereichs nach erfolgreichem Speichern beenden.  
+**Beschreibung:** Das System muss Generieren und Speichern des Scene Contexts mit nachvollziehbaren Lade- und Fehlerzustaenden begleiten.  
 **Akzeptanzkriterien:**
-- Nach erfolgreichem Speichern ist der betroffene Bereich nicht mehr im Bearbeitungsmodus.
-**Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
+- Waehrend Generieren oder Speichern laeuft, verhindert das Formular parallele Context-Aktionen.
+- Bei Fehlern zeigt das Formular einen verstaendlichen Fehlerhinweis an.
+- Fehler beim Generieren oder Speichern schliessen den Optionsdialog nicht.
+- Fehler beim Generieren oder Speichern veraendern den gespeicherten Scene Context nicht.
 
-### Ende des Bearbeitungsmodus nach Revert
-**Typ:** Funktional  
-**Beschreibung:** Das System muss nach einem Revert den Text des betroffenen Bereichs auf den Initialzustand zurücksetzen und den Bearbeitungsmodus beibehalten.
-**Akzeptanzkriterien:**
-- Nach einem Revert entspricht der Text des betroffenen Bereichs dem Initialzustand.
-- Nach einem Revert bleibt der betroffene Bereich im Bearbeitungsmodus.
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`
-
-### Zustandswahrung bei Fehlern
-**Typ:** Funktional  
-**Beschreibung:** Das System muss bei Fehlern den zuletzt erfolgreich gespeicherten Zustand wahren.  
-**Akzeptanzkriterien:**
-- Bei einem Fehler bleiben bereits erfolgreich gespeicherte Zustände unverändert.
-**Referenzen:** `doc/requirements/sg-004-dynamischer-charakterzustand.md`, `doc/requirements/sg-006-dynamischer-scene-state.md`
-
-### Generische Fehlerhinweise
-**Typ:** Funktional  
-**Beschreibung:** Das System muss bei Fehlern generische Fehlerhinweise ohne Ursachenoffenlegung anzeigen.  
-**Akzeptanzkriterien:**
-- Bei einem Fehler wird ein generischer Fehlerhinweis angezeigt.
-- Der Fehlerhinweis legt keine Ursache offen.
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`
-
-### Mobile-stabile Editfelder
-**Typ:** Nicht-funktional  
-**Beschreibung:** Das System darf auf Mobile beim Tippen in Editfelder keinen Positionssprung verursachen.  
-**Akzeptanzkriterien:**
-- Beim Fokussieren eines Editfelds bleibt die Position des betroffenen Bereichs stabil.
-- Mehrzeilige Editfelder wachsen in der Höhe statt eine innere Scrollbar zu verwenden.
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`
+**Referenzen:** `doc/guidelines/error-handling.md`

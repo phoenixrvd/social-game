@@ -155,6 +155,10 @@ class PromptsNode:
         return TextFile(path_resolver.prompt_file("scene_create_text.md"))
 
     @property
+    def scene_describe_image(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("scene_describe_image.md"))
+
+    @property
     def npc_create_description(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("npc_create_description.md"))
 
@@ -165,6 +169,14 @@ class PromptsNode:
     @property
     def npc_create_image(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("npc_create_image.md"))
+
+    @property
+    def npc_create_image_from_reference(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_create_image_from_reference.md"))
+
+    @property
+    def npc_describe_image(self) -> TextFile:
+        return TextFile(path_resolver.prompt_file("npc_describe_image.md"))
 
     @property
     def npc_scene_create_text(self) -> TextFile:

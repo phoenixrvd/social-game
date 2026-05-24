@@ -10,6 +10,8 @@ Create concise German character fields for a new NPC. The app will build `descri
 
 - Every explicitly mentioned fact in the orientation is mandatory.
 - Preserve explicitly mentioned name, age, profession, appearance, traits, background and relationship details.
+- If the orientation contains no clear character name, create a very short plausible given name as `character_name`.
+- Do not use a role, description or renamed generic label such as `Die Frau`, `Der Koch` or `Unbekannte` as `character_name`.
 - Fill in missing details creatively but plausibly.
 - Keep the NPC grounded, socially playable and internally consistent.
 - Do not add Markdown headings, YAML front matter or markdown fences.

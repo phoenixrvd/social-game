@@ -1,11 +1,30 @@
 import { appStore } from "./app-store.js"
 import { appActions } from "./app-actions.js"
+import { PLUS_ICON } from "./icons.js"
+import "./sg-reference-image-input.js"
 import "./sg-settings-action.js"
 
-const CREATE_ICON = /*html*/ `
-  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <path d="M12 5v14M5 12h14"></path>
-  </svg>
+const SCENE_TEMPLATE = /*html*/ `
+  <section class="sg-settings-section">
+    <h3 class="sg-settings-heading">Neue Szene für aktive Figur</h3>
+    <div class="sg-form-group">
+      <label for="scene-description-input" class="sg-form-label">
+        Szenenbeschreibung <span class="sg-form-required">*</span>
+      </label>
+      <p class="sg-form-hint-small">Die Beschreibung wird für die neue Szene und den NPC-Kontext verwendet.</p>
+      <textarea id="scene-description-input" class="sg-settings-textarea" placeholder="z. B. Ein gemütliches Café mit warmem Licht, der NPC sitzt links am Fenster..." required aria-required="true"></textarea>
+    </div>
+
+    <sg-reference-image-input preview-alt="Vorschau des Szenenbilds"></sg-reference-image-input>
+
+    <div class="sg-scene-error sg-hidden"></div>
+
+    <sg-settings-action data-action="create-scene" aria-label="Szene erstellen">
+        <span slot="icon">${PLUS_ICON}</span>
+        <span>Szene erstellen</span>
+        <span slot="description">Erzeugt Szene und NPC-Kontext aus der Beschreibung</span>
+    </sg-settings-action>
+  </section>
 `
 
 class SocialGameInputScene extends HTMLElement {
@@ -13,58 +32,15 @@ class SocialGameInputScene extends HTMLElement {
     super()
     this._state = {
       isLoading: false,
+      isImageActionLoading: false,
       errorMessage: "",
     }
     this.$ = {}
   }
 
   connectedCallback() {
-    this.innerHTML = /*html*/ `
-      <section class="sg-settings-section">
-        <h3 class="sg-settings-heading">Neue Szene für aktive Figur</h3>
-        <div class="sg-form-group">
-          <label for="scene-description-input" class="sg-form-label">
-            Szenenbeschreibung <span class="sg-form-required">*</span>
-          </label>
-          <p class="sg-form-hint-small">Die Beschreibung wird für die aktivierten Inhalte verwendet.</p>
-          <textarea
-            id="scene-description-input"
-            class="sg-settings-textarea"
-            placeholder="z. B. Ein gemütliches Café mit warmem Licht, der NPC sitzt links am Fenster..."
-            required
-            aria-required="true"
-          ></textarea>
-        </div>
-
-        <label class="sg-settings-checkbox">
-          <input id="create-scene-option" name="create-scene" type="checkbox" data-option="create-scene" checked />
-          <span>Scene Erstellen</span>
-        </label>
-        <label class="sg-settings-checkbox">
-          <input id="create-npc-context-option" name="create-npc-context" type="checkbox" data-option="create-npc-context" checked />
-          <span>NPC Kontext erstellen</span>
-        </label>
-
-        <div class="sg-scene-error sg-hidden"></div>
-
-        <sg-settings-action
-          data-action="create-scene"
-          aria-label="Szene erstellen"
-        >
-            ${CREATE_ICON}
-            <span>Szene erstellen</span>
-            <span slot="description">Erzeugt Szene und optionalen NPC-Kontext aus der Beschreibung</span>
-        </sg-settings-action>
-      </section>
-    `
-
-    this.$ = {
-      sceneDescriptionInput: this.querySelector("#scene-description-input"),
-      createSceneCheckbox: this.querySelector('[data-option="create-scene"]'),
-      createNpcContextCheckbox: this.querySelector('[data-option="create-npc-context"]'),
-      submitButton: this.querySelector('[data-action="create-scene"]'),
-      errorElement: this.querySelector(".sg-scene-error"),
-    }
+    this.innerHTML = SCENE_TEMPLATE
+    this.$ = this.cacheElements()
 
     this.registerEventListeners()
     this.registerSubscriptions()
@@ -72,10 +48,22 @@ class SocialGameInputScene extends HTMLElement {
     this.render()
   }
 
+  cacheElements() {
+    return {
+      sceneDescriptionInput: this.querySelector("#scene-description-input"),
+      referenceInput: this.querySelector("sg-reference-image-input"),
+      submitButton: this.querySelector('[data-action="create-scene"]'),
+      errorElement: this.querySelector(".sg-scene-error"),
+    }
+  }
+
   registerEventListeners() {
     this.$.sceneDescriptionInput.addEventListener("input", this.render.bind(this))
-    this.$.createSceneCheckbox.addEventListener("change", this.render.bind(this))
-    this.$.createNpcContextCheckbox.addEventListener("change", this.render.bind(this))
+    this.$.referenceInput.addEventListener("referenceChanged", this.handleReferenceChanged.bind(this))
+    this.$.referenceInput.addEventListener("imageError", this.handleImageError.bind(this))
+    this.$.referenceInput.addEventListener("describeRequested", this.handleDescribeReference.bind(this))
+    this.$.referenceInput.addEventListener("previewRequested", this.handleCreatePreviewImage.bind(this))
+    this.$.referenceInput.addEventListener("referenceRemoved", this.handleReferenceChanged.bind(this))
     this.$.submitButton.addEventListener("click", this.handleSubmit.bind(this))
   }
 
@@ -95,10 +83,8 @@ class SocialGameInputScene extends HTMLElement {
     this._state.isLoading = Boolean(isLoading)
     this.render()
 
-    const isSuccessfulCompletion = wasLoading && !this._state.isLoading && !this._state.errorMessage
-    if (isSuccessfulCompletion) {
-      this.$.sceneDescriptionInput.value = ""
-      this.render()
+    if (wasLoading && !this._state.isLoading && !this._state.errorMessage) {
+      this.resetDialogState()
       this.dispatchEvent(new CustomEvent("sceneCreateFinished", { bubbles: true, composed: true }))
     }
   }
@@ -108,39 +94,88 @@ class SocialGameInputScene extends HTMLElement {
     this.render()
   }
 
+  handleReferenceChanged() {
+    appStore.setState({ sceneCreatorError: "" })
+    this.render()
+  }
+
+  handleImageError(event) {
+    appStore.setState({ sceneCreatorError: event.detail?.message || "Referenzbild wurde abgelehnt." })
+  }
+
+  async handleDescribeReference() {
+    if (!this.$.referenceInput.referenceImageDataUrl || this._state.isImageActionLoading) {
+      return
+    }
+    await this.runImageAction(async () => {
+      const description = await appActions.describeSceneReference(this.$.referenceInput.referenceImageDataUrl)
+      if (description.trim()) {
+        this.$.sceneDescriptionInput.value = description.trim()
+      }
+    })
+  }
+
+  async handleCreatePreviewImage() {
+    const sceneDescription = this.$.sceneDescriptionInput.value.trim()
+    if (!sceneDescription || this._state.isImageActionLoading) {
+      return
+    }
+    await this.runImageAction(async () => {
+      const imageDataUrl = await appActions.createScenePreviewImage(sceneDescription, this.$.referenceInput.referenceImageDataUrl)
+      if (imageDataUrl) {
+        this.$.referenceInput.setPreviewImage(imageDataUrl)
+      }
+    })
+  }
+
+  async runImageAction(action) {
+    this._state.isImageActionLoading = true
+    appStore.setState({ sceneCreatorError: "" })
+    this.render()
+    try {
+      await action()
+    } catch (error) {
+      appStore.setState({ sceneCreatorError: error instanceof Error ? error.message : "Bildaktion fehlgeschlagen." })
+    } finally {
+      this._state.isImageActionLoading = false
+      this.render()
+    }
+  }
+
   handleSubmit(e) {
     e.preventDefault()
 
-    if (this._state.isLoading) {
+    if (this._state.isLoading || this._state.isImageActionLoading) {
       return
     }
 
     const sceneDescription = this.$.sceneDescriptionInput.value.trim()
-    const createScene = this.$.createSceneCheckbox.checked
-    const createNpcContext = this.$.createNpcContextCheckbox.checked
 
     if (!sceneDescription) {
       appStore.setState({ sceneCreatorError: "Szenenbeschreibung ist erforderlich." })
-      return
-    }
-    if (!createScene && !createNpcContext) {
-      appStore.setState({ sceneCreatorError: "Mindestens eine Erstellungsoption muss aktiv sein." })
       return
     }
 
     appStore.setState({ sceneCreatorError: "" })
     appActions.createScene({
       scene_description: sceneDescription,
-      create_scene: createScene,
-      create_npc_context: createNpcContext,
+      scene_image_data_url: this.$.referenceInput.previewImageDataUrl,
+      reference_image_data_url: this.$.referenceInput.referenceImageDataUrl,
     })
+  }
+
+  resetDialogState() {
+    this.$.sceneDescriptionInput.value = ""
+    this.$.referenceInput.reset()
+    this.render()
   }
 
   render() {
     const hasDescription = Boolean(this.$.sceneDescriptionInput.value.trim())
-    const hasCreateOption = this.$.createSceneCheckbox.checked || this.$.createNpcContextCheckbox.checked
+    const isBusy = this._state.isLoading || this._state.isImageActionLoading
 
-    this.$.submitButton.disabled = this._state.isLoading || !hasDescription || !hasCreateOption
+    this.$.submitButton.disabled = isBusy || !hasDescription
+    this.$.referenceInput.update({ busy: isBusy, canCreatePreview: hasDescription })
 
     const errorVisible = Boolean(this._state.errorMessage)
     this.$.errorElement.classList.toggle("sg-hidden", !errorVisible)
@@ -148,10 +183,9 @@ class SocialGameInputScene extends HTMLElement {
       this.$.errorElement.textContent = this._state.errorMessage
     }
 
-    this.$.sceneDescriptionInput.disabled = this._state.isLoading
-    this.$.createSceneCheckbox.disabled = this._state.isLoading
-    this.$.createNpcContextCheckbox.disabled = this._state.isLoading
+    this.$.sceneDescriptionInput.disabled = isBusy
   }
+
 }
 
 customElements.get("sg-input-scene") || customElements.define("sg-input-scene", SocialGameInputScene)

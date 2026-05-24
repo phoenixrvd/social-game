@@ -37,14 +37,31 @@ class SceneService:
         storage.scene.location.runtime.save(scene)
         return scene
 
-    def create_override(self, short_description: str) -> Path:
+    def create_override(self, short_description: str, scene_image_bytes: bytes | None = None) -> Path:
         orientation = self._normalize_short_description(short_description)
         scene_draft = self._create_scene_draft(orientation)
         target_dir = self._next_available_dir(scene_draft.location_name)
         target_dir.mkdir(parents=True, exist_ok=False)
         self._save_scene_markdown(target_dir, scene_draft)
-        self._save_scene_image(target_dir, scene_draft)
+        self._save_scene_image(target_dir, scene_draft, scene_image_bytes)
         return target_dir
+
+    def describe_reference_image(self, reference_image_bytes: bytes) -> str:
+        description = client.describe_scene_reference_img(
+            storage.prompts.scene_describe_image.get().strip(),
+            reference_image_bytes,
+        ).strip()
+        if not description:
+            raise RuntimeError("Bildbeschreibung blieb leer.")
+        return description
+
+    def create_preview_image(self, scene_description: str, reference_image_bytes: bytes | None = None) -> bytes:
+        description = self._normalize_short_description(scene_description)
+        scene_draft = SceneDraft(location_name="Neue Location", scene_description=description)
+        prompt = self._build_scene_image_prompt(scene_draft)
+        if reference_image_bytes is None:
+            return client.generate_scene_img(prompt)
+        return client.generate_scene_img_from_reference(prompt, reference_image_bytes)
 
     def _create_scene_draft(self, short_description: str) -> SceneDraft:
         prompt = self._build_scene_create_prompt(short_description)
@@ -74,7 +91,10 @@ class SceneService:
         markdown = f"## {scene_draft.location_name}\n\n{scene_draft.scene_description}\n"
         (target_dir / "scene.md").write_text(markdown, encoding="utf-8")
 
-    def _save_scene_image(self, target_dir: Path, scene_draft: SceneDraft) -> None:
+    def _save_scene_image(self, target_dir: Path, scene_draft: SceneDraft, scene_image_bytes: bytes | None = None) -> None:
+        if scene_image_bytes is not None:
+            (target_dir / "img.png").write_bytes(scene_image_bytes)
+            return
         prompt = self._build_scene_image_prompt(scene_draft)
         (target_dir / "img.png").write_bytes(client.generate_scene_img(prompt))
 

@@ -160,6 +160,34 @@ class Client:
             raise ValueError("Bildprompt darf nicht leer sein.")
         return self._request_scene_image(cleaned)
 
+    def generate_scene_img_from_reference(self, prompt: str, reference_img_bytes: bytes) -> bytes:
+        cleaned = prompt.strip()
+        if not cleaned:
+            raise ValueError("Bildprompt darf nicht leer sein.")
+        image = CompressedImage("scene-reference.jpg", reference_img_bytes).compress(scale_factor=1.0, quality=90)
+        return self._request_image(cleaned, [image], input_fidelity="high")
+
+    def generate_npc_img_from_reference(self, prompt: str, reference_img_bytes: bytes) -> bytes:
+        cleaned = prompt.strip()
+        if not cleaned:
+            raise ValueError("Bildprompt darf nicht leer sein.")
+        image = CompressedImage("npc-reference.jpg", reference_img_bytes).compress(scale_factor=1.0, quality=90)
+        return self._request_image(cleaned, [image], input_fidelity="low")
+
+    def describe_scene_reference_img(self, prompt: str, reference_img_bytes: bytes) -> str:
+        cleaned = prompt.strip()
+        if not cleaned:
+            return ""
+        image = CompressedImage("scene-reference.jpg", reference_img_bytes).compress(scale_factor=1.0, quality=90)
+        return self._request_small([self._image_user_message(cleaned, image)])
+
+    def describe_npc_reference_img(self, prompt: str, reference_img_bytes: bytes) -> str:
+        cleaned = prompt.strip()
+        if not cleaned:
+            return ""
+        image = CompressedImage("npc-reference.jpg", reference_img_bytes).compress(scale_factor=1.0, quality=90)
+        return self._request_small([self._image_user_message(cleaned, image)])
+
     def refresh_img(self, prompt: str, reference_img_bytes: bytes, identity_img_bytes: bytes | None = None) -> bytes:
         images = [CompressedImage("current.jpg", reference_img_bytes).compress(scale_factor=0.8, quality=82)]
         if identity_img_bytes is not None:
@@ -201,7 +229,7 @@ class Client:
         embedding = response.data[0].embedding
         return [float(value) for value in embedding]
 
-    def _request_image(self, prompt: str, images: list[NamedImage]) -> bytes:
+    def _request_image(self, prompt: str, images: list[NamedImage], input_fidelity: str = "low") -> bytes:
         payload = self._image_payload(images)
         image_arg: BytesIO | list[BytesIO] = payload[0] if len(payload) == 1 else payload
         result = self._request(
@@ -213,15 +241,12 @@ class Client:
                 size="1024x1536",
                 quality="low",
                 background="auto",
-                input_fidelity="low",
+                input_fidelity=input_fidelity,
                 extra_query={"moderation": "low"},
                 extra_body={"moderation": "low"},
             )
         )
-        encoded_image = result.data[0].b64_json
-        if encoded_image is None:
-            raise RuntimeError("OpenAI-Bildantwort enthaelt kein Bildpayload.")
-        return base64.b64decode(encoded_image)
+        return self._decode_image_result(result)
 
     def _request_scene_image(self, prompt: str) -> bytes:
         result = self._request(
@@ -235,6 +260,10 @@ class Client:
                 moderation="low",
             )
         )
+        return self._decode_image_result(result)
+
+    @staticmethod
+    def _decode_image_result(result: Any) -> bytes:
         encoded_image = result.data[0].b64_json
         if encoded_image is None:
             raise RuntimeError("OpenAI-Bildantwort enthaelt kein Bildpayload.")
@@ -248,6 +277,15 @@ class Client:
             image_file.name = name
             payload.append(image_file)
         return payload
+
+    @staticmethod
+    def _image_user_message(prompt: str, image: NamedImage) -> ChatCompletionMessageParam:
+        image_data = base64.b64encode(image[1]).decode("ascii")
+        content = [
+            {"type": "text", "text": prompt},
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+        ]
+        return cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": content}))
 
     def _chat_request(self, model: str, messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
         payload: dict[str, object] = {"model": model, "store": False, "messages": messages, "stream": True}

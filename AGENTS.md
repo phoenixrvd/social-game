@@ -94,6 +94,8 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 
 Projekt-Agenten sind in `.opencode/agents/` definiert. `AGENTS.md` enthält nur globale Projektanweisungen; agentenspezifische Aktivierung, Regeln, Modelle und Berechtigungen stehen ausschließlich in den jeweiligen Agent-Dateien.
 
+OpenCode und alle Agenten dürfen ausschließlich im Projekt-Kontext suchen und arbeiten. Datei- und Inhaltssuchen müssen auf dieses Projektverzeichnis beschränkt sein; Befehle außerhalb des Projektverzeichnisses sind nicht erlaubt.
+
 Verfügbare Agenten:
 - `doc/requirements-writer` – Anforderungen erstellen/überarbeiten
 - `doc/adr-writer` – Architecture Decision Records erstellen

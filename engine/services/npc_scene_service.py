@@ -14,18 +14,24 @@ class NpcSceneService:
             raise ValueError("Kurzbeschreibung darf nicht leer sein.")
         return cleaned_description
 
-    @staticmethod
-    def _active_context() -> tuple[str, str]:
-        return storage.session.npc_id.strip(), storage.session.scene_id.strip()
-
     def create_override(self, short_description: str) -> Path:
+        npc_id = storage.session.npc_id.strip()
+        scene_id = storage.session.scene_id.strip()
+        generated_scene = self.generate_context(short_description)
+        return self._save_scene_override(npc_id, scene_id, generated_scene)
+
+    def generate_context(self, short_description: str) -> str:
         orientation = self._normalize_short_description(short_description)
-        npc_id, scene_id = self._active_context()
         prompt = self._build_prompt(orientation)
         generated_scene = client.run_prompt_small(prompt).strip()
         if not generated_scene:
             raise RuntimeError("NPC-Scene-Erstellung lieferte keinen Inhalt.")
-        return self._save_scene_override(npc_id, scene_id, generated_scene)
+        return generated_scene
+
+    def save_active_context(self, markdown: str) -> Path:
+        target_file = storage.scene.npc_context.override
+        target_file.save(markdown)
+        return target_file.path
 
     def adapt_default_fallback(self) -> Path | None:
         if storage.session.npc_id == config.DEFAULT_NPC_ID:
@@ -39,7 +45,9 @@ class NpcSceneService:
         generated_scene = client.run_prompt_small(prompt).strip()
         if not generated_scene:
             raise RuntimeError("NPC-Scene-Fallback-Adaptierung lieferte keinen Inhalt.")
-        return self._save_active_scene_override(generated_scene)
+        target_file = storage.scene.npc_context.override
+        target_file.save(generated_scene.strip() + "\n")
+        return target_file.path
 
     @staticmethod
     def _build_prompt(short_description: str) -> str:
@@ -54,12 +62,6 @@ class NpcSceneService:
     @staticmethod
     def _save_scene_override(npc_id: str, scene_id: str, markdown: str) -> Path:
         target_file = storage.scene_view(npc_id=npc_id, scene_id=scene_id).npc_context.override
-        target_file.save(markdown.strip() + "\n")
-        return target_file.path
-
-    @staticmethod
-    def _save_active_scene_override(markdown: str) -> Path:
-        target_file = storage.scene.npc_context.override
         target_file.save(markdown.strip() + "\n")
         return target_file.path
 

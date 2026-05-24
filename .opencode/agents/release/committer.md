@@ -22,6 +22,7 @@ Create a local Git commit when the user explicitly requests it.
 - Do not work on `main`. Work branches are sequentially numbered `v1.x` branches, for example `v1.29` after `v1.28`, not the literal branch name `v1.x`.
 - Keep semantically different changes in separate commits, even if they come from the same user conversation.
 - Do not create a catch-all commit for multiple unrelated topics.
+- Commit messages must be written in English, even when the user request or surrounding conversation is in German.
 
 ## Workflow
 
@@ -60,7 +61,7 @@ Erlaubte Types:
 - `fix:`
 - `add:`
 
-Write the description briefly, clearly, and descriptively.
+Write the description briefly, clearly, and descriptively in English.
 
 ## Output
 

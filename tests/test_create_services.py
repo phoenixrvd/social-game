@@ -251,6 +251,71 @@ def test_scene_service_create_override_creates_scene_markdown_and_image(tmp_path
     assert (target_dir / "img.png").read_bytes() == b"png-bytes"
 
 
+def test_scene_service_create_override_uses_provided_scene_image(tmp_path, monkeypatch):
+    import engine.services.scene_service as scene_module
+
+    monkeypatch.setattr(scene_module.config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(
+        scene_module.client,
+        "run_prompt_small_model",
+        lambda _prompt, response_model: response_model(
+            location_name="Abendlicher Stadtpark",
+            scene_description="Ein ruhiger Park mit kleinem See.",
+        ),
+    )
+
+    def fail_generate(_prompt: str):
+        raise AssertionError("provided preview image should be used")
+
+    monkeypatch.setattr(scene_module.client, "generate_scene_img", fail_generate)
+
+    target_dir = SceneService().create_override("Ruhiger Stadtpark.", b"preview-png-bytes")
+
+    assert (target_dir / "img.png").read_bytes() == b"preview-png-bytes"
+
+
+def test_scene_service_preview_image_uses_reference_when_present(monkeypatch):
+    import engine.services.scene_service as scene_module
+
+    calls: list[tuple[str, bytes]] = []
+
+    def fake_generate(prompt: str, reference_image: bytes):
+        calls.append((prompt, reference_image))
+        return b"preview"
+
+    monkeypatch.setattr(scene_module.client, "generate_scene_img_from_reference", fake_generate)
+
+    preview = SceneService().create_preview_image("Ein heller Raum.", b"reference")
+
+    assert preview == b"preview"
+    assert len(calls) == 1
+    assert calls[0][1] == b"reference"
+    assert "Ein heller Raum." in calls[0][0]
+
+
+def test_npc_service_preview_image_uses_neutral_reference_prompt(monkeypatch):
+    import engine.services.npc_service as npc_module
+
+    calls: list[tuple[str, bytes]] = []
+
+    def fake_generate(prompt: str, reference_image: bytes):
+        calls.append((prompt, reference_image))
+        return b"preview"
+
+    monkeypatch.setattr(npc_module.client, "generate_npc_img_from_reference", fake_generate)
+
+    preview = NpcService().create_preview_image("Alex traegt eine dunkle Jacke.", b"reference")
+
+    assert preview == b"preview"
+    assert len(calls) == 1
+    assert calls[0][1] == b"reference"
+    assert "Alex traegt eine dunkle Jacke." in calls[0][0]
+    assert "neutral full-body studio portrait" in calls[0][0]
+    assert "Do not preserve the reference image background" in calls[0][0]
+    assert "Preserve the face, hairstyle" in calls[0][0]
+    assert "Do not crop or compose the output like the original image" in calls[0][0]
+
+
 def test_scene_service_create_override_suffixes_existing_directory(tmp_path, monkeypatch):
     import engine.services.scene_service as scene_module
 

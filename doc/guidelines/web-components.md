@@ -51,3 +51,8 @@
 - [BLOCKER] Keine `max-width`-Breakpoints für mobile Stile, wenn dieselben Regeln als Basis in den globalen Bereich gehören
 - [WARNING] `max-width`-Queries nur für echte Ausnahmen (z. B. Landscape-Override), nicht als primäre mobile Abgrenzung
 - [WARNING] CSS-Variablen als Tokens für Theme und Layout verwenden; keine hardcodierten Farb- oder Größenwerte außerhalb von `:root`/`[data-theme]`
+
+## Icons
+
+- [BLOCKER] Icons werden zentral in der Icon-Datei (`icons.js`) als exportierte Konstanten hinterlegt und in Komponenten importiert; keine Inline-SVGs direkt in Komponenten-Templates
+

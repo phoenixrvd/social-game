@@ -143,6 +143,7 @@ sg-input,
 sg-thumbnail,
 sg-message,
 sg-context-message,
+sg-input-scene-context,
 sg-context-gallery {
   display: block;
 }

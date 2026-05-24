@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import binascii
 import json
 from contextlib import asynccontextmanager
 from html import escape
@@ -32,6 +34,8 @@ from engine.tools.scheduler import Scheduler
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 STATIC_ASSET_PREFIXES = ("/css/", "/js/", "/icons/")
 VISIBLE_CHAT_ROLES = {"user", "assistant"}
+MAX_SCENE_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_SCENE_IMAGE_EDGE = 1536
 
 _webp_cache: dict[str, dict[str, Any]] = {}
 _scheduler: Scheduler | None = None
@@ -188,12 +192,36 @@ class UserProfileRequest(BaseModel):
 
 class SceneCreateRequest(BaseModel):
     scene_description: str
-    create_scene: bool = True
-    create_npc_context: bool = True
+    scene_image_data_url: str | None = None
+    reference_image_data_url: str | None = None
+
+
+class SceneContextRequest(BaseModel):
+    content: str
+
+
+class SceneReferenceImageRequest(BaseModel):
+    image_data_url: str
+
+
+class ScenePreviewImageRequest(BaseModel):
+    scene_description: str
+    reference_image_data_url: str | None = None
 
 
 class NpcCreateRequest(BaseModel):
     character_description: str
+    npc_image_data_url: str | None = None
+    reference_image_data_url: str | None = None
+
+
+class NpcReferenceImageRequest(BaseModel):
+    image_data_url: str
+
+
+class NpcPreviewImageRequest(BaseModel):
+    character_description: str
+    reference_image_data_url: str | None = None
 
 
 class RestoreCheckpointRequest(BaseModel):
@@ -202,6 +230,47 @@ class RestoreCheckpointRequest(BaseModel):
 
 def _render_markdown_to_html(text: str) -> str:
     return markdown.markdown(text, extensions=["extra", "sane_lists"])
+
+
+def _decode_image_data_url(data_url: str) -> bytes:
+    header, separator, payload = data_url.partition(",")
+    if separator != "," or not header.startswith("data:image/") or ";base64" not in header:
+        raise HTTPException(status_code=400, detail="Ungueltiges Bildformat.")
+    if not header.startswith(("data:image/png", "data:image/jpeg", "data:image/webp")):
+        raise HTTPException(status_code=400, detail="Nur PNG, JPEG oder WebP sind erlaubt.")
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail="Bilddaten konnten nicht gelesen werden.") from exc
+
+
+def _normalize_scene_image_data_url(data_url: str) -> bytes:
+    image_bytes = _decode_image_data_url(data_url)
+    if len(image_bytes) > MAX_SCENE_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Bild ist groesser als 5 MB.")
+    try:
+        with Image.open(BytesIO(image_bytes)) as image:
+            image.verify()
+        with Image.open(BytesIO(image_bytes)) as image:
+            if image.width > MAX_SCENE_IMAGE_EDGE or image.height > MAX_SCENE_IMAGE_EDGE:
+                raise HTTPException(status_code=400, detail="Bildkante ist groesser als 1536 px.")
+            return _encode_png(image)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Bilddaten konnten nicht dekodiert werden.") from exc
+
+
+def _encode_png(image: Image.Image) -> bytes:
+    buffer = BytesIO()
+    image.convert("RGBA").save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _png_data_url(image_bytes: bytes) -> str:
+    with Image.open(BytesIO(image_bytes)) as image:
+        encoded = base64.b64encode(_encode_png(image)).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
 
 
 def _parse_state_meta(state_text: str) -> tuple[dict[str, Any], str]:
@@ -254,7 +323,9 @@ def _visible_messages(npc, scene) -> list[dict[str, Any]]:
             "role": "assistant",
             "content": "",
             "html": _render_markdown_to_html(scene_description),
-            "timestamp_utc": ""
+            "timestamp_utc": "",
+            "context_type": "scene",
+            "is_editable_scene_context": True,
         },
         {
             "id": "context-state",
@@ -398,6 +469,7 @@ def _state_payload() -> dict[str, Any]:
         "character_description": npc.description.get(),
         "scene_id": scene_id,
         "scene_description": scene.description,
+        "scene_context": scene.npc_context.original.get(),
         "character_data": character,
         "messages": _visible_messages(npc, scene),
         "messages_signature": _messages_signature(npc),
@@ -444,24 +516,64 @@ def update_user_profile(request: UserProfileRequest) -> dict[str, Any]:
     return _state_payload()
 
 
+@app.post("/api/scenes/describe-reference")
+def describe_scene_reference(request: SceneReferenceImageRequest) -> dict[str, str]:
+    reference_image = _normalize_scene_image_data_url(request.image_data_url)
+    return {"scene_description": SceneService().describe_reference_image(reference_image)}
+
+
+@app.post("/api/scenes/preview-image")
+def create_scene_preview_image(request: ScenePreviewImageRequest) -> dict[str, str]:
+    scene_description = request.scene_description.strip()
+    if not scene_description:
+        raise HTTPException(status_code=400, detail="Szenenbeschreibung darf nicht leer sein.")
+    reference_image = None
+    if request.reference_image_data_url is not None:
+        reference_image = _normalize_scene_image_data_url(request.reference_image_data_url)
+    image_bytes = SceneService().create_preview_image(scene_description, reference_image)
+    return {"image_data_url": _png_data_url(image_bytes)}
+
+
 @app.post("/api/scenes/create")
 def create_scene(request: SceneCreateRequest) -> dict[str, Any]:
     scene_description = request.scene_description.strip()
     if not scene_description:
         raise HTTPException(status_code=400, detail="Szenenbeschreibung darf nicht leer sein.")
-    if not request.create_scene and not request.create_npc_context:
-        raise HTTPException(status_code=400, detail="Mindestens eine Erstellungsoption muss aktiv sein.")
 
-    if request.create_scene:
-        scene_dir = SceneService().create_override(scene_description)
-        storage.session.scene_id = scene_dir.name
+    scene_service = SceneService()
+    scene_image = _scene_create_image(scene_service, scene_description, request)
+    scene_dir = scene_service.create_override(scene_description, scene_image)
+    storage.session.scene_id = scene_dir.name
 
-    if request.create_npc_context:
-        NpcSceneService().create_override(scene_description)
+    NpcSceneService().create_override(scene_description)
     NpcSceneService().adapt_default_fallback()
     if storage.session.image_autogenerate:
         _get_scheduler().enqueue("image")
     return _state_payload()
+
+
+@app.post("/api/scene-context/generate")
+def generate_scene_context(request: SceneContextRequest) -> dict[str, str]:
+    return {"scene_context": NpcSceneService().generate_context(request.content)}
+
+
+@app.put("/api/scene-context")
+def update_scene_context(request: SceneContextRequest) -> dict[str, Any]:
+    NpcSceneService().save_active_context(request.content)
+    return _state_payload()
+
+
+def _scene_create_image(
+    scene_service: SceneService,
+    scene_description: str,
+    request: SceneCreateRequest,
+) -> bytes | None:
+    if request.scene_image_data_url is not None:
+        return _normalize_scene_image_data_url(request.scene_image_data_url)
+    if request.reference_image_data_url is None:
+        return None
+    reference_image = _normalize_scene_image_data_url(request.reference_image_data_url)
+    return scene_service.create_preview_image(scene_description, reference_image)
 
 
 @app.post("/api/npcs/create")
@@ -469,10 +581,43 @@ def create_npc(request: NpcCreateRequest) -> dict[str, Any]:
     character_description = request.character_description.strip()
     if not character_description:
         raise HTTPException(status_code=400, detail="Charakterbeschreibung darf nicht leer sein.")
-    target_dir = NpcService().create_override(character_description)
+    npc_service = NpcService()
+    npc_image = _npc_create_image(npc_service, character_description, request)
+    target_dir = npc_service.create_override(character_description, npc_image)
     storage.session.npc_id = target_dir.name
     NpcSceneService().adapt_default_fallback()
     return _state_payload()
+
+
+def _npc_create_image(
+    npc_service: NpcService,
+    character_description: str,
+    request: NpcCreateRequest,
+) -> bytes | None:
+    if request.npc_image_data_url is not None:
+        return _normalize_scene_image_data_url(request.npc_image_data_url)
+    if request.reference_image_data_url is None:
+        return None
+    reference_image = _normalize_scene_image_data_url(request.reference_image_data_url)
+    return npc_service.create_preview_image(character_description, reference_image)
+
+
+@app.post("/api/npcs/describe-reference")
+def describe_npc_reference(request: NpcReferenceImageRequest) -> dict[str, str]:
+    reference_image = _normalize_scene_image_data_url(request.image_data_url)
+    return {"character_description": NpcService().describe_reference_image(reference_image)}
+
+
+@app.post("/api/npcs/preview-image")
+def create_npc_preview_image(request: NpcPreviewImageRequest) -> dict[str, str]:
+    character_description = request.character_description.strip()
+    if not character_description:
+        raise HTTPException(status_code=400, detail="Charakterbeschreibung darf nicht leer sein.")
+    reference_image = None
+    if request.reference_image_data_url is not None:
+        reference_image = _normalize_scene_image_data_url(request.reference_image_data_url)
+    image_bytes = NpcService().create_preview_image(character_description, reference_image)
+    return {"image_data_url": _png_data_url(image_bytes)}
 
 
 @app.delete("/api/npc/reset-active")
@@ -504,7 +649,6 @@ def reset_active_npc_runtime_data(
 
 @app.post("/api/history/save")
 def save_checkpoint() -> dict[str, Any]:
-    """Speichert einen Checkpoint des aktiven Spielstands."""
     try:
         history_service = HistoryService()
         history_service.save_checkpoint()
@@ -515,7 +659,6 @@ def save_checkpoint() -> dict[str, Any]:
 
 @app.get("/api/history/list")
 def list_checkpoints() -> dict[str, Any]:
-    """Listet alle verfügbaren Checkpoints für den aktiven NPC/Scene auf."""
     history_service = HistoryService()
     checkpoints = history_service.list_checkpoints()
     return {
@@ -532,7 +675,6 @@ def list_checkpoints() -> dict[str, Any]:
 
 @app.post("/api/history/restore")
 def restore_checkpoint(request: RestoreCheckpointRequest) -> dict[str, Any]:
-    """Stellt einen älteren Spielstand wieder her."""
     try:
         history_service = HistoryService()
         history_service.restore_checkpoint(request.commit_hash)

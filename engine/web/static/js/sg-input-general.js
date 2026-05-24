@@ -1,36 +1,7 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
+import { DELETE_ICON, THEME_DARK_ICON, THEME_LIGHT_ICON } from "./icons.js"
 import "./sg-settings-action.js"
-
-const THEME_DARK_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <circle cx="12" cy="12" r="4"></circle>
-    <path d="M12 2v2"></path>
-    <path d="M12 20v2"></path>
-    <path d="M4.93 4.93l1.41 1.41"></path>
-    <path d="M17.66 17.66l1.41 1.41"></path>
-    <path d="M2 12h2"></path>
-    <path d="M20 12h2"></path>
-    <path d="M6.34 17.66l-1.41 1.41"></path>
-    <path d="M19.07 4.93l-1.41 1.41"></path>
-  </svg>
-`
-
-const THEME_LIGHT_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <path d="M21 12.79A9 9 0 1 1 11.21 3a7 7 0 0 0 9.79 9.79z"></path>
-  </svg>
-`
-
-const DELETE_ICON = /*html*/ `
-  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <polyline points="3 6 5 6 21 6"></polyline>
-    <path d="M19 6l-1 14H6L5 6"></path>
-    <path d="M10 11v6"></path>
-    <path d="M14 11v6"></path>
-    <path d="M9 6V4h6v2"></path>
-  </svg>
-`
 
 function getThemeToggleIcon(theme) {
   return theme === "dark" ? THEME_DARK_ICON : THEME_LIGHT_ICON
@@ -61,7 +32,7 @@ class SocialGameInputGeneral extends HTMLElement {
               <span slot="description">Zwischen hellem und dunklem Design wechseln</span>
           </sg-settings-action>
           <sg-settings-action data-action="reset-active-npc" danger aria-label="Verlauf löschen">
-              ${DELETE_ICON}
+              <span slot="icon">${DELETE_ICON}</span>
               <span>Verlauf löschen</span>
               <span slot="description">Entfernt Nachrichten und Bilder der aktiven Konversation</span>
           </sg-settings-action>

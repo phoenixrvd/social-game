@@ -36,11 +36,13 @@ class SocialGameApp extends HTMLElement {
     `
 
     this.$ = {
+      chat: this.querySelector("sg-chat"),
       input: this.querySelector("sg-input"),
       imageSlot: this.querySelector(".sg-scene-image-slot"),
       imageEmpty: this.querySelector(".sg-scene-image-slot .sg-image-empty"),
     }
 
+    this.$.chat.addEventListener("editSceneContextRequested", this.onEditSceneContextRequested.bind(this))
     appStore.subscribe("focusRequestedAt", this.onInputFocusRequested.bind(this))
     appStore.subscribe("imageUrl", this.onImageUrlChanged.bind(this))
     appStore.subscribe("isImageRefreshLoading", this.onImageRefreshLoadingChanged.bind(this))
@@ -107,6 +109,10 @@ class SocialGameApp extends HTMLElement {
 
   onInputFocusRequested() {
     this.focusInput()
+  }
+
+  onEditSceneContextRequested() {
+    appActions.openSceneContextEditor()
   }
 }
 

@@ -184,24 +184,13 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 **Akzeptanzkriterien:**
 - Eine neue Szene kann in der Web-GUI angelegt werden.
 - Die Auslöseaktion für das Anlegen heißt `Szene erstellen`.
-- Die Web-GUI bietet beim Erstellen die Optionen `Scene Erstellen` und `NPC Kontext erstellen` an.
-- Beide Optionen sind standardmäßig aktiviert.
-- Die Erstellung ist nur ausführbar, wenn eine Beschreibung vorhanden ist und mindestens eine der beiden Optionen aktiviert ist.
+- Die Web-GUI bietet beim Erstellen eine klar erkennbare Möglichkeit, zusätzlich einen NPC-Kontext für die aktive Figur in der betreffenden Szene zu erstellen.
+- Die zusätzliche NPC-Kontext-Erstellung ist standardmäßig aktiviert, wenn sie zusammen mit einer neuen Szene angeboten wird.
+- Die reine NPC-Kontext-Erstellung für eine bereits aktive Szene ist als eigene Kontextaktion oder als klar getrennte Dialog-Variante erkennbar und nicht nur als deaktivierte Szenen-Erstellung dargestellt.
+- Die Szene-Erstellung ist nur ausführbar, wenn eine Beschreibung vorhanden ist.
 - Nach erfolgreichem Anlegen steht die neue Szene für die Nutzung in der Sitzung zur Verfügung.
 
-**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
-
-### Anlegen von NPCs in der Web-GUI
-**Typ:** Funktional  
-**Beschreibung:** Das System muss das Anlegen neuer NPCs in der Web-GUI ermöglichen.  
-**Akzeptanzkriterien:**
-- Eine neue NPC-Erstellung kann in der Web-GUI aus demselben fachlichen Kontext wie die Szenen-Erstellung gestartet werden.
-- Für die NPC-Erstellung kann eine Beschreibung eingegeben und abgesendet werden.
-- Nach erfolgreichem Anlegen kehrt die Oberfläche zur Kontextauswahl zurück.
-- Der neue NPC ist dort sichtbar und für die Nutzung in der Sitzung auswählbar.
-- Fehlschläge des Anlegens werden nachvollziehbar angezeigt.
-
-**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
+**Referenzen:** `doc/requirements/sg-023-referenzbild-fuer-locations.md`
 
 ### Optionale Löschung erstellter Inhalte beim Verlauf-Löschen
 **Typ:** Funktional  

@@ -1,45 +1,7 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
+import { CHECKBOX_CHECKED_ICON, CHECKBOX_UNCHECKED_ICON, DELETE_ICON, REFRESH_IMAGE_ICON, REVERT_ICON } from "./icons.js"
 import "./sg-settings-action.js"
-
-const REFRESH_ICON = /*html*/ `
-  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <path d="M3 3h18v18H3z"></path>
-    <path d="M3 15l5-5 4 4 3-3 6 6"></path>
-    <path d="M16 8h4v4"></path>
-    <path d="M20 8l-4 4"></path>
-  </svg>
-`
-
-const REVERT_ICON = /*html*/ `
-  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <path d="M21 12a9 9 0 1 1-3.1-6.8"></path>
-    <path d="M21 3v6h-6"></path>
-  </svg>
-`
-
-const DELETE_ICON = /*html*/ `
-  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <polyline points="3 6 5 6 21 6"></polyline>
-    <path d="M19 6l-1 14H6L5 6"></path>
-    <path d="M10 11v6"></path>
-    <path d="M14 11v6"></path>
-    <path d="M9 6V4h6v2"></path>
-  </svg>
-`
-
-const CHECKBOX_CHECKED_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <rect x="3" y="3" width="18" height="18" rx="3"></rect>
-    <path d="M7 12l4 4 6-6"></path>
-  </svg>
-`
-
-const CHECKBOX_UNCHECKED_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <rect x="3" y="3" width="18" height="18" rx="3"></rect>
-  </svg>
-`
 
 class SocialGameInputImage extends HTMLElement {
   constructor() {
@@ -63,17 +25,17 @@ class SocialGameInputImage extends HTMLElement {
               <span slot="description">Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten</span>
           </sg-settings-action>
           <sg-settings-action data-action="refresh-image" aria-label="Neues Bild generieren">
-              ${REFRESH_ICON}
+              <span slot="icon">${REFRESH_IMAGE_ICON}</span>
               <span>Neues Bild generieren</span>
               <span slot="description">Erzeugt ein neues Bild aus dem aktuellen Chat-Kontext</span>
           </sg-settings-action>
           <sg-settings-action data-action="revert-image" aria-label="Vorheriges Bild wiederherstellen">
-              ${REVERT_ICON}
+              <span slot="icon">${REVERT_ICON}</span>
               <span>Vorheriges Bild wiederherstellen</span>
               <span slot="description">Ersetzt das aktuelle Bild durch den vorherigen Bildstand</span>
           </sg-settings-action>
           <sg-settings-action data-action="delete-image" danger aria-label="Aktuelles Bild löschen">
-              ${DELETE_ICON}
+              <span slot="icon">${DELETE_ICON}</span>
               <span>Aktuelles Bild löschen</span>
               <span slot="description">Entfernt das aktuelle Bild, ohne ein früheres Bild wiederherzustellen</span>
           </sg-settings-action>

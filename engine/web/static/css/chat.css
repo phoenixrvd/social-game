@@ -118,6 +118,29 @@ sg-message.sg-message-enter {
   object-fit: cover;
 }
 
+.sg-context-message-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.sg-context-message-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  color: inherit;
+  cursor: pointer;
+}
+
+.sg-context-message-edit:hover {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+
 .msg-bubble h1 {
   font-size: 1.75rem;
   margin: 1rem 0;

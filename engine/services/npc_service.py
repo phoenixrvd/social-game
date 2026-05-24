@@ -119,7 +119,7 @@ class NpcService:
             raise ValueError("NPC-Name ergibt keine gueltige ID.")
         return cleaned_name, npc_id
 
-    def create_override(self, character_description: str) -> Path:
+    def create_override(self, character_description: str, npc_image_bytes: bytes | None = None) -> Path:
         orientation = character_description.strip()
         if not orientation:
             raise ValueError("Charakterbeschreibung darf nicht leer sein.")
@@ -129,8 +129,25 @@ class NpcService:
         target_dir = self._next_available_dir(npc_id)
         target_dir.mkdir(parents=True, exist_ok=False)
         self._save_npc_files(target_dir, cleaned_name, description_draft, state_draft)
-        self._save_npc_image(target_dir, description_draft.description_markdown)
+        self._save_npc_image(target_dir, description_draft.description_markdown, npc_image_bytes)
         return target_dir
+
+    def describe_reference_image(self, reference_image_bytes: bytes) -> str:
+        description = client.describe_npc_reference_img(
+            storage.prompts.npc_describe_image.get().strip(),
+            reference_image_bytes,
+        ).strip()
+        if not description:
+            raise RuntimeError("Bildbeschreibung blieb leer.")
+        return description
+
+    def create_preview_image(self, npc_description: str, reference_image_bytes: bytes | None = None) -> bytes:
+        description = npc_description.strip()
+        if not description:
+            raise ValueError("Charakterbeschreibung darf nicht leer sein.")
+        if reference_image_bytes is None:
+            return client.generate_scene_img(self._build_image_prompt(description))
+        return client.generate_npc_img_from_reference(self._build_reference_image_prompt(description), reference_image_bytes)
 
     def _create_description_draft(self, character_description: str) -> NpcDescriptionDraft:
         prompt = self._build_description_prompt(character_description)
@@ -161,6 +178,15 @@ class NpcService:
             .replace("{{NPC_DESCRIPTION}}", npc_description)
         )
 
+    @classmethod
+    def _build_reference_image_prompt(cls, npc_description: str) -> str:
+        return (
+            storage.prompts.npc_create_image_from_reference.get()
+            .strip()
+            .replace("{{IMAGE_STYLE_RULES}}", storage.prompts.image_style_rules.get().strip())
+            .replace("{{NPC_DESCRIPTION}}", npc_description)
+        )
+
     @staticmethod
     def _next_available_dir(npc_id: str) -> Path:
         for suffix in range(0, 10_000):
@@ -182,7 +208,10 @@ class NpcService:
         (target_dir / "description.md").write_text(description_draft.description_markdown.strip() + "\n", encoding="utf-8")
         (target_dir / "state.md").write_text(state_draft.state_markdown.strip() + "\n", encoding="utf-8")
 
-    def _save_npc_image(self, target_dir: Path, npc_description: str) -> None:
+    def _save_npc_image(self, target_dir: Path, npc_description: str, npc_image_bytes: bytes | None = None) -> None:
+        if npc_image_bytes is not None:
+            (target_dir / "img.png").write_bytes(npc_image_bytes)
+            return
         prompt = self._build_image_prompt(npc_description)
         (target_dir / "img.png").write_bytes(client.generate_scene_img(prompt))
 

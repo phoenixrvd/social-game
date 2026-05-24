@@ -1,21 +1,7 @@
 import { appActions } from "./app-actions.js"
 import { appStore } from "./app-store.js"
+import { RESTORE_ICON, SAVE_ICON } from "./icons.js"
 import "./sg-settings-action.js"
-
-const SAVE_ICON = /*html*/ `
-  <svg slot="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-    <polyline points="17 21 17 13 7 13 7 21"></polyline>
-    <polyline points="7 3 7 8 15 8"></polyline>
-  </svg>
-`
-
-const RESTORE_ICON = /*html*/ `
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="sg-icon-sm" aria-hidden="true">
-    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-    <path d="M3 3v5h5"></path>
-  </svg>
-`
 
 function isAutoBackup(checkpoint) {
   return checkpoint.commit_message.includes("[auto-backup]")
@@ -67,7 +53,7 @@ class SocialGameInputHistory extends HTMLElement {
           data-action="save-history"
           aria-label="Zwischenstand speichern"
         >
-            ${SAVE_ICON}
+            <span slot="icon">${SAVE_ICON}</span>
             <span>Zwischenstand speichern</span>
             <span slot="description">Speichert den aktuellen Stand als wiederherstellbaren Checkpoint</span>
         </sg-settings-action>

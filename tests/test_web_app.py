@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 from io import BytesIO
 from pathlib import Path
@@ -21,6 +22,13 @@ def _make_test_png(path: Path, width: int = 4, height: int = 4) -> Path:
     img = Image.new("RGB", (width, height), color=(80, 120, 160))
     img.save(path, format="PNG")
     return path
+
+
+def _test_png_data_url(width: int = 4, height: int = 4) -> str:
+    buffer = BytesIO()
+    Image.new("RGB", (width, height), color=(80, 120, 160)).save(buffer, format="PNG")
+    payload = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/png;base64,{payload}"
 
 
 class FakeSessionView:
@@ -1186,7 +1194,7 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
     created_scenes: list[str] = []
     created_npc_scenes: list[tuple[str, str]] = []
 
-    def fake_scene_create(self, short_description: str):
+    def fake_scene_create(self, short_description: str, scene_image_bytes: bytes | None = None):
         created_scenes.append(short_description)
         scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
         scene_dir.mkdir(parents=True, exist_ok=True)
@@ -1230,6 +1238,59 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
     assert storage.session.scene_id == "test_scene"
 
 
+def test_generate_scene_context_returns_preview_without_saving(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    prompts: list[str] = []
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    def fake_run_prompt_small(prompt: str) -> str:
+        prompts.append(prompt)
+        return "Generierter NPC-Kontext"
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    monkeypatch.setattr(web_app_module.client, "run_prompt_small", fake_run_prompt_small)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post("/api/scene-context/generate", json={"content": "NPC sitzt am Fenster"})
+
+    override_file = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office" / "scene.md"
+    assert response.status_code == 200
+    assert response.json() == {"scene_context": "Generierter NPC-Kontext"}
+    assert "NPC sitzt am Fenster" in prompts[0]
+    assert not override_file.exists()
+
+
+def test_update_scene_context_saves_override_and_returns_updated_state(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    storage.npc.stm.save([])
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.put("/api/scene-context", json={"content": "NPC lehnt an der Bar."})
+
+    override_file = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office" / "scene.md"
+    payload = response.json()
+    assert response.status_code == 200
+    assert override_file.read_text(encoding="utf-8") == "NPC lehnt an der Bar."
+    assert payload["scene_context"] == "NPC lehnt an der Bar."
+    assert payload["messages"][1]["is_editable_scene_context"] is True
+    assert "NPC lehnt an der Bar" in payload["messages"][1]["html"]
+
+
 def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
@@ -1245,7 +1306,7 @@ def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, mo
     created_scenes: list[str] = []
     created_npc_scenes: list[str] = []
 
-    def fake_scene_create(self, short_description: str):
+    def fake_scene_create(self, short_description: str, scene_image_bytes: bytes | None = None):
         created_scenes.append(short_description)
         scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
         scene_dir.mkdir(parents=True, exist_ok=True)
@@ -1285,7 +1346,7 @@ def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, mo
     assert created_npc_scenes == ["Ein neues Café"]
 
 
-def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
+def test_create_scene_always_creates_scene_and_npc_context(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
@@ -1293,13 +1354,13 @@ def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
     monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
-    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: false\n", encoding="utf-8")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: true\n", encoding="utf-8")
 
     created_scenes: list[str] = []
     created_npc_scenes: list[str] = []
     adapted_scenes: list[str] = []
 
-    def fake_scene_create(self, short_description: str):
+    def fake_scene_create(self, short_description: str, scene_image_bytes: bytes | None = None):
         created_scenes.append(short_description)
         scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
         scene_dir.mkdir(parents=True, exist_ok=True)
@@ -1311,55 +1372,35 @@ def test_create_scene_can_create_only_scene(tmp_path, monkeypatch):
     def fake_adapt(self):
         adapted_scenes.append(storage.session.scene_id)
 
+    scheduler_calls: list[str] = []
+
+    class FakeScheduler:
+        def enqueue(self, job_name: str) -> None:
+            scheduler_calls.append(job_name)
+
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
     monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
     monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
     monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", fake_adapt)
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
             "/api/scenes/create",
-            json={"scene_description": "Ein neues Café", "create_scene": True, "create_npc_context": False},
+            json={"scene_description": "Ein neues Café"},
         )
 
     assert response.status_code == 200
     assert created_scenes == ["Ein neues Café"]
-    assert created_npc_scenes == []
+    assert created_npc_scenes == ["Ein neues Café"]
     assert adapted_scenes == ["test_scene"]
+    assert scheduler_calls == ["image"]
     assert storage.session.scene_id == "test_scene"
-
-
-def test_create_scene_can_create_only_npc_context(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
-    from engine.services.npc_scene_service import NpcSceneService
-    from engine.services.scene_service import SceneService
-
-    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
-    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
-    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: false\n", encoding="utf-8")
-
-    created_scenes: list[str] = []
-    created_npc_scenes: list[tuple[str, str]] = []
-
-    def fake_scene_create(self, short_description: str):
-        created_scenes.append(short_description)
-        return tmp_path / ".overrides" / "scenes" / "test_scene"
-
-    def fake_npc_scene_create(self, short_description: str):
-        created_npc_scenes.append((short_description, storage.session.scene_id))
-
-    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
-    monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
-
-    with TestClient(web_app_module.app) as client:
-        response = client.post(
-            "/api/scenes/create",
-            json={"scene_description": "NPC sitzt am Fenster", "create_scene": False, "create_npc_context": True},
-        )
-
-    assert response.status_code == 200
-    assert created_scenes == []
-    assert created_npc_scenes == [("NPC sitzt am Fenster", "cafe")]
-    assert storage.session.scene_id == "cafe"
 
 
 def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(tmp_path, monkeypatch):
@@ -1375,7 +1416,7 @@ def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(t
     (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
     storage.session.image_autogenerate = False
 
-    def fake_scene_create(self, _short_description: str):
+    def fake_scene_create(self, _short_description: str, scene_image_bytes: bytes | None = None):
         scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
         scene_dir.mkdir(parents=True, exist_ok=True)
         (scene_dir / "scene.md").write_text("# Test Scene\n", encoding="utf-8")
@@ -1414,6 +1455,162 @@ def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(t
     assert scheduler_calls == []
 
 
+def test_create_scene_uses_visible_preview_image(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: false\n", encoding="utf-8")
+
+    captured_images: list[bytes | None] = []
+
+    def fake_scene_create(self, _short_description: str, scene_image_bytes: bytes | None = None):
+        captured_images.append(scene_image_bytes)
+        scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        if scene_image_bytes is not None:
+            (scene_dir / "img.png").write_bytes(scene_image_bytes)
+        return scene_dir
+
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", lambda self, _short_description: None)
+    monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", lambda self: None)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "Ein Café",
+                "scene_image_data_url": _test_png_data_url(width=6, height=8),
+            },
+        )
+
+    assert response.status_code == 200
+    assert captured_images[0] is not None
+    with Image.open(BytesIO(captured_images[0] or b"")) as image:
+        assert image.size == (6, 8)
+
+
+def test_create_scene_generates_image_from_reference_when_no_preview_exists(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", tmp_path / ".overrides" / "scenes")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\nimage_autogenerate: false\n", encoding="utf-8")
+
+    generated_image = base64.b64decode(_test_png_data_url(width=9, height=11).split(",", 1)[1])
+    preview_calls: list[tuple[str, bytes | None]] = []
+    captured_images: list[bytes | None] = []
+
+    def fake_preview(self, scene_description: str, reference_image_bytes: bytes | None = None):
+        preview_calls.append((scene_description, reference_image_bytes))
+        return generated_image
+
+    def fake_scene_create(self, _short_description: str, scene_image_bytes: bytes | None = None):
+        captured_images.append(scene_image_bytes)
+        scene_dir = tmp_path / ".overrides" / "scenes" / "test_scene"
+        scene_dir.mkdir(parents=True, exist_ok=True)
+        return scene_dir
+
+    monkeypatch.setattr(SceneService, "create_preview_image", fake_preview)
+    monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
+    monkeypatch.setattr(NpcSceneService, "create_override", lambda self, _short_description: None)
+    monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", lambda self: None)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "Ein Café",
+                "reference_image_data_url": _test_png_data_url(width=5, height=7),
+            },
+        )
+
+    assert response.status_code == 200
+    assert preview_calls[0][0] == "Ein Café"
+    assert preview_calls[0][1] is not None
+    assert captured_images == [generated_image]
+
+
+def test_create_scene_fails_when_reference_image_generation_fails(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    def fail_preview(self, _scene_description: str, _reference_image_bytes: bytes | None = None):
+        raise RuntimeError("generation_failed")
+
+    def fail_scene_create(self, _short_description: str, _scene_image_bytes: bytes | None = None):
+        raise AssertionError("scene must not be created when automatic image generation fails")
+
+    monkeypatch.setattr(SceneService, "create_preview_image", fail_preview)
+    monkeypatch.setattr(SceneService, "create_override", fail_scene_create)
+
+    with TestClient(web_app_module.app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/api/scenes/create",
+            json={
+                "scene_description": "Ein Café",
+                "reference_image_data_url": _test_png_data_url(),
+            },
+        )
+
+    assert response.status_code == 500
+
+
+def test_describe_scene_reference_endpoint_uses_scene_service(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    seen_reference: list[bytes] = []
+
+    def fake_describe(self, reference_image_bytes: bytes):
+        seen_reference.append(reference_image_bytes)
+        return "Ein heller Raum mit Pflanzen."
+
+    monkeypatch.setattr(SceneService, "describe_reference_image", fake_describe)
+
+    with TestClient(web_app_module.app) as client:
+        describe_response = client.post("/api/scenes/describe-reference", json={"image_data_url": _test_png_data_url()})
+
+    assert describe_response.json() == {"scene_description": "Ein heller Raum mit Pflanzen."}
+    assert seen_reference
+
+
+def test_scene_preview_image_endpoint_uses_scene_service(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.scene_service import SceneService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    def fake_preview(self, scene_description: str, reference_image_bytes: bytes | None = None):
+        assert scene_description == "Ein heller Raum"
+        assert reference_image_bytes is not None
+        return base64.b64decode(_test_png_data_url().split(",", 1)[1])
+
+    monkeypatch.setattr(SceneService, "create_preview_image", fake_preview)
+
+    with TestClient(web_app_module.app) as client:
+        preview_response = client.post(
+            "/api/scenes/preview-image",
+            json={"scene_description": "Ein heller Raum", "reference_image_data_url": _test_png_data_url()},
+        )
+
+    assert preview_response.json()["image_data_url"].startswith("data:image/png;base64,")
+
+
 def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
     (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
@@ -1440,22 +1637,6 @@ def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
     assert "darf nicht leer sein" in response.json()["detail"].lower()
 
 
-def test_create_scene_rejects_missing_create_option(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
-    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
-
-    import engine.web.app as web_app_module
-
-    with TestClient(web_app_module.app) as client:
-        response = client.post(
-            "/api/scenes/create",
-            json={"scene_description": "Ein neues Café", "create_scene": False, "create_npc_context": False},
-        )
-
-    assert response.status_code == 400
-    assert "mindestens eine" in response.json()["detail"].lower()
-
-
 def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch):
     import engine.web.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
@@ -1470,7 +1651,7 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
     created_npcs: list[str] = []
     adapted_npcs: list[str] = []
 
-    def fake_npc_create(self, character_description: str):
+    def fake_npc_create(self, character_description: str, npc_image_bytes: bytes | None = None):
         created_npcs.append(character_description)
         npc_dir = tmp_path / ".overrides" / "npcs" / "alex"
         npc_dir.mkdir(parents=True, exist_ok=True)
@@ -1507,6 +1688,157 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
     assert adapted_npcs == ["alex"]
     assert response.json()["npc_id"] == "alex"
     assert storage.session.npc_id == "alex"
+
+
+def test_create_npc_uses_visible_preview_image(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.npc_service import NpcService
+
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    captured_images: list[bytes | None] = []
+
+    def fake_npc_create(self, _character_description: str, npc_image_bytes: bytes | None = None):
+        captured_images.append(npc_image_bytes)
+        npc_dir = tmp_path / ".overrides" / "npcs" / "alex"
+        npc_dir.mkdir(parents=True, exist_ok=True)
+        (npc_dir / "character.yaml").write_text("name: Alex\n", encoding="utf-8")
+        (npc_dir / "description.md").write_text("# Alex\n", encoding="utf-8")
+        (npc_dir / "state.md").write_text("---\ntrust: 0\n---\n", encoding="utf-8")
+        if npc_image_bytes is not None:
+            (npc_dir / "img.png").write_bytes(npc_image_bytes)
+        return npc_dir
+
+    monkeypatch.setattr(NpcService, "create_override", fake_npc_create)
+    monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", lambda self: None)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/npcs/create",
+            json={"character_description": "Alex", "npc_image_data_url": _test_png_data_url(width=5, height=7)},
+        )
+
+    assert response.status_code == 200
+    assert captured_images[0] is not None
+    with Image.open(BytesIO(captured_images[0] or b"")) as image:
+        assert image.size == (5, 7)
+
+
+def test_create_npc_generates_image_from_reference_when_no_preview_exists(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_scene_service import NpcSceneService
+    from engine.services.npc_service import NpcService
+
+    monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", tmp_path / ".overrides" / "npcs")
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    monkeypatch.setattr(config, "DATA_NPC_DIR", tmp_path / ".data" / "npcs")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    generated_image = base64.b64decode(_test_png_data_url(width=8, height=10).split(",", 1)[1])
+    preview_calls: list[tuple[str, bytes | None]] = []
+    captured_images: list[bytes | None] = []
+
+    def fake_preview(self, character_description: str, reference_image_bytes: bytes | None = None):
+        preview_calls.append((character_description, reference_image_bytes))
+        return generated_image
+
+    def fake_npc_create(self, _character_description: str, npc_image_bytes: bytes | None = None):
+        captured_images.append(npc_image_bytes)
+        npc_dir = tmp_path / ".overrides" / "npcs" / "alex"
+        npc_dir.mkdir(parents=True, exist_ok=True)
+        (npc_dir / "character.yaml").write_text("name: Alex\n", encoding="utf-8")
+        (npc_dir / "description.md").write_text("# Alex\n", encoding="utf-8")
+        (npc_dir / "state.md").write_text("---\ntrust: 0\n---\n", encoding="utf-8")
+        return npc_dir
+
+    monkeypatch.setattr(NpcService, "create_preview_image", fake_preview)
+    monkeypatch.setattr(NpcService, "create_override", fake_npc_create)
+    monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", lambda self: None)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/npcs/create",
+            json={"character_description": "Alex", "reference_image_data_url": _test_png_data_url(width=5, height=7)},
+        )
+
+    assert response.status_code == 200
+    assert preview_calls[0][0] == "Alex"
+    assert preview_calls[0][1] is not None
+    assert captured_images == [generated_image]
+
+
+def test_create_npc_fails_when_reference_image_generation_fails(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_service import NpcService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    def fail_preview(self, _character_description: str, _reference_image_bytes: bytes | None = None):
+        raise RuntimeError("generation_failed")
+
+    def fail_npc_create(self, _character_description: str, _npc_image_bytes: bytes | None = None):
+        raise AssertionError("npc must not be created when automatic image generation fails")
+
+    monkeypatch.setattr(NpcService, "create_preview_image", fail_preview)
+    monkeypatch.setattr(NpcService, "create_override", fail_npc_create)
+
+    with TestClient(web_app_module.app, raise_server_exceptions=False) as client:
+        response = client.post(
+            "/api/npcs/create",
+            json={"character_description": "Alex", "reference_image_data_url": _test_png_data_url()},
+        )
+
+    assert response.status_code == 500
+
+
+def test_describe_npc_reference_endpoint_uses_npc_service(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_service import NpcService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    seen_reference: list[bytes] = []
+
+    def fake_describe(self, reference_image_bytes: bytes):
+        seen_reference.append(reference_image_bytes)
+        return "Eine Person mit dunkler Jacke."
+
+    monkeypatch.setattr(NpcService, "describe_reference_image", fake_describe)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post("/api/npcs/describe-reference", json={"image_data_url": _test_png_data_url()})
+
+    assert response.json() == {"character_description": "Eine Person mit dunkler Jacke."}
+    assert seen_reference
+
+
+def test_npc_preview_image_endpoint_uses_npc_service(tmp_path, monkeypatch):
+    import engine.web.app as web_app_module
+    from engine.services.npc_service import NpcService
+
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    def fake_preview(self, character_description: str, reference_image_bytes: bytes | None = None):
+        assert character_description == "Eine Person mit dunkler Jacke"
+        assert reference_image_bytes is not None
+        return base64.b64decode(_test_png_data_url().split(",", 1)[1])
+
+    monkeypatch.setattr(NpcService, "create_preview_image", fake_preview)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post(
+            "/api/npcs/preview-image",
+            json={"character_description": "Eine Person mit dunkler Jacke", "reference_image_data_url": _test_png_data_url()},
+        )
+
+    assert response.json()["image_data_url"].startswith("data:image/png;base64,")
 
 
 def test_create_npc_rejects_empty_character_description(tmp_path, monkeypatch):
