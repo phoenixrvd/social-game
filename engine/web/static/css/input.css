@@ -308,6 +308,7 @@
   animation: path-draw 1.2s ease-in-out infinite alternate;
 }
 
+.sg-settings-action,
 sg-settings-action {
   display: block;
   width: 100%;
@@ -382,6 +383,7 @@ sg-settings-action {
   display: none;
 }
 
+.sg-settings-action.compact .sg-settings-action-button,
 sg-settings-action[compact] .sg-settings-action-button {
   gap: 0.45rem;
   min-height: 38px;
@@ -389,28 +391,34 @@ sg-settings-action[compact] .sg-settings-action-button {
   border-radius: 10px;
 }
 
+.sg-settings-action.compact .sg-settings-action-icon,
 sg-settings-action[compact] .sg-settings-action-icon {
   margin-top: 0;
 }
 
+.sg-settings-action.compact .sg-settings-action-title,
 sg-settings-action[compact] .sg-settings-action-title {
   font-size: 0.78rem;
   font-weight: 650;
 }
 
+.sg-settings-action.danger .sg-settings-action-button,
 sg-settings-action[danger] .sg-settings-action-button {
   color: var(--text-error);
 }
 
+.sg-settings-action.danger .sg-settings-action-text,
 sg-settings-action[danger] .sg-settings-action-text {
   color: color-mix(in srgb, var(--text-error) 82%, var(--text-muted));
 }
 
+.sg-settings-action.inactive .sg-settings-action-icon,
 sg-settings-action[inactive] .sg-settings-action-icon {
   color: var(--text-muted);
   opacity: 0.55;
 }
 
+.sg-settings-action.inactive .sg-settings-action-title,
 sg-settings-action[inactive] .sg-settings-action-title {
   color: var(--text-muted);
 }
@@ -424,6 +432,32 @@ sg-settings-action[inactive] .sg-settings-action-title {
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
+}
+
+.sg-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: color-mix(in srgb, #000 54%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.sg-confirm-dialog {
+  width: min(100%, 420px);
+  padding: 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--bg-panel);
+  box-shadow: var(--shadow-panel);
+}
+
+.sg-confirm-message {
+  margin: 0 0 0.9rem;
+  white-space: pre-wrap;
+  color: var(--text-main);
 }
 
 .sg-settings-checkbox input {

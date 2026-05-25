@@ -32,8 +32,7 @@ vorhandenes NPC-Video anstelle des Bildes wiedergeben.
 - Nach dem Anklicken wird das vorhandene NPC-Video wiedergegeben.
 - Während der Wiedergabe wird an dieser Stelle nicht stattdessen das Bild angezeigt.
 
-**Referenzen:** `npcs/olga/video.mp4`, `engine/web/static/js/sg-context-gallery.js`,
-`doc/requirements/sg-011-web-gui.md`
+**Referenzen:** `npcs/olga/video.mp4`, `doc/requirements/sg-011-web-gui.md`
 
 ### Entfernen von Audiospuren aus NPC-Videos
 

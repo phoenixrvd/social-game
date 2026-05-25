@@ -1,3 +1,14 @@
+FROM node:20-slim AS node-builder
+
+WORKDIR /build
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY vite.config.js tsconfig*.json ./
+COPY engine/web/react/ engine/web/react/
+RUN npm run build
+
 FROM python:3.12-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
@@ -44,6 +55,7 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 COPY --chown=root:root . /app
+COPY --from=node-builder /build/engine/web/static/js /app/engine/web/static/js
 
 RUN mkdir -p /app/.data \
     && chown -R app:app /app/.data \

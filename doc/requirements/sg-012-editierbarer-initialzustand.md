@@ -27,19 +27,16 @@ Der Scene Context ist die fuer den aktiven NPC und die aktive Szene gespeicherte
 - Beim Ausloesen der Bearbeiten-Aktion oeffnet sich der Optionsdialog.
 - Der Optionsdialog zeigt direkt das Formular zur Bearbeitung des Scene Contexts.
 
-**Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/adr/007-ui-architektur-mit-web-components.md`
+**Referenzen:** `doc/requirements/sg-011-web-gui.md`
 
 ### Formular zur Scene-Context-Bearbeitung
 **Typ:** Funktional  
 **Beschreibung:** Das System muss in der Web-GUI ein eigenes Formular zur Bearbeitung des Scene Contexts bereitstellen.  
 **Akzeptanzkriterien:**
-- Das Formular wird als eigenes Web Component `sg-input-scene-context` bereitgestellt.
 - Das Formular enthaelt eine Textarea fuer den Scene Context.
 - Beim Oeffnen ist die Textarea mit dem aktuell gespeicherten Scene Context der aktiven Sitzung vorbelegt.
 - Das Formular enthaelt die Aktion `Neuen Kontext aus Eingabe generieren`.
 - Das Formular enthaelt die Aktion `Kontext speichern`.
-
-**Referenzen:** `engine/web/static/js/sg-input-scene-context.js`
 
 ### Neuen Context aus Eingabe generieren
 **Typ:** Funktional  

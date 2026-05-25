@@ -194,8 +194,35 @@ def test_index_serves_gui(tmp_path, monkeypatch):
     content = (web_app_module.STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
     assert "Social Game GUI" in content
-    assert "<sg-app" in content
-    assert 'src="js/sg-app.js"' in content
+    assert 'id="root"' in content
+    assert 'src="/js/app.js"' in content
+
+
+def test_sg_routes_always_serve_spa_index(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    class FakeScheduler:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        for path in (
+            "/sg",
+            "/sg/",
+            "/sg/ursula/event/options",
+            "/sg/ursula/event/options/context",
+            "/sg/ursula/event/options/history",
+            "/sg/anything/else",
+        ):
+            response = client.get(path)
+            assert response.status_code == 200
+            assert response.headers["content-type"].startswith("text/html")
+            assert "<div id=\"root\"></div>" in response.text
 
 
 def test_security_headers_are_present_on_index(tmp_path, monkeypatch):

@@ -9,3 +9,8 @@ debug*
 __pycache__
 social_game.egg-info
 TODO.md
+node_modules
+engine/web/static/js/app.js
+engine/web/static/js/chunks/
+engine/web/static/js/assets/
+engine/web/static/react/

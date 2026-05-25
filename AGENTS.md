@@ -32,12 +32,12 @@ Ein KI-gestütztes soziales Interaktionssystem mit persistenten NPC-Zuständen, 
 
 ## Developer-Workflows
 
-Das Projekt nutzt eine lokale virtuelle Umgebung unter `.venv`. Vor Python-, pip-, pytest- oder `sg`-Aufrufen zuerst `source .venv/bin/activate` ausfuehren oder direkt die Binaries aus `.venv/bin/` verwenden.
+Das Projekt nutzt eine lokale virtuelle Umgebung unter `.venv`. Vor Python-, pip-, pytest- oder `sg`-Aufrufen zuerst `nvm use` (sieht .nvmrc) und dann `source .venv/bin/activate` ausfuehren.
 
 ```bash
 # Setup
 git config core.hooksPath .githooks
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && nvm use && source .venv/bin/activate
 pip install -r requirements.txt && pip install -e .
 
 # Starten
@@ -60,7 +60,6 @@ microsoft-edge \
 - `doc/guidelines/error-handling.md` – Fehlerbehandlung
 - `doc/guidelines/refactoring.md` – Refactoring-Vorgehen
 - `doc/guidelines/principles.md` – allgemeine Entwicklungsprinzipien
-- `doc/guidelines/web-components.md` – Web-Component-Regeln bei Frontend-Änderungen
 - `doc/guidelines/git-workflow.md` – Git-/Commit-Vorgaben
 
 Bei Konflikten gelten spezifischere Guidelines vor allgemeinen Mustern in dieser Datei.
@@ -83,7 +82,7 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 
 **Fehlerbehandlung** – Provider-Fehler werden in `RuntimeError` mit lesbarer Meldung gewrappt; user-sichtbare Details werden über `user_visible_provider_error_detail(...)` normalisiert. Keine stillen Catches.
 
-**Web-Frontend** – Vanilla-JS Web Components in `engine/web/static/js/`. Komponentenkommunikation ausschließlich via `CustomEvent`, kein direkter DOM-Zugriff auf Kind-Komponenten.
+**Web-Frontend** – React-Anwendung in `engine/web/static/`.
 
 **Requirements-Dokumentation** – Anforderungen primär fachlich, nicht technisch formulieren:
 - Technische Implementierungsdetails nur aufnehmen, wenn sie fachlich zwingend sind oder ohne sie die Anforderung nicht eindeutig/prüfbar wäre.

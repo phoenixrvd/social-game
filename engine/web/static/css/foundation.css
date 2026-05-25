@@ -129,6 +129,10 @@ body {
   color: var(--text-main);
 }
 
+.sg-body a {
+  text-decoration: none;
+}
+
 button,
 select,
 textarea {

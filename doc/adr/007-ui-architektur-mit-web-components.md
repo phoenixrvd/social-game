@@ -1,11 +1,15 @@
 ---
-state: defined
+state: deprecated
+superseded-by: react-migration
 ---
 
 # ADR-007: UI-Architektur mit Web Components
 
 ## Status
-defined
+deprecated
+
+## Begründung der Veraltung
+Die App ist über den ursprünglich angenommenen Umfang hinausgewachsen. State-Management und clientseitiges Routing sind ohne Framework nicht sinnvoll handhabbar. Die GUI migriert zu React.
 
 ## Kontext
 - Die Web-GUI benötigt eine modulare Struktur für Chat, Nachrichten, Eingabe und Szenenbild.

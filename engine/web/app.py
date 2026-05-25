@@ -32,7 +32,7 @@ from engine.storage.models import Message
 from engine.tools.scheduler import Scheduler
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-STATIC_ASSET_PREFIXES = ("/css/", "/js/", "/icons/")
+STATIC_ASSET_PREFIXES = ("/css/", "/js/", "/icons/", "/react/")
 VISIBLE_CHAT_ROLES = {"user", "assistant"}
 MAX_SCENE_IMAGE_BYTES = 5 * 1024 * 1024
 MAX_SCENE_IMAGE_EDGE = 1536
@@ -791,5 +791,19 @@ def run(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None
     uvicorn.run("engine.web.app:app", host=host, port=port, reload=reload)
 
 
-# Montiere statische Dateien am Ende, damit API-Routes zuerst geprueft werden.
-app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")
+# Montiere statische Asset-Verzeichnisse vor der SPA-Catch-All-Route.
+app.mount("/css", StaticFiles(directory=STATIC_DIR / "css"), name="css")
+app.mount("/icons", StaticFiles(directory=STATIC_DIR / "icons"), name="icons")
+app.mount("/js", StaticFiles(directory=STATIC_DIR / "js"), name="js")
+
+
+@app.get("/site.webmanifest")
+def site_webmanifest() -> FileResponse:
+    return FileResponse(STATIC_DIR / "site.webmanifest")
+
+
+@app.get("/")
+@app.get("/{path:path}")
+def sg_spa_route(path: str = "") -> FileResponse:
+    _ = path
+    return FileResponse(STATIC_DIR / "index.html")

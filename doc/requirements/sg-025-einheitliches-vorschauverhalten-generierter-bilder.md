@@ -22,6 +22,7 @@ Diese Anforderung beschreibt das fachlich einheitliche Klickverhalten der Vorsch
 **Beschreibung:** Das System muss in Dialogen mit Referenzbild und Bildvorschau ein einheitliches Klickverhalten für den aktuellen Bildzustand bereitstellen.  
 **Akzeptanzkriterien:**
 - Solange noch kein erzeugtes Vorschaubild vorhanden ist, öffnet ein Klick auf die Vorschau die Auswahl eines Referenzbilds.
+- Die Auswahl eines Referenzbilds erlaubt auf Geräten mit Kamera die Aufnahme eines neuen Bilds, sofern Browser und Gerät dies unterstützen.
 - Sobald ein erzeugtes Vorschaubild vorhanden ist, öffnet ein Klick auf die Vorschau eine vergrößerte Overlay-Vorschau.
 - Solange ein erzeugtes Vorschaubild vorhanden ist, öffnet derselbe Klick keine Auswahl eines Referenzbilds.
 - Die Overlay-Vorschau entspricht fachlich dem Verhalten der Bildvorschau im Chat.

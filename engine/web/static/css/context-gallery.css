@@ -1,3 +1,4 @@
+.sg-context-gallery,
 sg-context-gallery {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -63,6 +64,7 @@ sg-context-gallery-item {
   overflow: hidden;
 }
 
+.sg-context-gallery[data-context-type="npc"] .sg-context-gallery-item,
 sg-context-gallery[data-context-type="npc"] .sg-context-gallery-item,
 sg-context-gallery[data-context-type="npc"] sg-context-gallery-item {
   width: 106px;
