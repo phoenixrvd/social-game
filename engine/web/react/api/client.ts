@@ -16,6 +16,14 @@ function errorMessage(payload: unknown, fallback: string): string {
   ) {
     return (payload as { detail: string }).detail.trim()
   }
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "detail" in payload &&
+    Array.isArray((payload as { detail?: unknown }).detail)
+  ) {
+    return fallback
+  }
   return fallback
 }
 

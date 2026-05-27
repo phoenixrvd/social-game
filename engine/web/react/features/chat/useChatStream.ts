@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { streamChatReply } from "../../api/chat"
 import { stateQueryKey } from "../../api/state"
@@ -9,14 +9,20 @@ export function useChatStream() {
   const [optimisticMessages, setOptimisticMessages] = useState<ChatMessage[]>([])
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState("")
+  const startedAtRef = useRef<number | null>(null)
 
   async function submit(text: string) {
     const message = text.trim()
-    if (!message || isSending) return false
+    if (!message) return false
+    if (isSending) {
+      const startedAt = startedAtRef.current
+      if (startedAt !== null && Date.now() - startedAt <= 20000) return false
+    }
 
     const userId = `user-local-${Date.now()}`
     const assistantId = `assistant-local-${Date.now()}`
     setError("")
+    startedAtRef.current = Date.now()
     setIsSending(true)
     setOptimisticMessages([{ id: userId, role: "user", content: message, timestamp_utc: new Date().toISOString() }])
 
@@ -28,10 +34,12 @@ export function useChatStream() {
       setOptimisticMessages([])
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nachricht konnte nicht gesendet werden.")
+      const message = err instanceof Error ? err.message : "Nachricht konnte nicht gesendet werden."
+      setError(message || "Nachricht konnte nicht gesendet werden.")
       setOptimisticMessages((current) => current.filter((item) => item.id !== assistantId || item.content?.trim()))
       return false
     } finally {
+      startedAtRef.current = null
       setIsSending(false)
     }
   }

@@ -505,6 +505,8 @@ def update_session(request: SessionRequest) -> dict[str, Any]:
         storage.session.scene_id = request.scene_id
     if request.image_autogenerate is not None:
         storage.session.image_autogenerate = request.image_autogenerate
+    if request.image_autogenerate is True:
+        _get_scheduler().enqueue("image")
     if request.npc_id is not None or request.scene_id is not None:
         NpcSceneService().adapt_default_fallback()
     return _state_payload()

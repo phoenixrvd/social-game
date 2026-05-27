@@ -44,7 +44,7 @@ export function ImageOverlay({
   }, [showVideo, videoUrl])
 
   return (
-    <div className={`sg-image-overlay ${open ? "is-open" : ""}`} role="dialog" aria-modal="true" aria-label="Vergroessertes Szenenbild" tabIndex={-1} onClick={onClose}>
+    <div className={`sg-image-overlay ${open ? "is-open" : ""}`} role="dialog" aria-modal="true" aria-label="Vergrößertes Szenenbild" tabIndex={-1} onClick={onClose}>
       <div className="sg-image-overlay-frame">
         <img className="sg-image-overlay-bg" src={imageUrl} alt="" aria-hidden="true" loading="lazy" decoding="async" />
         <img className={`sg-image-overlay-main ${showVideo ? "sg-hidden" : ""}`} src={imageUrl} alt="Szenenbild" loading="lazy" decoding="async" />
@@ -53,7 +53,7 @@ export function ImageOverlay({
           <button className="sg-image-overlay-nav sg-image-overlay-nav-left" type="button" aria-label="Vorheriges Bild anzeigen" onClick={(event) => { event.stopPropagation(); setIndex?.(index - 1) }}>‹</button>
         ) : null}
         {images.length > 1 && index < images.length - 1 ? (
-          <button className="sg-image-overlay-nav sg-image-overlay-nav-right" type="button" aria-label="Aelteres Bild anzeigen" onClick={(event) => { event.stopPropagation(); setIndex?.(index + 1) }}>›</button>
+          <button className="sg-image-overlay-nav sg-image-overlay-nav-right" type="button" aria-label="Älteres Bild anzeigen" onClick={(event) => { event.stopPropagation(); setIndex?.(index + 1) }}>›</button>
         ) : null}
       </div>
     </div>

@@ -83,6 +83,7 @@ Path("prompts/image_build_prompt.md").read_text(encoding="utf-8").replace("{{NPC
 **Fehlerbehandlung** – Provider-Fehler werden in `RuntimeError` mit lesbarer Meldung gewrappt; user-sichtbare Details werden über `user_visible_provider_error_detail(...)` normalisiert. Keine stillen Catches.
 
 **Web-Frontend** – React-Anwendung in `engine/web/static/`.
+- **GUI-Sprache (Deutsch)** – Alle sichtbaren deutschen UI-Texte müssen mit korrekter deutscher Rechtschreibung und Umlauten geschrieben werden (z. B. `löschen`, `zurück`, `größer`, nicht `loeschen`, `zurueck`, `groesser`).
 
 **Requirements-Dokumentation** – Anforderungen primär fachlich, nicht technisch formulieren:
 - Technische Implementierungsdetails nur aufnehmen, wenn sie fachlich zwingend sind oder ohne sie die Anforderung nicht eindeutig/prüfbar wäre.

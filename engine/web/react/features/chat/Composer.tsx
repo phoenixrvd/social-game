@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { KeyboardEvent, RefObject } from "react"
+import type { FormEvent, KeyboardEvent, RefObject } from "react"
 import { Link } from "react-router-dom"
 import { useStateQuery } from "../../api/state"
 import { GearIcon, SendIcon } from "../../shared/icons"
@@ -18,7 +18,7 @@ export function Composer({ inputRef, chat }: ComposerProps) {
   const [input, setInput] = useState("")
   const formRef = useRef<HTMLFormElement | null>(null)
   const options = useOptionsParams()
-  const busy = chat.isSending || isLoading
+  const formBusy = chat.isSending || isLoading
   const npcId = options.npcId || data?.npcId || data?.defaultNpcId
   const sceneId = options.sceneId || data?.sceneId || data?.defaultSceneId
   const optionsHref = npcId && sceneId ? buildOptionsPath(npcId, sceneId, "context") : "/"
@@ -53,9 +53,14 @@ export function Composer({ inputRef, chat }: ComposerProps) {
     await chat.submit(text)
   }
 
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void submit()
+  }
+
   return (
     <section className="sg-input-component">
-      <form ref={formRef} className={`sg-chat-form ${options.isOptionsRoute ? "is-options-open" : ""}`} aria-busy={busy ? "true" : "false"} onSubmit={(event) => event.preventDefault()}>
+      <form ref={formRef} className={`sg-chat-form ${options.isOptionsRoute ? "is-options-open" : ""}`} aria-busy={formBusy ? "true" : "false"} onSubmit={handleSubmit}>
         <OptionsRoute />
         <div className="sg-composer-layout">
           {!options.isOptionsRoute ? <SceneImage className="sg-composer-thumb" imageState={data} /> : null}
@@ -74,7 +79,7 @@ export function Composer({ inputRef, chat }: ComposerProps) {
                 onChange={(event) => setInput(event.currentTarget.value)}
                 onKeyDown={(event) => handleKey(event, submit)}
               />
-              <button type="button" className={`sg-send-button ${chat.isSending ? "is-loading" : ""}`} aria-label="Senden" disabled={busy} onPointerDown={(event) => event.preventDefault()} onClick={submit}>
+              <button type="submit" className={`sg-send-button ${chat.isSending ? "is-loading" : ""}`} aria-label="Senden" disabled={isLoading}>
                 <SendIcon />
               </button>
             </div>

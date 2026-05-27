@@ -456,8 +456,17 @@ sg-settings-action[inactive] .sg-settings-action-title {
 
 .sg-confirm-message {
   margin: 0 0 0.9rem;
-  white-space: pre-wrap;
   color: var(--text-main);
+}
+
+.sg-confirm-list {
+  margin: 0 0 0.9rem;
+  padding-left: 1.25rem;
+  color: var(--text-main);
+}
+
+.sg-confirm-list li + li {
+  margin-top: 0.2rem;
 }
 
 .sg-settings-checkbox input {

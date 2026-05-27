@@ -52,5 +52,5 @@ function encodeImage(canvas: HTMLCanvasElement): string {
     const bytes = Math.ceil(((dataUrl.split(",")[1] || "").length * 3) / 4)
     if (bytes <= 5 * 1024 * 1024) return dataUrl
   }
-  throw new Error("Das verkleinerte Referenzbild ist groesser als 5 MB.")
+  throw new Error("Das verkleinerte Referenzbild ist größer als 5 MB.")
 }

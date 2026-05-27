@@ -408,6 +408,23 @@ def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
     assert payload["scene_id"] == "cafe"
 
 
+def test_update_session_enqueues_image_job_when_autogenerate_enabled(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    storage.session.image_autogenerate = False
+    calls: list[str] = []
+
+    class FakeScheduler:
+        def enqueue(self, job_name: str) -> None:
+            calls.append(job_name)
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    payload = web_app_module.update_session(web_app_module.SessionRequest(image_autogenerate=True))
+
+    assert payload["image_autogenerate"] is True
+    assert calls == ["image"]
+
+
 def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 

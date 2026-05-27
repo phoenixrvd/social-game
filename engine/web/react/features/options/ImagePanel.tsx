@@ -20,9 +20,9 @@ export function ImagePanel() {
 
   async function runConfirmed(action: "revert" | "delete") {
     const accepted = await confirm({
-      title: action === "delete" ? "Bild loeschen" : "Bild wiederherstellen",
-      message: action === "delete" ? "Soll das aktuelle Bild wirklich geloescht werden?" : "Soll das aktive Bild wirklich auf das letzte Backup zurueckgesetzt werden?",
-      confirmLabel: action === "delete" ? "Loeschen" : "Wiederherstellen",
+      title: action === "delete" ? "Bild löschen" : "Bild wiederherstellen",
+      message: action === "delete" ? "Soll das aktuelle Bild wirklich gelöscht werden?" : "Soll das aktive Bild wirklich auf das letzte Backup zurückgesetzt werden?",
+      confirmLabel: action === "delete" ? "Löschen" : "Wiederherstellen",
       danger: action === "delete",
     })
     if (!accepted) return

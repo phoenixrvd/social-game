@@ -32,7 +32,7 @@ export function SceneImage({ className = "", imageState }: SceneImageProps) {
   return (
     <div className={className}>
       <div className={`sg-image-frame ${hasImage ? "" : "sg-hidden"}${isRefreshing ? " is-loading" : ""}`}>
-        <button type="button" className="sg-image-content sg-image-button" aria-label="Bild vergroessern" disabled={!hasImage} onClick={() => setOpen(true)}>
+        <button type="button" className="sg-image-content sg-image-button" aria-label="Bild vergrößern" disabled={!hasImage} onClick={() => setOpen(true)}>
           <img className="sg-image-bg" src={imageUrl || EMPTY_IMAGE} alt="" aria-hidden="true" loading="lazy" decoding="async" />
           <img className="sg-image-main" src={imageUrl || EMPTY_IMAGE} alt="Szenenbild" loading="lazy" decoding="async" />
           {videoUrl ? <video ref={videoRef} className={`sg-image-inline-video ${showVideo ? "is-visible" : ""}`} src={videoUrl} preload="auto" muted playsInline autoPlay={showVideo} disablePictureInPicture /> : null}

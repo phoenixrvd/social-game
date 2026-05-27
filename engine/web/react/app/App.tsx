@@ -1,6 +1,7 @@
-import { useRef } from "react"
+import { useEffect, useRef } from "react"
 import { Outlet } from "react-router-dom"
-import { useStateQuery } from "../api/state"
+import { useImageSignatureQuery, useStateQuery } from "../api/state"
+import type { AppStateView } from "../api/types"
 import { ChatPane } from "../features/chat/ChatPane"
 import { Composer } from "../features/chat/Composer"
 import { useChatStream } from "../features/chat/useChatStream"
@@ -12,7 +13,23 @@ export function App() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const stateQuery = useStateQuery()
   const state = stateQuery.data
+  const imageSignatureQuery = useImageSignatureQuery(Boolean(state?.imageAutogenerate))
   const chat = useChatStream()
+
+  useEffect(() => {
+    const polledState = imageSignatureQuery.data
+    if (!state || !polledState) return
+    if (!hasImageStateChanged(state, polledState)) return
+    void stateQuery.refetch()
+  }, [
+    state,
+    stateQuery,
+    imageSignatureQuery.data?.imageSignature,
+    imageSignatureQuery.data?.imageIsOriginal,
+    imageSignatureQuery.data?.videoUrl,
+    imageSignatureQuery.data?.imageOriginalUrl,
+    imageSignatureQuery.data?.imageBackups,
+  ])
 
   return (
     <div className="app-viewport">
@@ -31,4 +48,15 @@ export function App() {
       <Outlet />
     </div>
   )
+}
+
+function hasImageStateChanged(currentState: AppStateView, polledState: AppStateView): boolean {
+  if (currentState.imageSignature !== polledState.imageSignature) return true
+  if (currentState.imageIsOriginal !== polledState.imageIsOriginal) return true
+  if (currentState.videoUrl !== polledState.videoUrl) return true
+  if (currentState.imageOriginalUrl !== polledState.imageOriginalUrl) return true
+
+  const currentBackups = currentState.imageBackups.map((backup) => `${backup.name}|${backup.signature || ""}`)
+  const polledBackups = polledState.imageBackups.map((backup) => `${backup.name}|${backup.signature || ""}`)
+  return currentBackups.join("||") !== polledBackups.join("||")
 }

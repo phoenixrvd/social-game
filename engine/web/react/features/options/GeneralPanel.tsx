@@ -36,7 +36,13 @@ export function GeneralPanel() {
     if (deleteNpc && data?.isDynamicNpc) parts.push("erstellter NPC")
     if (deleteScene && data?.isDynamicScene) parts.push("erstellte Szene")
     if (contextChecked) parts.push("NPC-Kontext")
-    const accepted = await confirm({ title: "Verlauf loeschen", message: `Sollen folgende Dinge geloescht werden?\n\n- ${parts.join("\n- ")}`, confirmLabel: "Loeschen", danger: true })
+    const accepted = await confirm({
+      title: "Verlauf löschen",
+      message: "Sollen folgende Dinge gelöscht werden?",
+      listItems: parts,
+      confirmLabel: "Löschen",
+      danger: true,
+    })
     if (!accepted) return
     await resetNpc.mutateAsync({ deleteNpc, deleteScene, deleteNpcContext: contextChecked })
     options.close()

@@ -44,7 +44,7 @@ async function readStream(body: ReadableStream<Uint8Array>, onChunk: (delta: str
     if (done) break
   }
 
-  if (!doneSeen) throw new Error("Nachricht wurde unvollstaendig uebertragen.")
+  if (!doneSeen) throw new Error("Nachricht wurde unvollständig übertragen.")
 }
 
 function parseStreamEvent(line: string): ChatStreamEvent | null {
@@ -52,6 +52,6 @@ function parseStreamEvent(line: string): ChatStreamEvent | null {
   try {
     return JSON.parse(line) as ChatStreamEvent
   } catch {
-    throw new Error("Ungueltige Streaming-Antwort vom Server.")
+    throw new Error("Ungültige Streaming-Antwort vom Server.")
   }
 }
