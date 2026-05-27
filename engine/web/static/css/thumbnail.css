@@ -47,12 +47,16 @@
 }
 
 .sg-composer-thumb .sg-image-frame.is-loading,
-.sg-scene-image-slot.is-loading {
+.sg-scene-thumbnail .sg-image-frame.is-loading,
+.sg-scene-image-slot.is-loading,
+.sg-scene-preview.is-loading {
   overflow: hidden;
 }
 
 .sg-composer-thumb .sg-image-frame.is-loading::after,
-.sg-scene-image-slot.is-loading::after {
+.sg-scene-thumbnail .sg-image-frame.is-loading::after,
+.sg-scene-image-slot.is-loading::after,
+.sg-scene-preview.is-loading::after {
   content: "";
   position: absolute;
   inset: 0;

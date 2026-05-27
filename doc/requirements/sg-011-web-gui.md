@@ -204,6 +204,38 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 
 **Referenzen:** `doc/requirements/sg-009-git-basierte-spielstandshistorie.md`, `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`
 
+### Navigierbare Kontextgalerie
+**Typ:** Funktional  
+**Beschreibung:** Das System muss NPCs und Szenen in der Kontextgalerie direkt auswählbar und eindeutig erreichbar machen.  
+**Akzeptanzkriterien:**
+- Ein Eintrag der NPC-Kontextgalerie führt zur Optionsansicht für diesen NPC in der aktuell aktiven Szene.
+- Ein Eintrag der Szenen-Kontextgalerie führt zur Optionsansicht für diese Szene mit dem aktuell aktiven NPC.
+- Der aktuell ausgewählte NPC oder die aktuell ausgewählte Szene ist in der jeweiligen Kontextgalerie erkennbar markiert.
+- Die Einträge bleiben auch dann auswählbar, wenn sie ein Bild oder Video als Medienvorschau enthalten.
+
+**Referenzen:** Keine
+
+### Inline-Wiedergabe des Originalvideos im Szenenbildbereich
+**Typ:** Funktional  
+**Beschreibung:** Das System muss ein vorhandenes Originalvideo zum aktuellen Szenenbild direkt im Szenenbildbereich wiedergeben können.  
+**Akzeptanzkriterien:**
+- Ist zum aktuell angezeigten Originalbild ein Video vorhanden, wird dieses im Szenenbildbereich stumm und inline wiedergegeben.
+- Die Inline-Wiedergabe startet ohne zusätzliche Nutzeraktion, sofern der Browser stumme Inline-Wiedergabe unterstützt.
+- Wird nicht das Originalbild angezeigt, ersetzt das Originalvideo den angezeigten Bildstand nicht.
+- Die vergrößerbare Overlay-Ansicht des Szenenbilds bleibt weiterhin verfügbar.
+
+**Referenzen:** `doc/requirements/sg-021-npc-videos-in-der-kontextgalerie.md`
+
+### Sichtbares Feedback während Bildgenerierung
+**Typ:** Nicht-funktional  
+**Beschreibung:** Das System muss in der Web-GUI ausgelöste Bild- und Vorschaubildgenerierung als laufende Aktion sichtbar machen.  
+**Akzeptanzkriterien:**
+- Nach dem Auslösen einer Bild- oder Vorschaubildgenerierung ist am betroffenen Bildbereich ein sichtbarer Ladezustand erkennbar.
+- Der Ladezustand endet, sobald die Generierung erfolgreich abgeschlossen ist oder fehlschlägt.
+- Die Web-GUI bleibt während der laufenden Bildgenerierung nachvollziehbar bedienbar und verdeckt den betroffenen Bildbereich nicht dauerhaft durch das auslösende Menü.
+
+**Referenzen:** `doc/requirements/sg-005-npc-bilder.md`, `doc/requirements/sg-014-initiale-bildgenerierung-aus-npc-und-szenenkontext.md`, `doc/requirements/sg-025-einheitliches-vorschauverhalten-generierter-bilder.md`
+
 ### Aktivierbarkeit der optionalen Löschoptionen
 **Typ:** Funktional  
 **Beschreibung:** Das System muss die optionalen Löschoptionen nur bei passend erstellten aktiven Inhalten aktivierbar machen.  

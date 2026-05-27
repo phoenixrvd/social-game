@@ -28,9 +28,10 @@ sobald eine NPC-Animation abgespielt wird.
 vorhandenes NPC-Video anstelle des Bildes wiedergeben.  
 **Akzeptanzkriterien:**
 
-- Existiert für den aktiven NPC ein Video, kann der Medienbereich in der Kontextgalerie angeklickt werden.
-- Nach dem Anklicken wird das vorhandene NPC-Video wiedergegeben.
-- Während der Wiedergabe wird an dieser Stelle nicht stattdessen das Bild angezeigt.
+- Existiert für den aktiven NPC ein Video, startet ein Klick auf den Medienbereich die Wiedergabe dieses Videos.
+- Die Wiedergabe erfolgt stumm und inline im Medienbereich der Kontextgalerie, sofern der Browser stumme Inline-Wiedergabe unterstützt.
+- Während der Wiedergabe wird an dieser Stelle kein statisches Bild desselben NPC angezeigt.
+- Wird ein anderer NPC ausgewählt, endet die Wiedergabe des zuvor angezeigten NPC-Videos.
 
 **Referenzen:** `npcs/olga/video.mp4`, `doc/requirements/sg-011-web-gui.md`
 

@@ -1,5 +1,6 @@
 import type { ChangeEvent } from "react"
 import { useState } from "react"
+import { useIsMutating } from "@tanstack/react-query"
 import { DeleteIcon, ImageIcon, TextEditIcon } from "../../shared/icons"
 import { SettingsAction } from "../../shared/SettingsAction"
 import { resizeReferenceImage } from "../../shared/imageUtils"
@@ -32,6 +33,7 @@ export function ReferenceImageInput({
 }: ReferenceImageInputProps) {
   const [overlayOpen, setOverlayOpen] = useState(false)
   const visibleImageDataUrl = previewImageDataUrl || referenceImageDataUrl
+  const isPreviewing = useIsMutating({ mutationKey: ["scene-creator", "preview-image"] }) + useIsMutating({ mutationKey: ["npc-creator", "preview-image"] }) > 0
 
   async function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0]
@@ -53,7 +55,7 @@ export function ReferenceImageInput({
 
   return (
     <div className="sg-scene-reference-panel">
-      <label className="sg-scene-preview" data-empty={visibleImageDataUrl ? "false" : "true"} role="button" tabIndex={0} aria-label={previewImageDataUrl ? "Bildvorschau vergroessern" : "Referenzbild wählen"} onClick={(event) => { if (previewImageDataUrl) { event.preventDefault(); setOverlayOpen(true) } }}>
+      <label className={`sg-scene-preview${isPreviewing ? " is-loading" : ""}`} data-empty={visibleImageDataUrl ? "false" : "true"} role="button" tabIndex={0} aria-label={previewImageDataUrl ? "Bildvorschau vergroessern" : "Referenzbild wählen"} onClick={(event) => { if (previewImageDataUrl) { event.preventDefault(); setOverlayOpen(true) } }}>
         <input className="sg-visually-hidden" type="file" accept="image/*" capture="environment" disabled={busy || Boolean(previewImageDataUrl)} onChange={selectFile} />
         <span className="sg-image-content">
           {visibleImageDataUrl ? (

@@ -36,7 +36,7 @@ export function ImagePanel() {
       <h3 className="sg-settings-heading">Bild</h3>
       <div className="sg-settings-actions">
         <SettingsAction icon={data?.imageAutogenerate ? <CheckedIcon /> : <UncheckedIcon />} title="Automatische Bildgenerierung" description="Bilder werden automatisch neu generiert und mit dem Chatverlauf konsistent gehalten" ariaPressed={Boolean(data?.imageAutogenerate)} inactive={!data?.imageAutogenerate} disabled={busy} onClick={() => updateSession.mutate({ npcId: data?.npcId || undefined, sceneId: data?.sceneId || undefined, imageAutogenerate: !data?.imageAutogenerate })} />
-        <SettingsAction icon={<RefreshIcon />} title="Neues Bild generieren" description="Erzeugt ein neues Bild aus dem aktuellen Chat-Kontext" disabled={busy} onClick={async () => { await refreshImage.mutateAsync(); options.close() }} />
+        <SettingsAction icon={<RefreshIcon />} title="Neues Bild generieren" description="Erzeugt ein neues Bild aus dem aktuellen Chat-Kontext" disabled={busy} onClick={() => { options.close(); void refreshImage.mutateAsync() }} />
         <SettingsAction icon={<RevertIcon />} title="Vorheriges Bild wiederherstellen" description="Ersetzt das aktuelle Bild durch den vorherigen Bildstand" disabled={busy} onClick={() => runConfirmed("revert")} />
         <SettingsAction icon={<DeleteIcon />} title="Aktuelles Bild löschen" description="Entfernt das aktuelle Bild, ohne ein früheres Bild wiederherzustellen" danger disabled={busy} onClick={() => runConfirmed("delete")} />
       </div>

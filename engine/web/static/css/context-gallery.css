@@ -57,7 +57,9 @@ sg-context-gallery-item {
   border: 1px solid var(--border-soft);
   border-radius: 10px;
   background: var(--bg-input);
+  color: inherit;
   cursor: pointer;
+  text-decoration: none;
   transition: all 140ms ease;
   outline: none;
   -webkit-tap-highlight-color: transparent;
@@ -77,6 +79,8 @@ sg-context-gallery-item:hover {
 }
 
 .sg-context-gallery-item--selected,
+.sg-context-gallery-item:active,
+sg-context-gallery-item:active,
 sg-context-gallery-item.sg-context-gallery-item--selected {
   border-color: color-mix(in srgb, var(--primary) 72%, var(--border-strong));
   background: color-mix(in srgb, var(--primary) 18%, var(--bg-input));
@@ -97,6 +101,8 @@ sg-context-gallery-item.sg-context-gallery-item--selected:hover {
 }
 
 .sg-context-gallery-item--selected .sg-context-gallery-media,
+.sg-context-gallery-item:active .sg-context-gallery-media,
+sg-context-gallery-item:active .sg-context-gallery-media,
 sg-context-gallery-item.sg-context-gallery-item--selected .sg-context-gallery-media {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 72%, var(--border-strong));
 }
