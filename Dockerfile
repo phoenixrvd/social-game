@@ -49,6 +49,8 @@ RUN groupadd --system --gid 10001 app \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git \
+    && git config --system user.name "Social Game" \
+    && git config --system user.email "social-game@local" \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

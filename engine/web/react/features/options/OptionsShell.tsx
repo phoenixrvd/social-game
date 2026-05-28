@@ -1,4 +1,5 @@
 import type { ReactNode } from "react"
+import { NavLink } from "react-router-dom"
 import { ContextIcon, GeneralIcon, ImageIcon, SaveIcon } from "../../shared/icons"
 import { ContextPanel } from "./ContextPanel"
 import { EntityCreator } from "../entities/EntityCreator"
@@ -6,7 +7,7 @@ import { GeneralPanel } from "./GeneralPanel"
 import { HistoryPanel } from "./HistoryPanel"
 import { ImagePanel } from "./ImagePanel"
 import { SceneContextPanel } from "./SceneContextPanel"
-import { type OptionPanel, useOptionsParams } from "./routes"
+import { buildOptionsPath, type OptionPanel, useOptionsParams } from "./routes"
 
 type OptionsShellProps = {
   activePanel: OptionPanel
@@ -21,6 +22,9 @@ const TABS: { id: OptionPanel; icon: ReactNode; label: string }[] = [
 
 export function OptionsShell({ activePanel }: OptionsShellProps) {
   const options = useOptionsParams()
+  const npcId = options.npcId
+  const sceneId = options.sceneId
+  if (!npcId || !sceneId) return null
 
   return (
     <div id="sg-options-panel" className="sg-options-panel">
@@ -31,20 +35,19 @@ export function OptionsShell({ activePanel }: OptionsShellProps) {
       </div>
       <div className="sg-options-tabs-list" role="tablist" aria-label="Optionen">
         {TABS.map((tab) => (
-          <button
+          <NavLink
             key={tab.id}
-            type="button"
-            className="sg-options-tab"
+            className={({ isActive }) => `sg-options-tab${isActive ? " is-active" : ""}`}
             role="tab"
             id={`sg-options-tab-${tab.id}`}
             aria-label={tab.label}
             aria-selected={activePanel === tab.id ? "true" : "false"}
             aria-controls={`sg-options-tab-panel-${tab.id}`}
             tabIndex={activePanel === tab.id ? 0 : -1}
-            onClick={() => options.navigateToPanel(tab.id)}
+            to={buildOptionsPath(npcId, sceneId, tab.id)}
           >
             {tab.icon}
-          </button>
+          </NavLink>
         ))}
       </div>
     </div>
@@ -56,7 +59,8 @@ function ActivePanel({ panel }: { panel: OptionPanel }) {
   if (panel === "image") return <ImagePanel />
   if (panel === "history") return <HistoryPanel />
   if (panel === "general") return <GeneralPanel />
-  if (panel === "scene-creator") return <EntityCreator type="scene" />
-  if (panel === "npc-creator") return <EntityCreator type="npc" />
+  if (panel === "scene-creator") return <EntityCreator type="scene" mode="create" />
+  if (panel === "scene-editor") return <EntityCreator type="scene" mode="edit" />
+  if (panel === "npc-creator") return <EntityCreator type="npc" mode="create" />
   return <SceneContextPanel />
 }

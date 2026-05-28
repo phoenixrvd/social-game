@@ -24,6 +24,14 @@ class HistoryService:
         self._git_dir = storage.npc.base_runtime
         self._ensure_git_repo()
 
+    @staticmethod
+    def _format_process_output(output: str | bytes | None) -> str:
+        if output is None:
+            return ""
+        if isinstance(output, bytes):
+            return output.decode("utf-8", errors="replace").strip()
+        return output.strip()
+
     def _ensure_git_repo(self) -> None:
         """Initialisiert das Git-Repository, falls nicht vorhanden."""
         self._git_dir.mkdir(parents=True, exist_ok=True)
@@ -41,7 +49,8 @@ class HistoryService:
             )
             logger.info(f"Git-Repository in {self._git_dir} initialisiert")
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Git-Initialisierung fehlgeschlagen: {e.stderr.decode()}") from e
+            error_detail = self._format_process_output(e.stderr)
+            raise RuntimeError(f"Git-Initialisierung fehlgeschlagen: {error_detail}") from e
 
     def _has_changes(self) -> bool:
         """Prüft, ob es uncommitted changes gibt."""
@@ -105,7 +114,14 @@ class HistoryService:
             logger.info(f"Checkpoint erstellt: {message} ({commit_hash})")
             return commit_hash
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Commit fehlgeschlagen: {e.stderr.decode()}") from e
+            stderr = self._format_process_output(e.stderr)
+            stdout = self._format_process_output(e.stdout)
+            combined_output = "\n".join(part for part in [stderr, stdout] if part)
+
+            if "nothing to commit" in combined_output.lower():
+                raise RuntimeError("Keine Änderungen vorhanden, Checkpoint nicht erstellt") from e
+
+            raise RuntimeError(f"Commit fehlgeschlagen: {combined_output}") from e
 
     def save_checkpoint(self, label: str | None = None) -> str:
         """Speichert einen Checkpoint für den aktiven Spielstand."""
@@ -191,5 +207,5 @@ class HistoryService:
             self._git_add_and_commit(f"[revert to] {commit_datetime} - {commit_orig_message}")
             logger.info(f"Checkpoint wiederhergestellt: {commit_hash}")
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Checkpoint-Wiederherstellung fehlgeschlagen: {e.stderr.decode()}") from e
-
+            error_detail = self._format_process_output(e.stderr)
+            raise RuntimeError(f"Checkpoint-Wiederherstellung fehlgeschlagen: {error_detail}") from e

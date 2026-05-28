@@ -51,3 +51,21 @@ export function useResetNpcMutation() {
     },
   })
 }
+
+export function useResetSceneMutation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationKey: ["session", "reset-scene"],
+    mutationFn: async () => {
+      const payload = await requestJson<StateDto>(
+        "/api/scenes/reset-active",
+        { method: "DELETE" },
+        "Scene konnte nicht zurueckgesetzt werden.",
+      )
+      return mapState(payload)
+    },
+    onSuccess: (state: AppStateView) => {
+      queryClient.setQueryData(stateQueryKey, state)
+    },
+  })
+}

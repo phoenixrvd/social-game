@@ -1,4 +1,4 @@
-import { useMatch, useNavigate, useParams } from "react-router-dom"
+import { generatePath, useMatch, useNavigate, useParams } from "react-router-dom"
 
 export const OPTIONS_PANELS = [
   "context",
@@ -6,9 +6,12 @@ export const OPTIONS_PANELS = [
   "history",
   "general",
   "scene-creator",
+  "scene-editor",
   "npc-creator",
   "scene-context",
 ] as const
+
+export const OPTIONS_ROUTE_PATTERN = "/sg/:npcId/:sceneId/options/:panel"
 
 export type OptionPanel = (typeof OPTIONS_PANELS)[number]
 
@@ -17,12 +20,12 @@ export function isOptionPanel(value: string | undefined): value is OptionPanel {
 }
 
 export function buildOptionsPath(npcId: string, sceneId: string, panel: OptionPanel = "context") {
-  return `/sg/${encodeURIComponent(npcId)}/${encodeURIComponent(sceneId)}/options/${panel}`
+  return generatePath(OPTIONS_ROUTE_PATTERN, { npcId, sceneId, panel })
 }
 
 export function useOptionsParams() {
   const params = useParams()
-  const routeMatch = useMatch("/sg/:npcId/:sceneId/options/:panel")
+  const routeMatch = useMatch(OPTIONS_ROUTE_PATTERN)
   const navigate = useNavigate()
   const panel = isOptionPanel(params.panel) ? params.panel : "context"
   const isOptionsRoute = Boolean(routeMatch)

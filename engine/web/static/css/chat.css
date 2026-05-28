@@ -121,6 +121,7 @@ sg-message.sg-message-enter {
 .sg-context-message-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 0.4rem;
   margin-top: 0.35rem;
 }
 

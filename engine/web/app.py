@@ -392,6 +392,22 @@ def _scene_option_image_url(scene_id: str) -> str:
     return f"/api/scenes/{scene_id}/image?v={version}"
 
 
+def _can_reset_active_scene() -> bool:
+    scene_id = storage.session.scene_id
+    default_scene_dir = config.SCENE_DIR / scene_id
+    override_scene_dir = config.OVERRIDES_SCENE_DIR / scene_id
+    if not default_scene_dir.is_dir() or storage.scene.location.is_dynamic:
+        return False
+    if override_scene_dir.exists():
+        return True
+    for npc in storage.list_npcs:
+        scene_view = storage.scene_view(npc.npc_id, scene_id)
+        npc_view = storage.npc_view(npc.npc_id, scene_id)
+        if npc_view.base_runtime.exists() or scene_view.npc_context.override.path.parent.exists():
+            return True
+    return False
+
+
 def _list_npcs() -> list[dict[str, str | None]]:
     return [
         {
@@ -469,6 +485,7 @@ def _state_payload() -> dict[str, Any]:
         "character_description": npc.description.get(),
         "scene_id": scene_id,
         "scene_description": scene.description,
+        "scene_location_description": scene.location.original.get(),
         "scene_context": scene.npc_context.original.get(),
         "character_data": character,
         "messages": _visible_messages(npc, scene),
@@ -487,6 +504,7 @@ def _state_payload() -> dict[str, Any]:
         "default_scene_id": config.DEFAULT_SCENE_ID,
         "is_dynamic_npc": npc.is_dynamic_npc,
         "is_dynamic_scene": scene.location.is_dynamic,
+        "can_reset_scene": _can_reset_active_scene(),
     }
 
 
@@ -549,6 +567,21 @@ def create_scene(request: SceneCreateRequest) -> dict[str, Any]:
 
     NpcSceneService().create_override(scene_description)
     NpcSceneService().adapt_default_fallback()
+    if storage.session.image_autogenerate:
+        _get_scheduler().enqueue("image")
+    return _state_payload()
+
+
+@app.put("/api/scenes/update-active")
+def update_active_scene(request: SceneCreateRequest) -> dict[str, Any]:
+    scene_description = request.scene_description.strip()
+    if not scene_description:
+        raise HTTPException(status_code=400, detail="Szenenbeschreibung darf nicht leer sein.")
+
+    scene_service = SceneService()
+    scene_image = _scene_create_image(scene_service, scene_description, request)
+    scene_service.update_active_override(scene_description, scene_image)
+    NpcSceneService().create_override(scene_description)
     if storage.session.image_autogenerate:
         _get_scheduler().enqueue("image")
     return _state_payload()
@@ -646,6 +679,18 @@ def reset_active_npc_runtime_data(
     if delete_npc:
         session.npc_id = config.DEFAULT_NPC_ID
         NpcService.delete_dynamic_npc_artifacts(npc_id)
+    return _state_payload()
+
+
+@app.delete("/api/scenes/reset-active")
+def reset_active_scene() -> dict[str, Any]:
+    scene_id = storage.session.scene_id
+    if not _can_reset_active_scene():
+        raise HTTPException(status_code=400, detail="Aktive Szene kann nicht zurueckgesetzt werden.")
+
+    _get_scheduler().clear_pending_jobs()
+    NpcService.reset_active_runtime()
+    SceneService.reset_scene_artifacts(scene_id)
     return _state_payload()
 
 

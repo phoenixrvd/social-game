@@ -13,6 +13,7 @@ export function SceneImage({ className = "", imageState }: SceneImageProps) {
   const [open, setOpen] = useState(false)
   const [index, setIndex] = useState(0)
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const previousVideoKeyRef = useRef<string | null>(null)
   const images = overlayImages(imageState)
   const imageUrl = imageState?.imageUrl || null
   const videoUrl = imageState?.videoUrl || null
@@ -24,10 +25,20 @@ export function SceneImage({ className = "", imageState }: SceneImageProps) {
 
   useEffect(() => {
     const video = videoRef.current
-    if (!showVideo || !video) return
+    const videoKey = `${imageState?.imageSignature || ""}::${videoUrl || ""}::${showVideo ? "1" : "0"}`
+    if (!showVideo || !video) {
+      previousVideoKeyRef.current = videoKey
+      return
+    }
+    if (!previousVideoKeyRef.current) {
+      previousVideoKeyRef.current = videoKey
+      return
+    }
+    if (previousVideoKeyRef.current === videoKey) return
+    previousVideoKeyRef.current = videoKey
     video.currentTime = 0
     void video.play().catch(() => {})
-  }, [showVideo, videoUrl])
+  }, [imageState?.imageSignature, showVideo, videoUrl])
 
   return (
     <div className={className}>

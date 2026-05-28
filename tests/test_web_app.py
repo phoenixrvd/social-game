@@ -563,6 +563,58 @@ def test_reset_active_npc_can_delete_dynamic_scene_and_reset_session(tmp_path, m
     assert payload["is_dynamic_scene"] is False
 
 
+def test_reset_active_scene_resets_standard_scene_artifacts(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    scene_override_dir = tmp_path / ".overrides" / "scenes" / "office"
+    scene_override_dir.mkdir(parents=True)
+    (scene_override_dir / "scene.md").write_text("# Override", encoding="utf-8")
+    _make_test_png(scene_override_dir / "img.png")
+
+    runtime_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    (runtime_dir / "stm.jsonl").write_text("{}\n", encoding="utf-8")
+
+    npc_scene_override = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office"
+    npc_scene_override.mkdir(parents=True, exist_ok=True)
+    (npc_scene_override / "scene.md").write_text("Kontext", encoding="utf-8")
+
+    calls: list[str] = []
+
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            calls.append("clear_pending_jobs")
+
+    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+
+    payload = web_app_module.reset_active_scene()
+
+    assert calls == ["clear_pending_jobs"]
+    assert not scene_override_dir.exists()
+    assert not runtime_dir.exists()
+    assert not npc_scene_override.exists()
+    assert storage.session.scene_id == "office"
+    assert payload["scene_id"] == "office"
+    assert payload["can_reset_scene"] is False
+
+
+def test_reset_active_scene_rejects_dynamic_scene(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    dynamic_scene_id = "created_rooftop"
+    _write_session(tmp_path, "vika", dynamic_scene_id)
+
+    dynamic_scene_dir = tmp_path / ".overrides" / "scenes" / dynamic_scene_id
+    dynamic_scene_dir.mkdir(parents=True)
+    (dynamic_scene_dir / "scene.md").write_text("# Rooftop", encoding="utf-8")
+
+    try:
+        web_app_module.reset_active_scene()
+        raise AssertionError("Expected HTTPException")
+    except HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Aktive Szene kann nicht zurueckgesetzt werden."
+
+
 def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     response = web_app_module.current_image()

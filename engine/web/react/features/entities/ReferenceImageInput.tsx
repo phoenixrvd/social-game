@@ -1,4 +1,5 @@
 import type { ChangeEvent } from "react"
+import type { ReactNode } from "react"
 import { useState } from "react"
 import { useIsMutating } from "@tanstack/react-query"
 import { DeleteIcon, ImageIcon, TextEditIcon } from "../../shared/icons"
@@ -17,6 +18,7 @@ type ReferenceImageInputProps = {
   onDescribe: () => void
   onPreview: () => void
   onError: (message: string) => void
+  extraActions?: ReactNode
 }
 
 export function ReferenceImageInput({
@@ -30,6 +32,7 @@ export function ReferenceImageInput({
   onDescribe,
   onPreview,
   onError,
+  extraActions,
 }: ReferenceImageInputProps) {
   const [overlayOpen, setOverlayOpen] = useState(false)
   const visibleImageDataUrl = previewImageDataUrl || referenceImageDataUrl
@@ -72,6 +75,7 @@ export function ReferenceImageInput({
         <SettingsAction compact icon={<TextEditIcon />} title="Beschreibung aus Bild" disabled={busy || !referenceImageDataUrl} onClick={onDescribe} />
         <SettingsAction compact icon={<ImageIcon />} title="Bild aus Beschreibung" disabled={busy || !canCreatePreview} onClick={onPreview} />
         <SettingsAction compact danger icon={<DeleteIcon />} title="Bild löschen" disabled={busy || !visibleImageDataUrl} onClick={clear} />
+        {extraActions}
       </div>
     </div>
   )

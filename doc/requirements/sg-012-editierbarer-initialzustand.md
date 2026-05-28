@@ -20,12 +20,13 @@ Der Scene Context ist die fuer den aktiven NPC und die aktive Szene gespeicherte
 
 ### Bearbeitungszugang im Dialogkontext
 **Typ:** Funktional  
-**Beschreibung:** Das System muss den Scene Context direkt aus der zugehoerigen Kontext-Message heraus zur Bearbeitung anbieten.  
+**Beschreibung:** Das System muss den Scene Context direkt aus der zugehörigen Kontext-Message heraus zur Bearbeitung anbieten.  
 **Akzeptanzkriterien:**
 - In der Kontext-Message des Scene Contexts ist eine Bearbeiten-Aktion sichtbar.
 - Die Bearbeiten-Aktion wird als Icon-Button mit Pencil-Icon dargestellt.
-- Beim Ausloesen der Bearbeiten-Aktion oeffnet sich der Optionsdialog.
+- Beim Auslösen der Bearbeiten-Aktion öffnet sich der Optionsdialog.
 - Der Optionsdialog zeigt direkt das Formular zur Bearbeitung des Scene Contexts.
+- Der Bearbeitungszugang des Scene Contexts ist vom Bearbeitungszugang der Event Location getrennt.
 
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`
 

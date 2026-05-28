@@ -22,12 +22,13 @@ export function useImageSignatureQuery(enabled: boolean) {
 }
 
 export function mapState(payload: StateDto = {}): AppStateView {
+  const imageSignature = stringOrNull(payload.image_signature || payload.signature)
   return {
     messages: Array.isArray(payload.messages) ? payload.messages : [],
-    imageUrl: appendCacheBuster(payload.image_url),
+    imageUrl: appendCacheBuster(payload.image_url, imageSignature),
     imageOriginalUrl: stringOrNull(payload.image_original_url),
     imageBackups: mapImageBackups(payload.image_backups),
-    imageSignature: stringOrNull(payload.image_signature || payload.signature),
+    imageSignature,
     npcs: Array.isArray(payload.npcs) ? payload.npcs : [],
     scenes: Array.isArray(payload.scenes) ? payload.scenes : [],
     npcId: stringOrNull(payload.npc_id),
@@ -36,18 +37,23 @@ export function mapState(payload: StateDto = {}): AppStateView {
     defaultSceneId: stringOrNull(payload.default_scene_id),
     isDynamicNpc: Boolean(payload.is_dynamic_npc),
     isDynamicScene: Boolean(payload.is_dynamic_scene),
+    canResetScene: Boolean(payload.can_reset_scene),
     userProfile: typeof payload.user_profile === "string" ? payload.user_profile : "",
     sceneContext: typeof payload.scene_context === "string" ? payload.scene_context : "",
+    sceneDescription: typeof payload.scene_description === "string" ? payload.scene_description : "",
+    sceneLocationDescription: typeof payload.scene_location_description === "string" ? payload.scene_location_description : "",
     imageAutogenerate: typeof payload.image_autogenerate === "boolean" ? payload.image_autogenerate : true,
     videoUrl: stringOrNull(payload.video_url),
     imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : true,
   }
 }
 
-function appendCacheBuster(url: unknown): string | null {
+function appendCacheBuster(url: unknown, version: string | null): string | null {
   if (typeof url !== "string" || !url) return null
+  if (!version) return url
+  if (url.includes("v=")) return url
   const separator = url.includes("?") ? "&" : "?"
-  return `${url}${separator}t=${Date.now()}`
+  return `${url}${separator}v=${encodeURIComponent(version)}`
 }
 
 function stringOrNull(value: unknown): string | null {

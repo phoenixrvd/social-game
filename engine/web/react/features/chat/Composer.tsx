@@ -85,7 +85,20 @@ export function Composer({ inputRef, chat }: ComposerProps) {
             </div>
             <div className="sg-composer-footer">
               <div className="sg-composer-meta" role="status" aria-live="polite">
-                {chat.isSending ? <span className="sg-composer-status">Antwort wird geladen</span> : <span className="sg-keyboard-hint">Enter = senden, Shift+Enter = neue Zeile</span>}
+                {chat.isSending
+                  ? (
+                    <span className="sg-composer-status" aria-label="Antwort wird geladen">
+                      <span className="typing-dots" aria-hidden="true">
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                        <span className="typing-dot" />
+                      </span>
+                      <span className="sg-visually-hidden">Antwort wird geladen</span>
+                    </span>
+                  )
+                  : !options.isOptionsRoute
+                    ? <span className="sg-keyboard-hint">Enter = senden, Shift+Enter = neue Zeile</span>
+                    : null}
               </div>
               <div className="sg-composer-tools" aria-label="Werkzeuge">
                 <Link className="sg-options-toggle" aria-label="Optionen" to={toggleHref}><GearIcon /> Optionen</Link>

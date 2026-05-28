@@ -40,8 +40,11 @@ export type StateDto = {
   default_scene_id?: string | null
   is_dynamic_npc?: boolean
   is_dynamic_scene?: boolean
+  can_reset_scene?: boolean
   user_profile?: string
   scene_context?: string
+  scene_description?: string
+  scene_location_description?: string
   image_autogenerate?: boolean
   video_url?: string | null
   image_is_original?: boolean
@@ -62,8 +65,11 @@ export type AppStateView = {
   defaultSceneId: string | null
   isDynamicNpc: boolean
   isDynamicScene: boolean
+  canResetScene: boolean
   userProfile: string
   sceneContext: string
+  sceneDescription: string
+  sceneLocationDescription: string
   imageAutogenerate: boolean
   videoUrl: string | null
   imageIsOriginal: boolean

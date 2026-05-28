@@ -46,6 +46,19 @@ class SceneService:
         self._save_scene_image(target_dir, scene_draft, scene_image_bytes)
         return target_dir
 
+    def update_active_override(self, short_description: str, scene_image_bytes: bytes | None = None) -> Path:
+        orientation = self._normalize_short_description(short_description)
+        scene_draft = self._create_scene_draft(orientation)
+        location = storage.scene.location
+        location.override.path.parent.mkdir(parents=True, exist_ok=True)
+        location.override.save(f"## {scene_draft.location_name}\n\n{scene_draft.scene_description}\n")
+        if scene_image_bytes is not None:
+            location.img_override.save(scene_image_bytes)
+            return location.override.path.parent
+        prompt = self._build_scene_image_prompt(scene_draft)
+        location.img_override.save(client.generate_scene_img(prompt))
+        return location.override.path.parent
+
     def describe_reference_image(self, reference_image_bytes: bytes) -> str:
         description = client.describe_scene_reference_img(
             storage.prompts.scene_describe_image.get().strip(),
@@ -119,6 +132,10 @@ class SceneService:
 
     @staticmethod
     def delete_dynamic_scene_artifacts(scene_id: str) -> None:
+        SceneService.reset_scene_artifacts(scene_id)
+
+    @staticmethod
+    def reset_scene_artifacts(scene_id: str) -> None:
         SceneService._delete_dynamic_scene_overrides(scene_id)
         SceneService._delete_dynamic_scene_runtime(scene_id)
 

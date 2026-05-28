@@ -184,9 +184,6 @@ Der fachliche Fokus liegt auf der Nutzung der Spielinteraktion über den Browser
 **Akzeptanzkriterien:**
 - Eine neue Szene kann in der Web-GUI angelegt werden.
 - Die Auslöseaktion für das Anlegen heißt `Szene erstellen`.
-- Die Web-GUI bietet beim Erstellen eine klar erkennbare Möglichkeit, zusätzlich einen NPC-Kontext für die aktive Figur in der betreffenden Szene zu erstellen.
-- Die zusätzliche NPC-Kontext-Erstellung ist standardmäßig aktiviert, wenn sie zusammen mit einer neuen Szene angeboten wird.
-- Die reine NPC-Kontext-Erstellung für eine bereits aktive Szene ist als eigene Kontextaktion oder als klar getrennte Dialog-Variante erkennbar und nicht nur als deaktivierte Szenen-Erstellung dargestellt.
 - Die Szene-Erstellung ist nur ausführbar, wenn eine Beschreibung vorhanden ist.
 - Nach erfolgreichem Anlegen steht die neue Szene für die Nutzung in der Sitzung zur Verfügung.
 

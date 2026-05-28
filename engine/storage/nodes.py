@@ -363,6 +363,14 @@ class SceneLocationNode(_StorageNodeBase):
         return TextFile(self.runtime_dir / "scene.md")
 
     @property
+    def override(self) -> TextFile:
+        return TextFile(config.OVERRIDES_SCENE_DIR / self.scene_id / "scene.md")
+
+    @property
+    def img_override(self) -> ImageFile:
+        return ImageFile(config.OVERRIDES_SCENE_DIR / self.scene_id / "img.png")
+
+    @property
     def original(self) -> TextFile:
         return TextFile(path_resolver.scene_original_file(self.scene_id, "scene.md"))
 

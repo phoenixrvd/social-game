@@ -46,6 +46,47 @@ Diese Anforderung erweitert diesen Ablauf um ein optionales Referenzbild, aus de
 
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`
 
+### Bearbeiten einer Event Location
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die aktive Event Location aus dem Dialogkontext heraus in einem eigenen Bearbeitungszugang bearbeiten können.  
+**Akzeptanzkriterien:**
+- Für die Event Location ist im Dialogkontext eine eigene Bearbeiten-Aktion verfügbar.
+- Der Bearbeitungszugang der Event Location ist vom Bearbeitungszugang des NPC-spezifischen Scene Contexts getrennt.
+- Die Bearbeiten-Aktion für die Event Location öffnet denselben Dialogablauf wie das Anlegen einer Szene.
+- Der Bearbeitungsmodus für die Event Location ist mit der aktuell gespeicherten generischen Location-Beschreibung vorbelegt.
+- Der Bearbeitungsmodus für die Event Location zeigt das aktuell gespeicherte Location-Bild als Bildzustand an.
+- Die Speicheraktion für die Event Location heißt `Scene speichern`.
+- Die Speicheraktion für die Event Location wird mit einem Save-Icon dargestellt.
+- Beim Speichern wird die zuvor geladene generische Event Location aktualisiert.
+- Der NPC-spezifische Scene Context wird für die Bearbeitung der Event Location nicht als Beschreibungsinhalt vorgeladen.
+- Der NPC-spezifische Scene Context wird durch das Speichern der Event Location nicht überschrieben.
+- Nach erfolgreichem Speichern ist die aktualisierte Event Location in Dialog und Kontextauswahl sichtbar.
+
+**Referenzen:** `doc/requirements/sg-011-web-gui.md`, `doc/requirements/sg-012-editierbarer-initialzustand.md`
+
+### Zurücksetzen angepasster Standard-Szenen
+**Typ:** Funktional  
+**Beschreibung:** Das System muss im Szenenbeschreibung-/Event-Location-Panel das Zurücksetzen der aktiven Standard-Szene auf ihren initialen Stand ermöglichen.  
+**Akzeptanzkriterien:**
+- Im Szenenbeschreibung-/Event-Location-Panel ist eine Aktion `Scene zurücksetzen` vorhanden.
+- Beim Auslösen der Aktion erscheint vor der Ausführung ein Bestätigungsdialog.
+- Wird die Bestätigung erteilt, wird die aktive Standard-Szene auf ihren initialen Stand zurückgesetzt.
+- Die aktive Szene bleibt dabei dieselbe.
+- Nach erfolgreicher Ausführung sind lokale generische Szenenanpassungen, lokale NPC-spezifische Szenenanpassungen sowie Laufzeitdaten dieser Szene nicht mehr vorhanden.
+- Wird die Bestätigung abgebrochen, bleibt die aktive Szene unverändert.
+
+**Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`, `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`, `doc/requirements/sg-011-web-gui.md`
+
+### Aktivierbarkeit von `Scene zurücksetzen`
+**Typ:** Funktional  
+**Beschreibung:** Das System muss die Aktion `Scene zurücksetzen` nur für rücksetzbare Standard-Szenen aktivierbar machen.  
+**Akzeptanzkriterien:**
+- `Scene zurücksetzen` ist aktivierbar, wenn die aktive Szene eine Standard-Szene mit versioniertem Initialstand ist und für diese Szene lokale Szenenartefakte vorhanden sind.
+- `Scene zurücksetzen` ist nicht aktivierbar, wenn die aktive Szene vollständig neu erstellt oder dynamisch ist.
+- Für vollständig neu erstellte Szenen bleibt die Entfernung der Szene über `Erstellte Szene mit löschen` abgedeckt.
+
+**Referenzen:** `doc/requirements/sg-018-default-fallbacks-fuer-npcs-und-scenes.md`, `doc/requirements/sg-011-web-gui.md`
+
 ### Auswahl und Verkleinerung des Referenzbilds
 **Typ:** Funktional  
 **Beschreibung:** Das System muss ein ausgewaehltes Referenzbild clientseitig auf eine fuer die weitere Verarbeitung geeignete Groesse verkleinern.  
