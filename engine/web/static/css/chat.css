@@ -26,10 +26,6 @@
   margin-top: 0.75rem;
 }
 
-sg-message.sg-message-enter {
-  animation: sg-message-enter 180ms ease-out;
-}
-
 .msg-bubble {
   max-width: min(90%, 760px);
   border-radius: 14px;
@@ -106,16 +102,6 @@ sg-message.sg-message-enter {
 .context-rich ul,
 .context-rich ol {
   margin: 0.35rem 0;
-}
-
-.context-rich .sg-initial-context-image {
-  float: right;
-  width: 120px;
-  max-width: 100%;
-  height: auto;
-  margin: 0 0 0.5rem 0.75rem;
-  border-radius: 10px;
-  object-fit: cover;
 }
 
 .sg-context-message-actions {

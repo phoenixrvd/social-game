@@ -57,18 +57,6 @@
   initial-value: 0deg;
 }
 
-@keyframes sg-message-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes typing-bounce {
   0%,
   80%,
@@ -95,18 +83,6 @@
 
   100% {
     --sg-image-loading-angle: 360deg;
-  }
-}
-
-@keyframes sg-image-in {
-  0% {
-    opacity: 0;
-    filter: blur(6px);
-  }
-
-  100% {
-    opacity: 1;
-    filter: blur(0);
   }
 }
 
@@ -139,17 +115,6 @@ textarea {
   margin: 0;
   font: inherit;
   color: inherit;
-}
-
-sg-app,
-sg-chat,
-sg-input,
-sg-thumbnail,
-sg-message,
-sg-context-message,
-sg-input-scene-context,
-sg-context-gallery {
-  display: block;
 }
 
 .sg-hidden {

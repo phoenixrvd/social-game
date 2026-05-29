@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import {useEffect, useState} from "react"
 import {
   useCreateNpcMutation,
   useCreateSceneMutation,
@@ -8,14 +8,14 @@ import {
   useScenePreviewImageMutation,
   useUpdateActiveSceneMutation,
 } from "../../api/entities"
-import { useResetSceneMutation } from "../../api/session"
-import { useStateQuery } from "../../api/state"
-import { useConfirmDialog } from "../../shared/ConfirmDialog"
-import { PlusIcon, RevertIcon, SaveIcon } from "../../shared/icons"
-import { SettingsAction } from "../../shared/SettingsAction"
-import { errorText } from "../../shared/imageUtils"
-import { useOptionsParams } from "../options/routes"
-import { ReferenceImageInput } from "./ReferenceImageInput"
+import {useResetSceneMutation} from "../../api/session"
+import {useStateQuery} from "../../api/state"
+import {useConfirmDialog} from "../../shared/ConfirmDialog"
+import {PlusIcon, RevertIcon, SaveIcon} from "../../shared/icons"
+import {SettingsAction} from "../../shared/SettingsAction"
+import {errorText} from "../../shared/imageUtils"
+import {useOptionsParams} from "../options/routes"
+import {ReferenceImageInput} from "./ReferenceImageInput"
 
 type EntityType = "scene" | "npc"
 type EntityCreatorProps =
@@ -160,7 +160,9 @@ export function EntityCreator({ type, mode }: EntityCreatorProps) {
         onDescribe={describeReference}
         onPreview={createPreview}
         onError={setLocalError}
-        extraActions={isSceneEdit ? <SettingsAction compact icon={<RevertIcon />} title="Scene zurücksetzen" danger disabled={busy || !data?.canResetScene} onClick={resetScene} /> : null}
+        extraActions={isSceneEdit ? <SettingsAction compact icon={<RevertIcon/>} title="Scene zurücksetzen" danger
+                                                    disabled={busy || data?.canResetScene !== true}
+                                                    onClick={resetScene}/> : null}
       />
       {error ? <div className="sg-scene-error">{error}</div> : null}
       <div className="sg-settings-actions">

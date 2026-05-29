@@ -47,16 +47,14 @@ ENV PYTHONUNBUFFERED=1 \
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --no-create-home --home /nonexistent --shell /usr/sbin/nologin app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends git \
-    && git config --system user.name "Social Game" \
-    && git config --system user.email "social-game@local" \
-    && rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
-COPY --chown=root:root . /app
+COPY --chown=root:root sg /app/sg
+COPY --chown=root:root engine /app/engine
+COPY --chown=root:root npcs /app/npcs
+COPY --chown=root:root scenes /app/scenes
+COPY --chown=root:root prompts /app/prompts
 COPY --from=node-builder /build/engine/web/static/js /app/engine/web/static/js
 
 RUN mkdir -p /app/.data \

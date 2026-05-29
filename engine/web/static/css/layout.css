@@ -74,21 +74,3 @@
   position: relative;
   display: none;
 }
-
-.sg-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 52px;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border-soft);
-  background: var(--bg-panel-soft);
-}
-
-.sg-panel-title {
-  margin: 0;
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  letter-spacing: 0.02em;
-}
