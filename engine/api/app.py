@@ -39,6 +39,18 @@ class SpaStaticFiles(StaticFiles):
         return await super().get_response("index.html", scope)
 
 
+class OptionalStaticFiles(StaticFiles):
+    async def check_config(self) -> None:
+        if self.directory is not None and not Path(self.directory).exists():
+            return
+        await super().check_config()
+
+    async def get_response(self, path: str, scope):
+        if self.directory is not None and not Path(self.directory).exists():
+            raise StarletteHTTPException(status_code=404)
+        return await super().get_response(path, scope)
+
+
 def _problem_response(status_code: int, detail: Any) -> Response:
     return Response(
         content=json.dumps({"type": "about:blank", "status": status_code, "detail": detail}),
@@ -189,8 +201,8 @@ def run(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> None
     uvicorn.run("engine.api.app:app", host=host, port=port, reload=reload)
 
 
-app.mount("/css", StaticFiles(directory=STATIC_DIR / "css"), name="css")
-app.mount("/icons", StaticFiles(directory=STATIC_DIR / "icons"), name="icons")
-app.mount("/js", StaticFiles(directory=STATIC_DIR / "js"), name="js")
+app.mount("/css", OptionalStaticFiles(directory=STATIC_DIR / "css", check_dir=False), name="css")
+app.mount("/icons", OptionalStaticFiles(directory=STATIC_DIR / "icons", check_dir=False), name="icons")
+app.mount("/js", OptionalStaticFiles(directory=STATIC_DIR / "js", check_dir=False), name="js")
 app.mount("/sg", SpaStaticFiles(directory=STATIC_DIR, html=True), name="sg")
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="root")
