@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from engine.client import client
@@ -13,7 +14,7 @@ from engine.storage import storage
 class Checkpoint:
     """Repräsentation eines Spielstand-Checkpoints."""
     commit_hash: str
-    commit_date: str
+    commit_date: datetime
     commit_message: str
 
 
@@ -31,6 +32,10 @@ class HistoryService:
         if isinstance(output, bytes):
             return output.decode("utf-8", errors="replace").strip()
         return output.strip()
+
+    @staticmethod
+    def _parse_git_datetime(value: str) -> datetime:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S %z")
 
     def _ensure_git_repo(self) -> None:
         """Initialisiert das Git-Repository, falls nicht vorhanden."""
@@ -50,7 +55,7 @@ class HistoryService:
             logger.info(f"Git-Repository in {self._git_dir} initialisiert")
         except subprocess.CalledProcessError as e:
             error_detail = self._format_process_output(e.stderr)
-            raise RuntimeError(f"Git-Initialisierung fehlgeschlagen: {error_detail}") from e
+            raise ValueError(f"Git-Initialisierung fehlgeschlagen: {error_detail}") from e
 
     def _has_changes(self) -> bool:
         """Prüft, ob es uncommitted changes gibt."""
@@ -119,14 +124,14 @@ class HistoryService:
             combined_output = "\n".join(part for part in [stderr, stdout] if part)
 
             if "nothing to commit" in combined_output.lower():
-                raise RuntimeError("Keine Änderungen vorhanden, Checkpoint nicht erstellt") from e
+                raise ValueError("Keine Änderungen vorhanden, Checkpoint nicht erstellt") from e
 
-            raise RuntimeError(f"Commit fehlgeschlagen: {combined_output}") from e
+            raise ValueError(f"Commit fehlgeschlagen: {combined_output}") from e
 
     def save_checkpoint(self, label: str | None = None) -> str:
         """Speichert einen Checkpoint für den aktiven Spielstand."""
         if not self._has_changes():
-            raise RuntimeError("Keine Änderungen vorhanden, Checkpoint nicht erstellt")
+            raise ValueError("Keine Änderungen vorhanden, Checkpoint nicht erstellt")
 
         message = label if label else self._generate_checkpoint_summary()
         return self._git_add_and_commit(message)
@@ -158,7 +163,7 @@ class HistoryService:
             checkpoints.append(
                 Checkpoint(
                     commit_hash=lines[i].strip(),
-                    commit_date=lines[i + 1].strip(),
+                    commit_date=self._parse_git_datetime(lines[i + 1].strip()),
                     commit_message=commit_message,
                 )
             )
@@ -172,7 +177,7 @@ class HistoryService:
             logger.info("Änderungen vorhanden, erstelle Auto-Backup...")
             try:
                 self._git_add_and_commit(self._generate_checkpoint_summary() + " [auto-backup]")
-            except RuntimeError as e:
+            except ValueError as e:
                 logger.warning(f"Auto-Backup fehlgeschlagen: {e}")
 
         try:
@@ -208,4 +213,4 @@ class HistoryService:
             logger.info(f"Checkpoint wiederhergestellt: {commit_hash}")
         except subprocess.CalledProcessError as e:
             error_detail = self._format_process_output(e.stderr)
-            raise RuntimeError(f"Checkpoint-Wiederherstellung fehlgeschlagen: {error_detail}") from e
+            raise ValueError(f"Checkpoint-Wiederherstellung fehlgeschlagen: {error_detail}") from e

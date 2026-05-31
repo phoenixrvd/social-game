@@ -5,9 +5,10 @@ WORKDIR /build
 COPY package.json package-lock.json ./
 RUN npm ci
 
-COPY vite.config.js tsconfig*.json ./
+COPY .openapi/openapi.json .openapi/openapi.json
+COPY orval.config.js vite.config.js tsconfig*.json ./
 COPY engine/web/react/ engine/web/react/
-RUN npm run build
+RUN ORVAL_OPENAPI_TARGET=.openapi/openapi.json npm run build
 
 FROM python:3.12-slim AS builder
 

@@ -1,15 +1,20 @@
 import {useEffect, useState} from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import {
-  useCreateNpcMutation,
-  useCreateSceneMutation,
-  useDescribeNpcReferenceMutation,
-  useDescribeSceneReferenceMutation,
-  useNpcPreviewImageMutation,
-  useScenePreviewImageMutation,
-  useUpdateActiveSceneMutation,
-} from "../../api/entities"
-import {useResetSceneMutation} from "../../api/session"
-import {useStateQuery} from "../../api/state"
+  getNpcListOptionsQueryKey,
+  useImageDescribeNpc,
+  useImagePreviewNpc,
+  useNpcCreate,
+} from "../../api/generated/npc/npc"
+import {
+  getSceneListOptionsQueryKey,
+  useImageDescribeScene,
+  useImagePreviewScene,
+  useSceneResetActive,
+  useSceneCreate,
+  useSceneUpdate,
+} from "../../api/generated/scene/scene"
+import { stateQueryKey, useStateQuery } from "../../api/state"
 import {useConfirmDialog} from "../../shared/ConfirmDialog"
 import {PlusIcon, RevertIcon, SaveIcon} from "../../shared/icons"
 import {SettingsAction} from "../../shared/SettingsAction"
@@ -42,17 +47,60 @@ const CONFIG = {
 }
 
 export function EntityCreator({ type, mode }: EntityCreatorProps) {
+  const queryClient = useQueryClient()
   const { data } = useStateQuery()
   const confirm = useConfirmDialog()
   const options = useOptionsParams()
-  const createScene = useCreateSceneMutation()
-  const updateActiveScene = useUpdateActiveSceneMutation()
-  const createNpc = useCreateNpcMutation()
-  const describeScene = useDescribeSceneReferenceMutation()
-  const describeNpc = useDescribeNpcReferenceMutation()
-  const previewScene = useScenePreviewImageMutation()
-  const previewNpc = useNpcPreviewImageMutation()
-  const resetSceneMutation = useResetSceneMutation()
+
+  async function syncAfterContextCreate(nextNpcId: string | null, nextSceneId: string | null) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getNpcListOptionsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getSceneListOptionsQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: stateQueryKey }),
+    ])
+    if (nextNpcId && nextSceneId) {
+      options.navigateToOptions(nextNpcId, nextSceneId, "context")
+    }
+  }
+
+  const createScene = useSceneCreate({
+    mutation: {
+      onSuccess: async (response) => {
+        const nextSceneId = typeof response.data === "object" && response.data && "id" in response.data && typeof response.data.id === "string"
+          ? response.data.id
+          : null
+        await syncAfterContextCreate(data?.npcId ?? options.npcId ?? null, nextSceneId)
+      },
+    },
+  })
+  const updateActiveScene = useSceneUpdate({
+    mutation: {
+      onSuccess: (response) => {
+        void queryClient.invalidateQueries({ queryKey: stateQueryKey })
+      },
+    },
+  })
+  const createNpc = useNpcCreate({
+    mutation: {
+      onSuccess: async (response) => {
+        const nextNpcId = typeof response.data === "object" && response.data && "id" in response.data && typeof response.data.id === "string"
+          ? response.data.id
+          : null
+        await syncAfterContextCreate(nextNpcId, data?.sceneId ?? options.sceneId ?? null)
+      },
+    },
+  })
+  const describeScene = useImageDescribeScene()
+  const describeNpc = useImageDescribeNpc()
+  const previewScene = useImagePreviewScene()
+  const previewNpc = useImagePreviewNpc()
+  const resetSceneMutation = useSceneResetActive({
+    mutation: {
+      onSuccess: (response) => {
+        void queryClient.invalidateQueries({ queryKey: stateQueryKey })
+      },
+    },
+  })
   const [description, setDescription] = useState("")
   const [referenceImageDataUrl, setReferenceImageDataUrl] = useState<string | null>(null)
   const [previewImageDataUrl, setPreviewImageDataUrl] = useState<string | null>(null)
@@ -60,7 +108,7 @@ export function EntityCreator({ type, mode }: EntityCreatorProps) {
   const isScene = type === "scene"
   const isSceneEdit = type === "scene" && mode === "edit"
   const config = CONFIG[type]
-  const activeSceneImageUrl = isSceneEdit && data?.sceneId ? (data.scenes.find((s) => s.id === data.sceneId)?.image_url ?? null) : null
+  const activeSceneImageUrl = isSceneEdit && data?.sceneId ? `/api/scenes/${data.sceneId}/image` : null
   const busy = createScene.isPending || updateActiveScene.isPending || createNpc.isPending || describeScene.isPending || describeNpc.isPending || previewScene.isPending || previewNpc.isPending || resetSceneMutation.isPending
   const mutationError = createScene.error || updateActiveScene.error || createNpc.error || describeScene.error || describeNpc.error || previewScene.error || previewNpc.error || resetSceneMutation.error
   const error = localError || errorText(mutationError, "")
@@ -94,7 +142,13 @@ export function EntityCreator({ type, mode }: EntityCreatorProps) {
   async function describeReference() {
     setLocalError("")
     try {
-      setDescription(isScene ? await describeScene.mutateAsync(referenceImageDataUrl) : await describeNpc.mutateAsync(referenceImageDataUrl))
+      if (isScene) {
+        const response = await describeScene.mutateAsync({ data: { imageDataUrl: referenceImageDataUrl || "" } })
+        setDescription(typeof response.data === "object" && response.data && "description" in response.data && typeof response.data.description === "string" ? response.data.description : "")
+      } else {
+        const response = await describeNpc.mutateAsync({ data: { imageDataUrl: referenceImageDataUrl || "" } })
+        setDescription(typeof response.data === "object" && response.data && "description" in response.data && typeof response.data.description === "string" ? response.data.description : "")
+      }
     } catch (error) {
       setLocalError(errorText(error, "Beschreibung aus Bild konnte nicht erstellt werden."))
     }
@@ -104,7 +158,13 @@ export function EntityCreator({ type, mode }: EntityCreatorProps) {
     setLocalError("")
     try {
       const input = { description: description.trim(), referenceImageDataUrl }
-      setPreviewImageDataUrl(isScene ? await previewScene.mutateAsync(input) : await previewNpc.mutateAsync(input))
+      if (isScene) {
+        const response = await previewScene.mutateAsync({ data: input })
+        setPreviewImageDataUrl(typeof response.data === "object" && response.data && "imageDataUrl" in response.data && typeof response.data.imageDataUrl === "string" ? response.data.imageDataUrl : "")
+      } else {
+        const response = await previewNpc.mutateAsync({ data: input })
+        setPreviewImageDataUrl(typeof response.data === "object" && response.data && "imageDataUrl" in response.data && typeof response.data.imageDataUrl === "string" ? response.data.imageDataUrl : "")
+      }
     } catch (error) {
       setLocalError(errorText(error, "Bild aus Beschreibung konnte nicht erstellt werden."))
     }
@@ -118,14 +178,18 @@ export function EntityCreator({ type, mode }: EntityCreatorProps) {
     }
     setLocalError("")
     if (isSceneEdit) {
-      updateActiveScene.mutate({ sceneDescription: text, sceneImageDataUrl: previewImageDataUrl || referenceImageDataUrl || null })
+      if (!data?.sceneId) {
+        setLocalError("Aktive Szene konnte nicht ermittelt werden.")
+        return
+      }
+      updateActiveScene.mutate({ scene: data.sceneId, data: { description: text, imageDataUrl: previewImageDataUrl || referenceImageDataUrl || null } })
       return
     }
     if (isScene) {
-      createScene.mutate({ sceneDescription: text, sceneImageDataUrl: previewImageDataUrl, referenceImageDataUrl })
+      createScene.mutate({ data: { description: text, imageDataUrl: previewImageDataUrl, referenceImageDataUrl } })
       return
     }
-    createNpc.mutate({ characterDescription: text, npcImageDataUrl: previewImageDataUrl, referenceImageDataUrl })
+    createNpc.mutate({ data: { description: text, imageDataUrl: previewImageDataUrl, referenceImageDataUrl } })
   }
 
   async function resetScene() {
@@ -137,7 +201,8 @@ export function EntityCreator({ type, mode }: EntityCreatorProps) {
       danger: true,
     })
     if (!accepted) return
-    await resetSceneMutation.mutateAsync()
+    if (!data?.sceneId) return
+    await resetSceneMutation.mutateAsync({ scene: data.sceneId })
     options.close()
   }
 

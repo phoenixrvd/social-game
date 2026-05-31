@@ -38,7 +38,7 @@ class NpcSceneService:
             return None
         if storage.scene.npc_context.existing_file is not None:
             return None
-        default_context = storage.scene_view(config.DEFAULT_NPC_ID, storage.session.scene_id).npc_context.existing_file
+        default_context = storage.scene_view(storage.session.scene_id, config.DEFAULT_NPC_ID).npc_context.existing_file
         if default_context is None:
             return None
         prompt = self._build_adapt_prompt(default_context.get())
@@ -61,7 +61,7 @@ class NpcSceneService:
 
     @staticmethod
     def _save_scene_override(npc_id: str, scene_id: str, markdown: str) -> Path:
-        target_file = storage.scene_view(npc_id=npc_id, scene_id=scene_id).npc_context.override
+        target_file = storage.scene_view(scene_id=scene_id, npc_id=npc_id).npc_context.override
         target_file.save(markdown.strip() + "\n")
         return target_file.path
 
@@ -77,6 +77,6 @@ class NpcSceneService:
 
     @staticmethod
     def delete_override(npc_id: str, scene_id: str) -> None:
-        target_dir = storage.scene_view(npc_id=npc_id, scene_id=scene_id).npc_context.override.path.parent
+        target_dir = storage.scene_view(scene_id=scene_id, npc_id=npc_id).npc_context.override.path.parent
         if target_dir.exists():
             shutil.rmtree(target_dir)

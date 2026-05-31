@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react"
-import type { ChatMessage } from "../../api/types"
+import type { MessageResponse as ChatMessage } from "../../api/generated/model"
 import { Message } from "./Message"
 
 type ChatPaneProps = {

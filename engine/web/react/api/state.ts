@@ -1,15 +1,73 @@
 import { useQuery } from "@tanstack/react-query"
-import { requestJson } from "./client"
-import type { AppStateView, ImageBackup, StateDto } from "./types"
+import type { MessageResponse, NpcResponse, SceneResponse } from "./generated/model"
+import {
+  getImageCurrentSignatureQueryKey,
+  getSessionGetStateQueryKey,
+  imageCurrentSignature,
+  sessionGetState,
+} from "./generated/session/session"
 
-export const stateQueryKey = ["state"] as const
-export const imageSignatureQueryKey = ["image-signature"] as const
+export type AppStateView = {
+  messages: MessageResponse[]
+  imageUrl: string | null
+  imageOriginalUrl: string | null
+  imageSignature: string | null
+  npcs: Array<NpcResponse & { imageUrl?: string; hasVideo?: boolean }>
+  scenes: SceneResponse[]
+  npcId: string | null
+  sceneId: string | null
+  defaultNpcId: string | null
+  defaultSceneId: string | null
+  isDynamicNpc: boolean
+  isDynamicScene: boolean
+  canResetScene: boolean
+  userProfile: string
+  sceneContext: string
+  npcName: string
+  characterDescription: string
+  sceneDescription: string
+  sceneLocationDescription: string
+  imageAutogenerate: boolean
+  videoUrl: string | null
+  hasVideo: boolean
+  imageIsOriginal: boolean
+}
+
+export const stateQueryKey = getSessionGetStateQueryKey()
+export const imageSignatureQueryKey = getImageCurrentSignatureQueryKey()
+
+const noStoreRequest = { cache: "no-store" } as const
 
 export function useStateQuery() {
-  return useQuery({
+  const stateQuery = useQuery({
     queryKey: stateQueryKey,
-    queryFn: async () => mapState(await requestJson<StateDto>("/api/state", { cache: "no-store" })),
+    queryFn: async () => {
+      const response = await sessionGetState(noStoreRequest)
+      return normalizeStateDynamic(response.data)
+    },
   })
+
+  const npcId = stateQuery.data?.npcId
+  const sceneId = stateQuery.data?.sceneId
+
+  const npcQuery = useQuery({
+    queryKey: ["npc", npcId],
+    enabled: Boolean(npcId),
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async () => normalizeNpc(await readJson(`/api/npcs/${npcId}`)),
+  })
+
+  const sceneQuery = useQuery({
+    queryKey: ["scene", sceneId],
+    enabled: Boolean(sceneId),
+    staleTime: Number.POSITIVE_INFINITY,
+    queryFn: async () => normalizeScene(await readJson(`/api/scenes/${sceneId}`)),
+  })
+
+  return {
+    ...stateQuery,
+    data: mergeState(stateQuery.data, npcQuery.data, sceneQuery.data),
+  }
 }
 
 export function useImageSignatureQuery(enabled: boolean) {
@@ -17,56 +75,114 @@ export function useImageSignatureQuery(enabled: boolean) {
     queryKey: imageSignatureQueryKey,
     enabled,
     refetchInterval: enabled ? 5000 : false,
-    queryFn: async () => mapState(await requestJson<StateDto>("/api/image/signature", { cache: "no-store" })),
+    queryFn: async () => {
+      const response = await imageCurrentSignature(noStoreRequest)
+      const payload = (response.data ?? {}) as {
+        signature?: unknown
+        imageIsOriginal?: unknown
+      }
+      return {
+        imageSignature: typeof payload.signature === "string" ? payload.signature : null,
+        imageUrl: "/api/session/image",
+        imageIsOriginal: typeof payload.imageIsOriginal === "boolean" ? payload.imageIsOriginal : undefined,
+      } as Partial<AppStateView>
+    },
   })
 }
 
-export function mapState(payload: StateDto = {}): AppStateView {
-  const imageSignature = stringOrNull(payload.image_signature || payload.signature)
+type DynamicState = Omit<
+  AppStateView,
+  | "npcName"
+  | "characterDescription"
+  | "sceneDescription"
+  | "sceneLocationDescription"
+  | "isDynamicNpc"
+  | "isDynamicScene"
+>
+
+type NpcDetailState = Pick<
+  AppStateView,
+  | "npcName"
+  | "characterDescription"
+  | "isDynamicNpc"
+  | "hasVideo"
+  | "imageIsOriginal"
+>
+
+type SceneDetailState = Pick<AppStateView, "sceneDescription" | "sceneLocationDescription" | "isDynamicScene">
+
+export function normalizeStateDynamic(data: unknown): DynamicState {
+  const payload = (data ?? {}) as Record<string, unknown>
   return {
-    messages: Array.isArray(payload.messages) ? payload.messages : [],
-    imageUrl: appendCacheBuster(payload.image_url, imageSignature),
-    imageOriginalUrl: stringOrNull(payload.image_original_url),
-    imageBackups: mapImageBackups(payload.image_backups),
-    imageSignature,
-    npcs: Array.isArray(payload.npcs) ? payload.npcs : [],
-    scenes: Array.isArray(payload.scenes) ? payload.scenes : [],
-    npcId: stringOrNull(payload.npc_id),
-    sceneId: stringOrNull(payload.scene_id),
-    defaultNpcId: stringOrNull(payload.default_npc_id),
-    defaultSceneId: stringOrNull(payload.default_scene_id),
-    isDynamicNpc: Boolean(payload.is_dynamic_npc),
-    isDynamicScene: Boolean(payload.is_dynamic_scene),
-    canResetScene: Boolean(payload.can_reset_scene),
-    userProfile: typeof payload.user_profile === "string" ? payload.user_profile : "",
-    sceneContext: typeof payload.scene_context === "string" ? payload.scene_context : "",
-    sceneDescription: typeof payload.scene_description === "string" ? payload.scene_description : "",
-    sceneLocationDescription: typeof payload.scene_location_description === "string" ? payload.scene_location_description : "",
-    imageAutogenerate: typeof payload.image_autogenerate === "boolean" ? payload.image_autogenerate : true,
-    videoUrl: stringOrNull(payload.video_url),
-    imageIsOriginal: typeof payload.image_is_original === "boolean" ? payload.image_is_original : true,
+    messages: Array.isArray(payload.messages) ? (payload.messages as MessageResponse[]) : [],
+    imageUrl: stringOrNull(payload.imageUrl),
+    imageSignature: stringOrNull(payload.imageSignature),
+    npcs: Array.isArray(payload.npcs) ? (payload.npcs as Array<NpcResponse & { imageUrl?: string; hasVideo?: boolean }>) : [],
+    scenes: Array.isArray(payload.scenes) ? (payload.scenes as SceneResponse[]) : [],
+    npcId: stringOrNull(payload.npc),
+    sceneId: stringOrNull(payload.scene),
+    defaultNpcId: stringOrNull(payload.defaultNpc),
+    defaultSceneId: stringOrNull(payload.defaultScene),
+    canResetScene: Boolean(payload.canResetScene),
+    userProfile: typeof payload.userProfile === "string" ? payload.userProfile : "",
+    sceneContext: typeof payload.sceneContext === "string" ? payload.sceneContext : "",
+    imageAutogenerate: typeof payload.imageAutogenerate === "boolean" ? payload.imageAutogenerate : true,
+    imageOriginalUrl: null,
+    videoUrl: null,
+    hasVideo: false,
+    imageIsOriginal: true,
   }
 }
 
-function appendCacheBuster(url: unknown, version: string | null): string | null {
-  if (typeof url !== "string" || !url) return null
-  if (!version) return url
-  if (url.includes("v=")) return url
-  const separator = url.includes("?") ? "&" : "?"
-  return `${url}${separator}v=${encodeURIComponent(version)}`
+function normalizeNpc(data: unknown): NpcDetailState {
+  const payload = (data ?? {}) as Record<string, unknown>
+  return {
+    npcName: typeof payload.name === "string" ? payload.name : "",
+    characterDescription: typeof payload.description === "string" ? payload.description : "",
+    imageIsOriginal: typeof payload.imageIsOriginal === "boolean" ? payload.imageIsOriginal : true,
+    hasVideo: typeof payload.hasVideo === "boolean" ? payload.hasVideo : false,
+    isDynamicNpc: Boolean(payload.isDynamicNpc),
+  }
+}
+
+function normalizeScene(data: unknown): SceneDetailState {
+  const payload = (data ?? {}) as Record<string, unknown>
+  return {
+    sceneDescription: typeof payload.name === "string" ? payload.name : "",
+    sceneLocationDescription: typeof payload.description === "string" ? payload.description : "",
+    isDynamicScene: Boolean(payload.isDynamicScene),
+  }
+}
+
+function mergeState(
+  dynamicState: DynamicState | undefined,
+  npcState: NpcDetailState | undefined,
+  sceneState: SceneDetailState | undefined,
+): AppStateView | undefined {
+  if (!dynamicState) return undefined
+  const imageOriginalUrl = dynamicState.npcId ? `/api/npcs/${dynamicState.npcId}/image/original` : null
+  return {
+    ...dynamicState,
+    npcName: npcState?.npcName ?? "",
+    characterDescription: npcState?.characterDescription ?? "",
+    sceneDescription: sceneState?.sceneDescription ?? "",
+    sceneLocationDescription: sceneState?.sceneLocationDescription ?? "",
+    isDynamicNpc: npcState?.isDynamicNpc ?? false,
+    isDynamicScene: sceneState?.isDynamicScene ?? false,
+    imageUrl: dynamicState.imageUrl,
+    imageOriginalUrl,
+    imageIsOriginal: npcState?.imageIsOriginal ?? true,
+    hasVideo: npcState?.hasVideo ?? false,
+    videoUrl: npcState?.hasVideo && dynamicState.npcId ? `/api/npcs/${dynamicState.npcId}/video` : null,
+  }
+}
+
+async function readJson(url: string): Promise<unknown> {
+  const response = await fetch(url, noStoreRequest)
+  if (!response.ok) throw new Error("Anfrage fehlgeschlagen.")
+  return await response.json().catch(() => ({}))
 }
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value ? value : null
-}
-
-function mapImageBackups(backups: unknown): ImageBackup[] {
-  if (!Array.isArray(backups)) return []
-  return backups
-    .map((backup) => ({
-      name: typeof backup?.name === "string" ? backup.name : "",
-      url: typeof backup?.url === "string" ? backup.url : "",
-      signature: typeof backup?.signature === "string" ? backup.signature : "",
-    }))
-    .filter((backup) => backup.name && backup.url)
 }

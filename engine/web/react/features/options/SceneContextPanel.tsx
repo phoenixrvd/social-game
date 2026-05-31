@@ -1,14 +1,22 @@
 import { useEffect, useState } from "react"
-import { useGenerateSceneContextMutation, useUpdateSceneContextMutation } from "../../api/context"
-import { useStateQuery } from "../../api/state"
+import { useQueryClient } from "@tanstack/react-query"
+import { useSessionSceneContextGenerate, useSessionSceneContextUpdate } from "../../api/generated/session/session"
+import { stateQueryKey, useStateQuery } from "../../api/state"
 import { SaveIcon, TextEditIcon } from "../../shared/icons"
 import { SettingsAction } from "../../shared/SettingsAction"
 import { errorText } from "../../shared/imageUtils"
 
 export function SceneContextPanel() {
+  const queryClient = useQueryClient()
   const { data } = useStateQuery()
-  const generateContext = useGenerateSceneContextMutation()
-  const updateContext = useUpdateSceneContextMutation()
+  const generateContext = useSessionSceneContextGenerate()
+  const updateContext = useSessionSceneContextUpdate({
+    mutation: {
+      onSuccess: (response) => {
+        void queryClient.invalidateQueries({ queryKey: stateQueryKey })
+      },
+    },
+  })
   const [content, setContent] = useState("")
   const busy = generateContext.isPending || updateContext.isPending
   const error = errorText(generateContext.error || updateContext.error, "")
@@ -16,7 +24,8 @@ export function SceneContextPanel() {
   useEffect(() => setContent(data?.sceneContext || ""), [data?.npcId, data?.sceneId, data?.sceneContext])
 
   async function generate() {
-    setContent(await generateContext.mutateAsync(content))
+    const response = await generateContext.mutateAsync({ data: { content } })
+    setContent(typeof response.data === "object" && response.data && "context" in response.data && typeof response.data.context === "string" ? response.data.context : "")
   }
 
   return (
@@ -30,7 +39,7 @@ export function SceneContextPanel() {
       {error ? <div className="sg-scene-error">{error}</div> : null}
       <div className="sg-settings-actions">
         <SettingsAction icon={<TextEditIcon />} title="Neuen Kontext aus Eingabe generieren" description="Formt den Text zu einem neuen Kontext um" disabled={busy || !content.trim()} onClick={generate} />
-        <SettingsAction icon={<SaveIcon />} title="Kontext speichern" description="Übernimmt den Kontext für die aktive Szene" disabled={busy} onClick={() => updateContext.mutate(content)} />
+        <SettingsAction icon={<SaveIcon />} title="Kontext speichern" description="Übernimmt den Kontext für die aktive Szene" disabled={busy} onClick={() => updateContext.mutate({ data: { content } })} />
       </div>
     </section>
   )

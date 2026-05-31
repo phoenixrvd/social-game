@@ -226,7 +226,23 @@ class NpcService:
             shutil.rmtree(scene_data_dir)
 
     @staticmethod
+    def reset_npc_artifacts(npc_id: str) -> None:
+        npc_view = storage.npc_view(npc_id=npc_id)
+
+        npc_runtime_dir = npc_view.base_runtime
+        if npc_runtime_dir.exists():
+            shutil.rmtree(npc_runtime_dir)
+
+        npc_scene_overrides_dir = npc_view.override_base / "scenes"
+        if npc_scene_overrides_dir.exists():
+            shutil.rmtree(npc_scene_overrides_dir)
+
+    @staticmethod
     def delete_dynamic_npc_artifacts(npc_id: str) -> None:
+        if not storage.npc.is_dynamic_npc:
+            raise ValueError("Aktiver NPC ist kein erstellter NPC.")
+        if storage.session.npc_id == npc_id:
+            storage.session.npc_id = config.DEFAULT_NPC_ID
         if (config.NPC_DIR / npc_id).is_dir():
             return
         override_dir = config.OVERRIDES_NPC_DIR / npc_id

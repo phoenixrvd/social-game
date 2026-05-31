@@ -34,7 +34,7 @@ def test_web_command_starts_web_gui(monkeypatch):
         captured["port"] = port
         captured["reload"] = reload
 
-    monkeypatch.setattr("engine.web.app.run", run)
+    monkeypatch.setattr("engine.api.app.run", run)
 
     result = runner.invoke(app, ["web", "--host", "0.0.0.0", "--port", "8123", "--reload"])
 
@@ -47,7 +47,7 @@ def test_web_command_reports_error(monkeypatch):
         _ = host, port, reload
         raise RuntimeError("kaputt")
 
-    monkeypatch.setattr("engine.web.app.run", run)
+    monkeypatch.setattr("engine.api.app.run", run)
 
     result = runner.invoke(app, ["web"])
 

@@ -1,18 +1,43 @@
 import { useState } from "react"
-import { useCheckpointsQuery, useRestoreCheckpointMutation, useSaveCheckpointMutation } from "../../api/history"
-import type { Checkpoint } from "../../api/types"
+import { useQueryClient } from "@tanstack/react-query"
+import {
+  getSessionHistoryCheckpointsQueryKey,
+  useSessionHistoryCheckpoints,
+  useSessionHistoryCreateCheckpoint,
+  useSessionHistoryRestoreCheckpoint,
+} from "../../api/generated/session/session"
+import type { CheckpointResponse as Checkpoint } from "../../api/generated/model"
+import { stateQueryKey } from "../../api/state"
 import { useConfirmDialog } from "../../shared/ConfirmDialog"
 import { RestoreIcon, SaveIcon } from "../../shared/icons"
 import { SettingsAction } from "../../shared/SettingsAction"
 import { errorText } from "../../shared/imageUtils"
 
 export function HistoryPanel() {
+  const queryClient = useQueryClient()
   const confirm = useConfirmDialog()
-  const checkpoints = useCheckpointsQuery(true)
-  const saveCheckpoint = useSaveCheckpointMutation()
-  const restoreCheckpoint = useRestoreCheckpointMutation()
+  const checkpointsQueryKey = getSessionHistoryCheckpointsQueryKey()
+  const checkpoints = useSessionHistoryCheckpoints({ query: { enabled: true } })
+  const saveCheckpoint = useSessionHistoryCreateCheckpoint({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: checkpointsQueryKey })
+      },
+    },
+  })
+  const restoreCheckpoint = useSessionHistoryRestoreCheckpoint({
+    mutation: {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: stateQueryKey })
+        void queryClient.invalidateQueries({ queryKey: checkpointsQueryKey })
+      },
+    },
+  })
   const [actionError, setActionError] = useState("")
-  const items = checkpoints.data ?? []
+  const rawCheckpoints = checkpoints.data?.data
+  const items = rawCheckpoints && typeof rawCheckpoints === "object" && "checkpoints" in rawCheckpoints && Array.isArray(rawCheckpoints.checkpoints)
+    ? (rawCheckpoints.checkpoints as Checkpoint[])
+    : []
   const error = actionError || errorText(checkpoints.error, "")
   const busy = saveCheckpoint.isPending || restoreCheckpoint.isPending
 
@@ -30,7 +55,7 @@ export function HistoryPanel() {
     if (!accepted) return
     setActionError("")
     try {
-      await restoreCheckpoint.mutateAsync(commitHash)
+      await restoreCheckpoint.mutateAsync({ commitHash })
     } catch (err) {
       setActionError(errorText(err, "Spielstand konnte nicht wiederhergestellt werden."))
     }
@@ -41,7 +66,7 @@ export function HistoryPanel() {
       <h3 className="sg-settings-heading">Zwischenstände</h3>
       <div className="sg-checkpoint-list-container">
         <div className="sg-checkpoint-list" role="region" aria-label="Gespeicherte Spielstände">
-          {items.map((checkpoint) => <CheckpointItem key={checkpoint.commit_hash} checkpoint={checkpoint} onRestore={restore} />)}
+          {items.map((checkpoint) => <CheckpointItem key={checkpoint.commitHash} checkpoint={checkpoint} onRestore={restore} />)}
         </div>
         {!items.length && !error ? <div className="sg-checkpoint-empty">Keine Spielstände vorhanden</div> : null}
       </div>
@@ -52,15 +77,15 @@ export function HistoryPanel() {
 }
 
 function CheckpointItem({ checkpoint, onRestore }: { checkpoint: Checkpoint; onRestore: (commitHash: string) => void }) {
-  const autoBackup = checkpoint.commit_message.includes("[auto-backup]")
-  const label = autoBackup ? checkpoint.commit_message.replace("[auto-backup]", "").trim() : checkpoint.commit_message
+  const autoBackup = checkpoint.commitMessage.includes("[auto-backup]")
+  const label = autoBackup ? checkpoint.commitMessage.replace("[auto-backup]", "").trim() : checkpoint.commitMessage
 
   return (
-    <button type="button" className={`sg-checkpoint-item${autoBackup ? " sg-checkpoint-item--auto-backup" : ""}`} aria-label={`Checkpoint: ${label}`} onClick={() => onRestore(checkpoint.commit_hash)}>
+    <button type="button" className={`sg-checkpoint-item${autoBackup ? " sg-checkpoint-item--auto-backup" : ""}`} aria-label={`Checkpoint: ${label}`} onClick={() => onRestore(checkpoint.commitHash)}>
       <span className="sg-checkpoint-item-icon" aria-hidden="true"><RestoreIcon /></span>
       <span className="sg-checkpoint-item-body">
         <span className="sg-checkpoint-title">{label}</span>
-        <span className="sg-checkpoint-date">{checkpoint.commit_date}{autoBackup ? " · Auto-Backup" : ""}</span>
+        <span className="sg-checkpoint-date">{checkpoint.commitDate}{autoBackup ? " · Auto-Backup" : ""}</span>
       </span>
     </button>
   )

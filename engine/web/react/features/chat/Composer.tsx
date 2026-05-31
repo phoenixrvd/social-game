@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { FormEvent, KeyboardEvent, RefObject } from "react"
 import { Link } from "react-router-dom"
-import { useStateQuery } from "../../api/state"
+import type { AppStateView } from "../../api/state"
 import { GearIcon, SendIcon } from "../../shared/icons"
 import { SceneImage } from "../image/SceneImage"
 import { buildOptionsPath, useOptionsParams } from "../options/routes"
@@ -11,10 +11,13 @@ import { useChatStream } from "./useChatStream"
 type ComposerProps = {
   inputRef: RefObject<HTMLTextAreaElement | null>
   chat: ReturnType<typeof useChatStream>
+  appState?: AppStateView
+  isStateLoading: boolean
 }
 
-export function Composer({ inputRef, chat }: ComposerProps) {
-  const { data, isLoading } = useStateQuery()
+export function Composer({ inputRef, chat, appState, isStateLoading }: ComposerProps) {
+  const data = appState
+  const isLoading = isStateLoading
   const [input, setInput] = useState("")
   const formRef = useRef<HTMLFormElement | null>(null)
   const options = useOptionsParams()

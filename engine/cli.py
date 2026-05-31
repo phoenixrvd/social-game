@@ -34,7 +34,7 @@ def web(
     reload: bool = typer.Option(False, "--reload", help="Auto-Reload fuer Entwicklung aktivieren."),
 ):
     """Startet die browserbasierte GUI."""
-    from engine.web.app import run as run_web
+    from engine.api.app import run as run_web
 
     run_web(host=host, port=port, reload=reload)
 

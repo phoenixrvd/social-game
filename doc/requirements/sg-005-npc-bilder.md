@@ -57,7 +57,7 @@ SG-005 beschreibt Verfügbarkeit, Auswahl und Zuordnung von NPC-Bildern; die ini
 **Typ:** Funktional  
 **Beschreibung:** Das System muss für die Aktualisierung des aktiven NPC-Bildes die initiale Bilderzeugung gemäß SG-014 verwenden, wenn im aktiven NPC-Szenen-Kontext weder ein aktives Laufzeitbild noch ein szenenspezifisches NPC-Bild vorliegt.  
 **Akzeptanzkriterien:**
-- Wird `/api/image/refresh-active` aufgerufen und es existiert weder ein aktives Laufzeitbild unter `.data/npcs/<npc_id>/<scene_id>/img.png` noch ein szenenspezifisches NPC-Bild unter `npcs/<npc_id>/scenes/<scene_id>/img.png`, wird die initiale Bilderzeugung gemäß SG-014 verwendet.
+- Wird `/api/image/current/refresh` aufgerufen und es existiert weder ein aktives Laufzeitbild unter `.data/npcs/<npc_id>/<scene_id>/img.png` noch ein szenenspezifisches NPC-Bild unter `npcs/<npc_id>/scenes/<scene_id>/img.png`, wird die initiale Bilderzeugung gemäß SG-014 verwendet.
 - Existiert unter `.data/npcs/<npc_id>/<scene_id>/scene.md` bereits eine Runtime-Szenendatei, aber weiterhin kein aktives Laufzeitbild unter `.data/npcs/<npc_id>/<scene_id>/img.png`, bleibt dieser Fall eine initiale Bilderzeugung gemäß SG-014.
 - In diesem Fall erfolgt keine reguläre Bildfortschreibung.
 

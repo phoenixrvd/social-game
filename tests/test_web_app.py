@@ -12,7 +12,10 @@ from PIL import Image
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-import engine.web.app as web_app_module
+(Path(__file__).resolve().parents[1] / "engine" / "web" / "static" / "js").mkdir(parents=True, exist_ok=True)
+
+import engine.api.app as web_app_module
+import engine.services.npc_turn_service as npc_turn_service_module
 from engine.config import config
 from engine.storage import storage
 from engine.storage.models import Message
@@ -81,6 +84,30 @@ class FakeNpcTurnService:
         web_app_module.storage.npc.stm.append(assistant_msg)
 
 
+def _patch_scheduler(monkeypatch, scheduler_factory) -> None:
+    monkeypatch.setattr(web_app_module.chat, "get_scheduler", scheduler_factory)
+    monkeypatch.setattr(web_app_module.session, "get_scheduler", scheduler_factory, raising=False)
+    monkeypatch.setattr(web_app_module.scene, "get_scheduler", scheduler_factory, raising=False)
+    monkeypatch.setattr(web_app_module.npc, "get_scheduler", scheduler_factory)
+    monkeypatch.setattr("engine.tools.scheduler.get_scheduler", scheduler_factory)
+
+
+def _patch_streaming_response(monkeypatch, response_cls) -> None:
+    monkeypatch.setattr(
+        web_app_module.chat,
+        "StreamingResponse",
+        lambda content, media_type: response_cls(content, media_type),
+    )
+
+
+def _patch_image_service(monkeypatch, service_cls) -> None:
+    monkeypatch.setattr(web_app_module.session, "ImageService", service_cls)
+
+
+def _patch_npc_turn_service(monkeypatch, service_cls) -> None:
+    monkeypatch.setattr(web_app_module.chat, "NpcTurnService", service_cls)
+
+
 def _setup_web_app(
     tmp_path,
     monkeypatch,
@@ -128,10 +155,8 @@ def _setup_web_app(
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
     monkeypatch.setattr(config, "WEB_DEBUG", web_debug)
     _write_session(tmp_path, "vika", "office")
-    monkeypatch.setattr(web_app_module, "NpcTurnService", FakeNpcTurnService)
+    _patch_npc_turn_service(monkeypatch, FakeNpcTurnService)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", lambda turn_messages: iter(["Antwort", " vom Web"]))
-    web_app_module.app.state.watch_scheduler = None
-    web_app_module._scheduler = None
 
     storage.npc.stm.save(
         [
@@ -152,6 +177,12 @@ def _run_async(coro):
     finally:
         loop.run_until_complete(loop.shutdown_asyncgens())
         loop.close()
+
+
+def _as_payload(value: Any) -> Any:
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    return value
 
 
 def _read_stream_events(response) -> list[dict[str, object]]:
@@ -195,7 +226,6 @@ def test_index_serves_gui(tmp_path, monkeypatch):
 
     assert "Social Game GUI" in content
     assert 'id="root"' in content
-    assert 'src="/js/app.js"' in content
 
 
 def test_sg_routes_always_serve_spa_index(tmp_path, monkeypatch):
@@ -208,7 +238,7 @@ def test_sg_routes_always_serve_spa_index(tmp_path, monkeypatch):
         def stop(self) -> None:
             return None
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         for path in (
@@ -285,34 +315,47 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     _make_test_png(storage.npc.backup_dir / "img-20260510-100000.png")
     _make_test_png(storage.npc.backup_dir / "img-20260510-110000.png")
 
-    payload = web_app_module.get_state()
-    assert payload["npc_id"] == "vika"
-    assert payload["npc_name"] == "Vika"
-    assert payload["character_description"] == "Charakterbeschreibung vika"
-    assert payload["character_data"] == {"name": "Vika"}
-    assert payload["scene_id"] == "office"
-    assert payload["default_npc_id"] == config.DEFAULT_NPC_ID
-    assert payload["default_scene_id"] == config.DEFAULT_SCENE_ID
-    assert payload["is_dynamic_npc"] is False
-    assert payload["is_dynamic_scene"] is False
-    assert payload["image_url"] == "/api/image/current"
-    assert payload["image_original_url"].startswith("/api/image/original?v=")
-    assert [backup["name"] for backup in payload["image_backups"]] == [
-        "img-20260510-110000.png",
-        "img-20260510-100000.png",
-    ]
-    assert payload["image_backups"][0]["url"].startswith("/api/image/backups/img-20260510-110000.png?v=")
+    payload = _as_payload(web_app_module.session.get_state())
+    assert payload["npc"] == "vika"
+    assert payload["scene"] == "office"
+    assert payload["default_npc"] == config.DEFAULT_NPC_ID
+    assert payload["default_scene"] == config.DEFAULT_SCENE_ID
+    assert "npc_name" not in payload
+    assert "character_description" not in payload
+    assert "character_data" not in payload
+    assert "is_dynamic_npc" not in payload
+    assert "is_dynamic_scene" not in payload
+    assert "image_url" not in payload
+    assert "image_original_url" not in payload
+    assert "image_backups" not in payload
     assert payload["messages"][0]["content"] == "Hi"
-    npc_options = {(entry["id"], entry["label"]) for entry in payload["npcs"]}
+    assert "npcs" not in payload
+    assert "scenes" not in payload
+
+
+def test_npc_options_endpoint_lists_npcs_with_media_urls(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")
+
+    payload = [_as_payload(entry) for entry in web_app_module.npc.list_options()]
+
+    npc_options = {(entry["id"], entry["name"]) for entry in payload}
     assert {("mira", "Mira"), ("vika", "Vika")}.issubset(npc_options)
-    vika_option = next(entry for entry in payload["npcs"] if entry["id"] == "vika")
-    mira_option = next(entry for entry in payload["npcs"] if entry["id"] == "mira")
-    assert vika_option["video_url"].startswith("/api/npcs/vika/video?v=")
-    assert mira_option["video_url"] is None
-    scene_options = {(entry["id"], entry["label"], entry["image_url"]) for entry in payload["scenes"]}
+    vika_option = next(entry for entry in payload if entry["id"] == "vika")
+    mira_option = next(entry for entry in payload if entry["id"] == "mira")
+    assert "video_url" not in vika_option
+    assert "video_url" not in mira_option
+
+
+def test_scene_options_endpoint_lists_scenes_with_image_urls(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    payload = [_as_payload(entry) for entry in web_app_module.scene.list_options()]
+
+    scene_options = {(entry["id"], entry["name"]) for entry in payload}
     assert {
-        ("cafe", "Cafe", "/api/scenes/cafe/image?v="),
-        ("office", "Office", "/api/scenes/office/image?v="),
+        ("cafe", "Cafe"),
+        ("office", "Office"),
     }.issubset(scene_options)
 
 
@@ -320,7 +363,7 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
     _setup_web_app(tmp_path, monkeypatch)
     storage.npc.stm.save([])
 
-    payload = web_app_module.get_state()
+    payload = _as_payload(web_app_module.session.get_state())
     assert len(payload["messages"]) == 3
     character_message = payload["messages"][0]
     scene_message = payload["messages"][1]
@@ -344,7 +387,7 @@ def test_get_state_returns_context_message_when_history_is_empty(tmp_path, monke
 
 def test_get_state_prefers_real_messages_over_context_fallback(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    payload = web_app_module.get_state()
+    payload = _as_payload(web_app_module.session.get_state())
     assert len(payload["messages"]) == 2
     assert payload["messages"][0]["content"] == "Hi"
     assert payload["messages"][1]["content"] == "Hallo."
@@ -363,7 +406,7 @@ def test_get_state_returns_context_message_when_only_system_messages_exist(tmp_p
         ]
     )
 
-    payload = web_app_module.get_state()
+    payload = _as_payload(web_app_module.session.get_state())
     assert len(payload["messages"]) == 3
     assert payload["messages"][0]["id"] == "context-character"
     assert payload["messages"][1]["id"] == "context-scene"
@@ -381,7 +424,7 @@ def test_get_state_context_html_keeps_markdown_links_unescaped(tmp_path, monkeyp
     storage.scene.location.runtime.save("Szene [ok](https://example.com)")
     storage.npc.stm.save([])
 
-    payload = web_app_module.get_state()
+    payload = _as_payload(web_app_module.session.get_state())
     character_html = payload["messages"][0]["html"]
     assert "javascript:" in character_html
 
@@ -391,7 +434,7 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
     storage.npc.description.save("Außen:\n\n- direkt\n- offen")
     storage.npc.stm.save([])
 
-    payload = web_app_module.get_state()
+    payload = _as_payload(web_app_module.session.get_state())
     character_html = payload["messages"][0]["html"]
     assert "<ul>" in character_html
     assert "<li>direkt</li>" in character_html
@@ -400,12 +443,13 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
 
 def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    payload = web_app_module.update_session(web_app_module.SessionRequest(npc_id="mira", scene_id="cafe"))
+    payload = _as_payload(
+        web_app_module.session.update_session(web_app_module.session.SessionRequest(npc="mira", scene="cafe"))
+    )
     assert storage.session.npc_id == "mira"
     assert storage.session.scene_id == "cafe"
-    assert payload["npc_id"] == "mira"
-    assert payload["npc_name"] == "Mira"
-    assert payload["scene_id"] == "cafe"
+    assert payload["npc"] == "mira"
+    assert payload["scene"] == "cafe"
 
 
 def test_update_session_enqueues_image_job_when_autogenerate_enabled(tmp_path, monkeypatch):
@@ -417,30 +461,43 @@ def test_update_session_enqueues_image_job_when_autogenerate_enabled(tmp_path, m
         def enqueue(self, job_name: str) -> None:
             calls.append(job_name)
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    payload = web_app_module.update_session(web_app_module.SessionRequest(image_autogenerate=True))
+    payload = _as_payload(web_app_module.session.update_session(web_app_module.session.SessionRequest(image_autogenerate=True)))
 
     assert payload["image_autogenerate"] is True
     assert calls == ["image"]
 
 
-def test_update_session_requires_at_least_one_field(tmp_path, monkeypatch):
+def test_update_session_without_fields_keeps_state_unchanged(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    try:
-        web_app_module.update_session(web_app_module.SessionRequest())
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as exc:
-        assert exc.status_code == 422
-        assert exc.detail == "Mindestens npc_id, scene_id oder image_autogenerate muss gesetzt sein."
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.put("/api/session", json={})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["npc"] == "vika"
+    assert payload["scene"] == "office"
 
 
 def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     scene_data_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
+    other_scene_data_dir = tmp_path / ".data" / "npcs" / "vika" / "cafe"
     scene_data_dir.mkdir(parents=True, exist_ok=True)
+    other_scene_data_dir.mkdir(parents=True, exist_ok=True)
     assert scene_data_dir.exists()
+    assert other_scene_data_dir.exists()
 
     calls: list[str] = []
 
@@ -448,17 +505,17 @@ def test_reset_active_npc_runtime_data_deletes_directory(tmp_path, monkeypatch):
         def clear_pending_jobs(self) -> None:
             calls.append("clear_pending_jobs")
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    payload = web_app_module.reset_active_npc_runtime_data()
+    response = web_app_module.npc.reset_active("vika")
 
     assert not scene_data_dir.exists()
+    assert not other_scene_data_dir.exists()
     assert calls == ["clear_pending_jobs"]
-    assert payload["npc_id"] == "vika"
-    assert payload["scene_id"] == "office"
+    assert response.status_code == 200
 
 
-def test_reset_active_npc_can_delete_npc_scene_context(tmp_path, monkeypatch):
+def test_reset_active_npc_deletes_npc_scene_context(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     npc_scene_context_dir = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office"
     npc_scene_context_dir.mkdir(parents=True, exist_ok=True)
@@ -470,19 +527,18 @@ def test_reset_active_npc_can_delete_npc_scene_context(tmp_path, monkeypatch):
         def clear_pending_jobs(self) -> None:
             calls.append("clear_pending_jobs")
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    payload = web_app_module.reset_active_npc_runtime_data(delete_npc_context=True)
+    response = web_app_module.npc.reset_active("vika")
 
     assert calls == ["clear_pending_jobs"]
     assert not npc_scene_context_dir.exists()
     assert storage.session.npc_id == "vika"
     assert storage.session.scene_id == "office"
-    assert payload["npc_id"] == "vika"
-    assert payload["scene_id"] == "office"
+    assert response.status_code == 200
 
 
-def test_reset_active_npc_can_delete_dynamic_npc_and_reset_session(tmp_path, monkeypatch):
+def test_delete_dynamic_npc_removes_artifacts_and_resets_session(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     dynamic_npc_id = "created_lina"
     _write_session(tmp_path, dynamic_npc_id, "office")
@@ -505,19 +561,18 @@ def test_reset_active_npc_can_delete_dynamic_npc_and_reset_session(tmp_path, mon
         def clear_pending_jobs(self) -> None:
             calls.append("clear_pending_jobs")
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    payload = web_app_module.reset_active_npc_runtime_data(delete_npc=True)
+    response = web_app_module.npc.delete(dynamic_npc_id)
 
     assert calls == ["clear_pending_jobs"]
     assert not dynamic_npc_dir.exists()
     assert not dynamic_runtime_dir.exists()
     assert storage.session.npc_id == config.DEFAULT_NPC_ID
-    assert payload["npc_id"] == config.DEFAULT_NPC_ID
-    assert payload["is_dynamic_npc"] is False
+    assert response.status_code == 200
 
 
-def test_reset_active_npc_can_delete_dynamic_scene_and_reset_session(tmp_path, monkeypatch):
+def test_delete_dynamic_scene_removes_artifacts_and_resets_session(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     dynamic_scene_id = "created_rooftop"
     _write_session(tmp_path, "vika", dynamic_scene_id)
@@ -546,9 +601,9 @@ def test_reset_active_npc_can_delete_dynamic_scene_and_reset_session(tmp_path, m
         def clear_pending_jobs(self) -> None:
             calls.append("clear_pending_jobs")
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    payload = web_app_module.reset_active_npc_runtime_data(delete_scene=True)
+    response = web_app_module.scene.delete(dynamic_scene_id)
 
     assert calls == ["clear_pending_jobs"]
     assert not dynamic_scene_dir.exists()
@@ -558,8 +613,30 @@ def test_reset_active_npc_can_delete_dynamic_scene_and_reset_session(tmp_path, m
     assert not other_npc_scene_override.exists()
     assert storage.session.npc_id == "vika"
     assert storage.session.scene_id == config.DEFAULT_SCENE_ID
-    assert payload["npc_id"] == "vika"
-    assert payload["scene_id"] == config.DEFAULT_SCENE_ID
+    assert response.status_code == 200
+
+
+def test_get_npc_returns_static_npc_properties(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")
+
+    payload = _as_payload(web_app_module.npc.get_npc("vika"))
+
+    assert payload["name"] == "Vika"
+    assert payload["description"] == "Charakterbeschreibung vika"
+    assert isinstance(payload["image_is_original"], bool)
+    assert payload["is_dynamic_npc"] is False
+
+
+def test_get_scene_returns_static_scene_properties(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    payload = _as_payload(web_app_module.scene.get_scene("office"))
+
+    assert payload["id"] == "office"
+    assert payload["name"] == "Office"
+    assert payload["description_html"]
+    assert payload["description"].startswith("# Office")
     assert payload["is_dynamic_scene"] is False
 
 
@@ -585,17 +662,16 @@ def test_reset_active_scene_resets_standard_scene_artifacts(tmp_path, monkeypatc
         def clear_pending_jobs(self) -> None:
             calls.append("clear_pending_jobs")
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    payload = web_app_module.reset_active_scene()
+    response = web_app_module.scene.reset_active("office")
 
     assert calls == ["clear_pending_jobs"]
     assert not scene_override_dir.exists()
     assert not runtime_dir.exists()
     assert not npc_scene_override.exists()
     assert storage.session.scene_id == "office"
-    assert payload["scene_id"] == "office"
-    assert payload["can_reset_scene"] is False
+    assert response.status_code == 200
 
 
 def test_reset_active_scene_rejects_dynamic_scene(tmp_path, monkeypatch):
@@ -607,17 +683,47 @@ def test_reset_active_scene_rejects_dynamic_scene(tmp_path, monkeypatch):
     dynamic_scene_dir.mkdir(parents=True)
     (dynamic_scene_dir / "scene.md").write_text("# Rooftop", encoding="utf-8")
 
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            pass
+
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
+
     try:
-        web_app_module.reset_active_scene()
-        raise AssertionError("Expected HTTPException")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-        assert exc.detail == "Aktive Szene kann nicht zurueckgesetzt werden."
+        web_app_module.scene.reset_active(dynamic_scene_id)
+        raise AssertionError("Expected ValueError")
+    except ValueError as exc:
+        assert str(exc) == "Aktive Szene kann nicht zurückgesetzt werden."
+
+
+def test_delete_scene_keeps_default_scene_and_resets_artifacts(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    scene_override_dir = tmp_path / ".overrides" / "scenes" / "office"
+    scene_override_dir.mkdir(parents=True)
+    (scene_override_dir / "scene.md").write_text("# Override", encoding="utf-8")
+
+    runtime_dir = tmp_path / ".data" / "npcs" / "vika" / "office"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    (runtime_dir / "stm.jsonl").write_text("{}\n", encoding="utf-8")
+
+    class FakeScheduler:
+        def clear_pending_jobs(self) -> None:
+            pass
+
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
+
+    response = web_app_module.scene.delete("office")
+
+    assert response.status_code == 200
+    assert storage.session.scene_id == "office"
+    assert not scene_override_dir.exists()
+    assert not runtime_dir.exists()
 
 
 def test_current_image_serves_active_npc_image(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    response = web_app_module.current_image()
+    response = web_app_module.session.image_current()
 
     assert response.status_code == 200
     assert response.media_type == "image/webp"
@@ -634,7 +740,7 @@ def test_current_image_returns_404_when_missing(tmp_path, monkeypatch):
         root_image.unlink()
 
     try:
-        web_app_module.current_image()
+        web_app_module.session.image_current()
         raise AssertionError("Expected FileNotFoundError")
     except FileNotFoundError as exc:
         assert exc.filename == str(storage.npc.img.get())
@@ -645,17 +751,7 @@ def test_image_backup_endpoint_serves_active_npc_backup(tmp_path, monkeypatch):
     storage.npc.backup_dir.mkdir(parents=True)
     _make_test_png(storage.npc.backup_dir / "img-20260510-110000.png")
 
-    response = web_app_module.image_backup("img-20260510-110000.png")
-
-    assert response.status_code == 200
-    assert response.media_type == "image/webp"
-    assert len(response.body) > 0
-
-
-def test_original_image_endpoint_serves_active_npc_original(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-
-    response = web_app_module.original_image()
+    response = web_app_module.session.image_current_backup("img-20260510-110000.png")
 
     assert response.status_code == 200
     assert response.media_type == "image/webp"
@@ -666,7 +762,7 @@ def test_image_backup_endpoint_rejects_unknown_name(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
     try:
-        web_app_module.image_backup("state.md")
+        web_app_module.session.image_current_backup("state.md")
         raise AssertionError("Expected HTTPException")
     except HTTPException as exc:
         assert exc.status_code == 404
@@ -680,7 +776,7 @@ def test_image_backup_endpoint_rejects_path_traversal(tmp_path, monkeypatch):
 
     for backup_name in ("img-../session.yaml.png", "img-20260510-110000/../../session.yaml.png"):
         try:
-            web_app_module.image_backup(backup_name)
+            web_app_module.session.image_current_backup(backup_name)
             raise AssertionError("Expected HTTPException")
         except HTTPException as exc:
             assert exc.status_code == 404
@@ -698,10 +794,10 @@ def test_npc_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkeypa
         def stop(self) -> None:
             return None
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
-        response = client.get("/api/npcs/vika/image?v=123")
+        response = client.get("/api/npcs/vika/image/original?v=123")
 
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("image/webp")
@@ -719,7 +815,7 @@ def test_npc_option_video_endpoint_accepts_cache_buster_query(tmp_path, monkeypa
         def stop(self) -> None:
             return None
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.get("/api/npcs/vika/video?v=123")
@@ -732,8 +828,8 @@ def test_npc_option_video_endpoint_accepts_cache_buster_query(tmp_path, monkeypa
 def test_npc_option_video_uses_storage_node(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
-    source = (Path(__file__).parents[1] / "engine" / "web" / "app.py").read_text(encoding="utf-8")
-    helper_source = source[source.find("def _npc_option_video(npc_id: str):"):source.find("def _npc_option_video_url")]
+    source = (Path(__file__).parents[1] / "engine" / "api" / "npc.py").read_text(encoding="utf-8")
+    helper_source = source[source.find("def _npc_option_video(npc: EntityId):"):source.find("def _map_npc_response")]
     assert ".video" in helper_source
     assert "OVERRIDES_NPC_DIR" not in helper_source
     assert "NPC_DIR" not in helper_source
@@ -750,7 +846,7 @@ def test_scene_option_image_endpoint_accepts_cache_buster_query(tmp_path, monkey
         def stop(self) -> None:
             return None
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.get("/api/scenes/office/image?v=123")
@@ -771,10 +867,10 @@ def test_npc_option_image_endpoint_scales_width_to_256(tmp_path, monkeypatch):
         def stop(self) -> None:
             return None
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
-        response = client.get("/api/npcs/vika/image?v=123")
+        response = client.get("/api/npcs/vika/image/original?v=123")
 
     assert response.status_code == 200
     with Image.open(BytesIO(response.content)) as image:
@@ -793,7 +889,7 @@ def test_scene_option_image_endpoint_scales_width_to_256(tmp_path, monkeypatch):
         def stop(self) -> None:
             return None
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.get("/api/scenes/office/image?v=123")
@@ -813,9 +909,9 @@ def test_refresh_active_image_uses_character_image_service_directly(tmp_path, mo
             assert force is True
             calls.append("update_from_context")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
-    response = web_app_module.refresh_active_image()
+    response = _as_payload(web_app_module.session.image_current_refresh())
 
     assert response == {}
     assert calls == ["update_from_context"]
@@ -829,13 +925,13 @@ def test_refresh_active_image_returns_400_with_detail_for_user_visible_llm_error
             assert force is True
             raise _make_user_visible_runtime_error("Anfrage durch Moderation blockiert.")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
     try:
-        web_app_module.refresh_active_image()
+        web_app_module.session.image_current_refresh()
         raise AssertionError("Expected RuntimeError")
     except RuntimeError as exc:
-        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/session/image/refresh", "POST"), exc))
 
     assert response.status_code == 400
     assert response.media_type == "application/problem+json"
@@ -850,13 +946,13 @@ def test_refresh_active_image_returns_500_on_internal_schedule_runtime_error(tmp
             assert force is True
             raise RuntimeError("generation_failed")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
     try:
-        web_app_module.refresh_active_image()
+        web_app_module.session.image_current_refresh()
         raise AssertionError("Expected RuntimeError")
     except RuntimeError as exc:
-        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/session/image/refresh", "POST"), exc))
 
     assert response.status_code == 500
     assert response.media_type == "application/problem+json"
@@ -872,13 +968,13 @@ def test_refresh_active_image_returns_400_with_detail_for_user_visible_http_erro
             assert force is True
             raise _make_user_visible_http_runtime_error("Anfrage durch Moderation blockiert.")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
     try:
-        web_app_module.refresh_active_image()
+        web_app_module.session.image_current_refresh()
         raise AssertionError("Expected RuntimeError")
     except RuntimeError as exc:
-        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/session/image/refresh", "POST"), exc))
 
     assert response.status_code == 400
     assert response.media_type == "application/problem+json"
@@ -900,13 +996,13 @@ def test_refresh_active_image_returns_400_with_detail_for_direct_openai_error(tm
                 "SAFETY_CHECK_TYPE_CSAM'}\")"
             )
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
     try:
-        web_app_module.refresh_active_image()
+        web_app_module.session.image_current_refresh()
         raise AssertionError("Expected FakePermissionDenied")
     except FakePermissionDenied as exc:
-        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/refresh-active", "POST"), exc))
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/session/image/refresh", "POST"), exc))
 
     assert response.status_code == 400
     assert response.media_type == "application/problem+json"
@@ -921,9 +1017,9 @@ def test_revert_active_image_calls_character_image_service(tmp_path, monkeypatch
         def revert(self) -> None:
             calls.append("revert")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
-    response = web_app_module.revert_active_image()
+    response = _as_payload(web_app_module.session.image_current_revert())
 
     assert response == {}
     assert calls == ["revert"]
@@ -936,13 +1032,13 @@ def test_revert_active_image_returns_500_on_internal_runtime_error(tmp_path, mon
         def revert(self) -> None:
             raise RuntimeError("revert_failed")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
     try:
-        web_app_module.revert_active_image()
+        web_app_module.session.image_current_revert()
         raise AssertionError("Expected RuntimeError")
     except RuntimeError as exc:
-        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/revert-active", "POST"), exc))
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/session/image/revert", "POST"), exc))
 
     assert response.status_code == 500
     assert response.media_type == "application/problem+json"
@@ -958,13 +1054,12 @@ def test_delete_active_image_calls_character_image_service_and_returns_state(tmp
         def delete_current(self) -> None:
             calls.append("delete_current")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
-    payload = web_app_module.delete_active_image()
+    response = web_app_module.session.image_current_delete()
 
     assert calls == ["delete_current"]
-    assert payload["npc_id"] == "vika"
-    assert payload["scene_id"] == "office"
+    assert response.status_code == 200
 
 
 def test_delete_active_image_returns_500_on_internal_runtime_error(tmp_path, monkeypatch):
@@ -974,13 +1069,13 @@ def test_delete_active_image_returns_500_on_internal_runtime_error(tmp_path, mon
         def delete_current(self) -> None:
             raise RuntimeError("delete_failed")
 
-    monkeypatch.setattr(web_app_module, "ImageService", FakeImageService)
+    _patch_image_service(monkeypatch, FakeImageService)
 
     try:
-        web_app_module.delete_active_image()
+        web_app_module.session.image_current_delete()
         raise AssertionError("Expected RuntimeError")
     except RuntimeError as exc:
-        response = _run_async(web_app_module._internal_error_handler(_request("/api/image/delete-active", "DELETE"), exc))
+        response = _run_async(web_app_module._internal_error_handler(_request("/api/session/image/delete", "DELETE"), exc))
 
     assert response.status_code == 500
     assert response.media_type == "application/problem+json"
@@ -1007,11 +1102,11 @@ def test_chat_stream_scheduled_tools_nach_finaler_nachricht(tmp_path, monkeypatc
         captured["turn_messages"] = turn_messages
         return iter(["Antwort", " vom Web"])
 
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    _patch_streaming_response(monkeypatch, FakeStreamingResponse)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Startbild bitte"))
+    response = web_app_module.chat.stream(web_app_module.chat.ChatRequest(message="Startbild bitte"))
 
     assert response.status_code == 200
     assert _read_stream_events(response) == [
@@ -1050,11 +1145,11 @@ def test_chat_stream_endpoint_streams_ndjson_events(tmp_path, monkeypatch):
         captured["turn_messages"] = turn_messages
         return iter(["Antwort", " vom Web"])
 
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    _patch_streaming_response(monkeypatch, FakeStreamingResponse)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Stream bitte"))
+    response = web_app_module.chat.stream(web_app_module.chat.ChatRequest(message="Stream bitte"))
 
     assert response.status_code == 200
     assert response.media_type == "application/x-ndjson"
@@ -1095,11 +1190,11 @@ def test_chat_stream_emits_error_event_for_runtime_error(tmp_path, monkeypatch):
 
         return FailingIterator()
 
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    _patch_streaming_response(monkeypatch, FakeStreamingResponse)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Fehler bitte"))
+    response = web_app_module.chat.stream(web_app_module.chat.ChatRequest(message="Fehler bitte"))
 
     assert response.status_code == 200
     assert _read_stream_events(response) == [
@@ -1134,10 +1229,10 @@ def test_chat_stream_emits_error_event_for_direct_openai_error(tmp_path, monkeyp
 
         return FailingIterator()
 
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    _patch_streaming_response(monkeypatch, FakeStreamingResponse)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
 
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Fehler bitte"))
+    response = web_app_module.chat.stream(web_app_module.chat.ChatRequest(message="Fehler bitte"))
 
     assert response.status_code == 200
     assert _read_stream_events(response) == [
@@ -1164,10 +1259,10 @@ def test_chat_stream_emits_generic_error_event_without_leaking_details(tmp_path,
 
         return _iterator()
 
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
+    _patch_streaming_response(monkeypatch, FakeStreamingResponse)
     monkeypatch.setattr(web_app_module.client, "stream_prompt", fake_stream_prompt)
 
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Teilantwort bitte"))
+    response = web_app_module.chat.stream(web_app_module.chat.ChatRequest(message="Teilantwort bitte"))
 
     assert response.status_code == 200
     assert _read_stream_events(response) == [
@@ -1200,11 +1295,11 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
     class FailingStorage:
         npc = FailingNpcPaths()
 
-    monkeypatch.setattr(web_app_module, "StreamingResponse", FakeStreamingResponse)
-    monkeypatch.setattr(web_app_module, "storage", FailingStorage())
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_streaming_response(monkeypatch, FakeStreamingResponse)
+    monkeypatch.setattr(npc_turn_service_module, "storage", FailingStorage())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
-    response = web_app_module.chat_stream(web_app_module.ChatRequest(message="Speichern bitte"))
+    response = web_app_module.chat.stream(web_app_module.chat.ChatRequest(message="Speichern bitte"))
 
     assert response.status_code == 200
     assert _read_stream_events(response) == [
@@ -1221,7 +1316,9 @@ def test_update_user_profile_persists_active_runtime_profile_and_returns_it(tmp_
     scene_profile = config.DATA_NPC_DIR / "vika" / "office" / "user_profile.md"
     (config.NPC_DIR / "user_profile.md").write_text("default", encoding="utf-8")
 
-    payload = web_app_module.update_user_profile(web_app_module.UserProfileRequest(content="global-profile"))
+    payload = _as_payload(
+        web_app_module.session.update_user_profile(web_app_module.session.UserProfileRequest(content="global-profile"))
+    )
 
     assert scene_profile.read_text(encoding="utf-8") == "global-profile"
     assert payload["user_profile"] == "global-profile"
@@ -1250,7 +1347,7 @@ def test_web_lifespan_uses_scheduler_directly(monkeypatch):
     assert events == ["init", "start", "inside", "stop"]
 
 
-def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
+def test_web_lifespan_creates_new_scheduler_per_run(monkeypatch):
     events: list[str] = []
 
     class FakeScheduler:
@@ -1263,7 +1360,6 @@ def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
         def stop(self) -> None:
             events.append("stop")
 
-    monkeypatch.setattr(web_app_module, "_scheduler", None)
     monkeypatch.setattr(web_app_module, "Scheduler", FakeScheduler)
 
     async def run_lifespan():
@@ -1272,11 +1368,11 @@ def test_web_lifespan_reuses_single_scheduler_instance(monkeypatch):
 
     _run_async(run_lifespan())
     _run_async(run_lifespan())
-    assert events == ["init", "start", "inside", "stop", "start", "inside", "stop"]
+    assert events == ["init", "start", "inside", "stop", "init", "start", "inside", "stop"]
 
 
 def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
@@ -1317,13 +1413,13 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
         def stop(self) -> None:
             pass
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "Ein neues Café",
+                "description": "Ein neues Café",
             }
         )
 
@@ -1332,6 +1428,7 @@ def test_create_scene_calls_scene_service(tmp_path, monkeypatch):
     assert created_npc_scenes == [("Ein neues Café", "test_scene")]
     assert scheduler_calls == [("image", "test_scene")]
     assert storage.session.scene_id == "test_scene"
+    assert response.json()["id"] == "test_scene"
 
 
 def test_generate_scene_context_returns_preview_without_saving(tmp_path, monkeypatch):
@@ -1349,15 +1446,15 @@ def test_generate_scene_context_returns_preview_without_saving(tmp_path, monkeyp
         prompts.append(prompt)
         return "Generierter NPC-Kontext"
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
     monkeypatch.setattr(web_app_module.client, "run_prompt_small", fake_run_prompt_small)
 
     with TestClient(web_app_module.app) as client:
-        response = client.post("/api/scene-context/generate", json={"content": "NPC sitzt am Fenster"})
+        response = client.post("/api/session/context/generate", json={"content": "NPC sitzt am Fenster"})
 
     override_file = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office" / "scene.md"
     assert response.status_code == 200
-    assert response.json() == {"scene_context": "Generierter NPC-Kontext"}
+    assert response.json() == {"context": "Generierter NPC-Kontext"}
     assert "NPC sitzt am Fenster" in prompts[0]
     assert not override_file.exists()
 
@@ -1373,22 +1470,22 @@ def test_update_scene_context_saves_override_and_returns_updated_state(tmp_path,
         def stop(self) -> None:
             pass
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
-        response = client.put("/api/scene-context", json={"content": "NPC lehnt an der Bar."})
+        response = client.put("/api/session/context", json={"content": "NPC lehnt an der Bar."})
 
     override_file = tmp_path / ".overrides" / "npcs" / "vika" / "scenes" / "office" / "scene.md"
     payload = response.json()
     assert response.status_code == 200
     assert override_file.read_text(encoding="utf-8") == "NPC lehnt an der Bar."
-    assert payload["scene_context"] == "NPC lehnt an der Bar."
-    assert payload["messages"][1]["is_editable_scene_context"] is True
+    assert payload["sceneContext"] == "NPC lehnt an der Bar."
+    assert payload["messages"][1]["isEditableSceneContext"] is True
     assert "NPC lehnt an der Bar" in payload["messages"][1]["html"]
 
 
 def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
@@ -1427,13 +1524,13 @@ def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, mo
         def stop(self) -> None:
             pass
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "Ein neues Café",
+                "description": "Ein neues Café",
             }
         )
 
@@ -1443,7 +1540,7 @@ def test_create_scene_uses_same_description_for_scene_and_npc_scene(tmp_path, mo
 
 
 def test_create_scene_always_creates_scene_and_npc_context(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
@@ -1483,12 +1580,12 @@ def test_create_scene_always_creates_scene_and_npc_context(tmp_path, monkeypatch
     monkeypatch.setattr(SceneService, "create_override", fake_scene_create)
     monkeypatch.setattr(NpcSceneService, "create_override", fake_npc_scene_create)
     monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", fake_adapt)
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
-            json={"scene_description": "Ein neues Café"},
+            "/api/scenes",
+            json={"description": "Ein neues Café"},
         )
 
     assert response.status_code == 200
@@ -1500,7 +1597,7 @@ def test_create_scene_always_creates_scene_and_npc_context(tmp_path, monkeypatch
 
 
 def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
@@ -1537,13 +1634,13 @@ def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(t
         def stop(self) -> None:
             pass
 
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "Ein neues Café",
+                "description": "Ein neues Café",
             }
         )
 
@@ -1552,7 +1649,7 @@ def test_create_scene_does_not_enqueue_image_job_when_autogenerate_is_disabled(t
 
 
 def test_create_scene_uses_visible_preview_image(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
@@ -1577,10 +1674,10 @@ def test_create_scene_uses_visible_preview_image(tmp_path, monkeypatch):
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "Ein Café",
-                "scene_image_data_url": _test_png_data_url(width=6, height=8),
+                "description": "Ein Café",
+                "image_data_url": _test_png_data_url(width=6, height=8),
             },
         )
 
@@ -1591,7 +1688,7 @@ def test_create_scene_uses_visible_preview_image(tmp_path, monkeypatch):
 
 
 def test_create_scene_generates_image_from_reference_when_no_preview_exists(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.scene_service import SceneService
 
@@ -1621,9 +1718,9 @@ def test_create_scene_generates_image_from_reference_when_no_preview_exists(tmp_
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "Ein Café",
+                "description": "Ein Café",
                 "reference_image_data_url": _test_png_data_url(width=5, height=7),
             },
         )
@@ -1635,7 +1732,7 @@ def test_create_scene_generates_image_from_reference_when_no_preview_exists(tmp_
 
 
 def test_create_scene_fails_when_reference_image_generation_fails(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.scene_service import SceneService
 
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -1652,9 +1749,9 @@ def test_create_scene_fails_when_reference_image_generation_fails(tmp_path, monk
 
     with TestClient(web_app_module.app, raise_server_exceptions=False) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "Ein Café",
+                "description": "Ein Café",
                 "reference_image_data_url": _test_png_data_url(),
             },
         )
@@ -1663,7 +1760,7 @@ def test_create_scene_fails_when_reference_image_generation_fails(tmp_path, monk
 
 
 def test_describe_scene_reference_endpoint_uses_scene_service(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.scene_service import SceneService
 
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -1678,14 +1775,14 @@ def test_describe_scene_reference_endpoint_uses_scene_service(tmp_path, monkeypa
     monkeypatch.setattr(SceneService, "describe_reference_image", fake_describe)
 
     with TestClient(web_app_module.app) as client:
-        describe_response = client.post("/api/scenes/describe-reference", json={"image_data_url": _test_png_data_url()})
+        describe_response = client.post("/api/scenes/image/describe", json={"image_data_url": _test_png_data_url()})
 
-    assert describe_response.json() == {"scene_description": "Ein heller Raum mit Pflanzen."}
+    assert describe_response.json() == {"description": "Ein heller Raum mit Pflanzen."}
     assert seen_reference
 
 
 def test_scene_preview_image_endpoint_uses_scene_service(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.scene_service import SceneService
 
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -1700,11 +1797,11 @@ def test_scene_preview_image_endpoint_uses_scene_service(tmp_path, monkeypatch):
 
     with TestClient(web_app_module.app) as client:
         preview_response = client.post(
-            "/api/scenes/preview-image",
-            json={"scene_description": "Ein heller Raum", "reference_image_data_url": _test_png_data_url()},
+            "/api/scenes/image/preview",
+            json={"description": "Ein heller Raum", "reference_image_data_url": _test_png_data_url()},
         )
 
-    assert preview_response.json()["image_data_url"].startswith("data:image/png;base64,")
+    assert preview_response.json()["imageDataUrl"].startswith("data:image/png;base64,")
 
 
 def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
@@ -1718,23 +1815,23 @@ def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
         def stop(self) -> None:
             pass
 
-    import engine.web.app as web_app_module
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    import engine.api.app as web_app_module
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/scenes/create",
+            "/api/scenes",
             json={
-                "scene_description": "   ",
+                "description": "   ",
             }
         )
 
     assert response.status_code == 400
-    assert "darf nicht leer sein" in response.json()["detail"].lower()
+    assert "darf nicht leer sein" in response.json()["message"].lower()
 
 
 def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.npc_service import NpcService
 
@@ -1769,25 +1866,25 @@ def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch)
 
     monkeypatch.setattr(NpcService, "create_override", fake_npc_create)
     monkeypatch.setattr(NpcSceneService, "adapt_default_fallback", fake_adapt)
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/npcs/create",
+            "/api/npcs",
             json={
-                "character_description": "Alex, 28, arbeitet als Koch.",
+                "description": "Alex, 28, arbeitet als Koch.",
             }
         )
 
     assert response.status_code == 200
     assert created_npcs == ["Alex, 28, arbeitet als Koch."]
     assert adapted_npcs == ["alex"]
-    assert response.json()["npc_id"] == "alex"
+    assert response.json()["id"] == "alex"
     assert storage.session.npc_id == "alex"
 
 
 def test_create_npc_uses_visible_preview_image(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.npc_service import NpcService
 
@@ -1814,8 +1911,8 @@ def test_create_npc_uses_visible_preview_image(tmp_path, monkeypatch):
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/npcs/create",
-            json={"character_description": "Alex", "npc_image_data_url": _test_png_data_url(width=5, height=7)},
+            "/api/npcs",
+            json={"description": "Alex", "image_data_url": _test_png_data_url(width=5, height=7)},
         )
 
     assert response.status_code == 200
@@ -1825,7 +1922,7 @@ def test_create_npc_uses_visible_preview_image(tmp_path, monkeypatch):
 
 
 def test_create_npc_generates_image_from_reference_when_no_preview_exists(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_scene_service import NpcSceneService
     from engine.services.npc_service import NpcService
 
@@ -1857,8 +1954,8 @@ def test_create_npc_generates_image_from_reference_when_no_preview_exists(tmp_pa
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/npcs/create",
-            json={"character_description": "Alex", "reference_image_data_url": _test_png_data_url(width=5, height=7)},
+            "/api/npcs",
+            json={"description": "Alex", "reference_image_data_url": _test_png_data_url(width=5, height=7)},
         )
 
     assert response.status_code == 200
@@ -1868,7 +1965,7 @@ def test_create_npc_generates_image_from_reference_when_no_preview_exists(tmp_pa
 
 
 def test_create_npc_fails_when_reference_image_generation_fails(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_service import NpcService
 
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -1885,15 +1982,15 @@ def test_create_npc_fails_when_reference_image_generation_fails(tmp_path, monkey
 
     with TestClient(web_app_module.app, raise_server_exceptions=False) as client:
         response = client.post(
-            "/api/npcs/create",
-            json={"character_description": "Alex", "reference_image_data_url": _test_png_data_url()},
+            "/api/npcs",
+            json={"description": "Alex", "reference_image_data_url": _test_png_data_url()},
         )
 
     assert response.status_code == 500
 
 
 def test_describe_npc_reference_endpoint_uses_npc_service(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_service import NpcService
 
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -1908,14 +2005,14 @@ def test_describe_npc_reference_endpoint_uses_npc_service(tmp_path, monkeypatch)
     monkeypatch.setattr(NpcService, "describe_reference_image", fake_describe)
 
     with TestClient(web_app_module.app) as client:
-        response = client.post("/api/npcs/describe-reference", json={"image_data_url": _test_png_data_url()})
+        response = client.post("/api/npcs/image/describe", json={"image_data_url": _test_png_data_url()})
 
-    assert response.json() == {"character_description": "Eine Person mit dunkler Jacke."}
+    assert response.json() == {"description": "Eine Person mit dunkler Jacke."}
     assert seen_reference
 
 
 def test_npc_preview_image_endpoint_uses_npc_service(tmp_path, monkeypatch):
-    import engine.web.app as web_app_module
+    import engine.api.app as web_app_module
     from engine.services.npc_service import NpcService
 
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
@@ -1930,11 +2027,11 @@ def test_npc_preview_image_endpoint_uses_npc_service(tmp_path, monkeypatch):
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/npcs/preview-image",
-            json={"character_description": "Eine Person mit dunkler Jacke", "reference_image_data_url": _test_png_data_url()},
+            "/api/npcs/image/preview",
+            json={"description": "Eine Person mit dunkler Jacke", "reference_image_data_url": _test_png_data_url()},
         )
 
-    assert response.json()["image_data_url"].startswith("data:image/png;base64,")
+    assert response.json()["imageDataUrl"].startswith("data:image/png;base64,")
 
 
 def test_create_npc_rejects_empty_character_description(tmp_path, monkeypatch):
@@ -1948,16 +2045,37 @@ def test_create_npc_rejects_empty_character_description(tmp_path, monkeypatch):
         def stop(self) -> None:
             pass
 
-    import engine.web.app as web_app_module
-    monkeypatch.setattr(web_app_module, "_get_scheduler", lambda: FakeScheduler())
+    import engine.api.app as web_app_module
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
 
     with TestClient(web_app_module.app) as client:
         response = client.post(
-            "/api/npcs/create",
+            "/api/npcs",
             json={
-                "character_description": "   ",
+                "description": "   ",
             }
         )
 
     assert response.status_code == 400
-    assert "darf nicht leer sein" in response.json()["detail"].lower()
+    assert "darf nicht leer sein" in response.json()["message"].lower()
+
+
+def test_chat_stream_rejects_empty_message_with_validation_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
+    (tmp_path / "session.yaml").write_text("npc_id: vika\nscene_id: cafe\n", encoding="utf-8")
+
+    class FakeScheduler:
+        def start(self) -> None:
+            pass
+
+        def stop(self) -> None:
+            pass
+
+    import engine.api.app as web_app_module
+    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post("/api/chat/stream", json={"message": "   "})
+
+    assert response.status_code == 400
+    assert "darf nicht leer sein" in response.json()["message"].lower()

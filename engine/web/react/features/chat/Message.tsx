@@ -1,4 +1,4 @@
-import type { ChatMessage } from "../../api/types"
+import type { MessageResponse as ChatMessage } from "../../api/generated/model"
 import { PencilIcon, TextEditIcon } from "../../shared/icons"
 import { buildOptionsPath } from "../options/routes"
 import { useStateQuery } from "../../api/state"
@@ -21,7 +21,7 @@ export function Message({ message }: { message: ChatMessage }) {
       <div className="msg-content">
         <div className="msg-body msg-content-prewrap">{content}</div>
       </div>
-      {message.timestamp_utc ? <div className={`msg-timestamp ${timeClass}`}>{formatTime(message.timestamp_utc)}</div> : null}
+      {message.timestampUtc ? <div className={`msg-timestamp ${timeClass}`}>{formatTime(message.timestampUtc)}</div> : null}
     </div>
   )
 }
@@ -40,7 +40,7 @@ function ContextMessage({ message }: { message: ChatMessage }) {
       ) : (
         <div className="sg-initial-context-html msg-content-prewrap">{text}</div>
       )}
-      {message.is_editable_scene_context ? (
+      {message.isEditableSceneContext ? (
         <div className="sg-context-message-actions">
           <Link className="sg-context-message-edit" aria-label="Szenenkontext bearbeiten" to={hrefSceneContext}>
             <PencilIcon />

@@ -222,6 +222,10 @@ class NpcNode(_StorageNodeBase):
         return config.NPC_DIR / self.npc_id
 
     @property
+    def override_base(self) -> Path:
+        return config.OVERRIDES_NPC_DIR / self.npc_id
+
+    @property
     def base_runtime(self) -> Path:
         return self.runtime_dir
 
@@ -310,7 +314,7 @@ class NpcNode(_StorageNodeBase):
 
     @property
     def video_override(self) -> VideoFile:
-        return VideoFile(config.OVERRIDES_NPC_DIR / self.npc_id / "video.mp4")
+        return VideoFile(self.override_base / "video.mp4")
 
     @property
     def video_default(self) -> VideoFile:

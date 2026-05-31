@@ -7,7 +7,7 @@ Der Fokus liegt auf dem aktuell implementierten zeitgesteuerten Ablauf über den
 
 ## Beteiligte Komponenten
 
-- `engine/web/app.py`: manueller Trigger über `POST /api/image/refresh-active` und Lifespan-Start des Schedulers
+- `engine/web/app.py`: manueller Trigger über `POST /api/image/current/refresh` und Lifespan-Start des Schedulers
 - `engine/tools/scheduler.py`: stößt periodisch `execute_pending_jobs()` an
 - `engine/tools/image_job.py`: startet Bild-Updates über den `ImageService`
 - `engine/services/image_service.py`: orchestriert Prompt-Erzeugung, Bildgenerierung, Backup und Persistierung
@@ -30,7 +30,7 @@ Im automatischen Pfad wird immer im aktiven Kontext aus `npc_id` und `scene_id` 
 Es gibt zwei relevante Startpfade:
 
 - **Chat-getriggerter Pfad (automatisch):** nach einer final erfolgreich gestreamten Chat-Nachricht ruft der Web-Flow `enqueue_all()` auf; `image` wird anschließend im nächsten Scheduler-Zyklus über `execute_pending_jobs()` rate-limitiert ausgeführt.
-- **Manueller Pfad:** `POST /api/image/refresh-active` ruft direkt `ImageService.update_from_context(force=True)` auf.
+- **Manueller Pfad:** `POST /api/image/current/refresh` ruft direkt `ImageService.update_from_context(force=True)` auf.
 
 LLM-Tool-/Function-Calling wird bewusst nicht genutzt. Hintergrund: In diesem Modus liefert das Modell typischerweise keine normale Antwort. Ein Twice-Call-Pattern würde für dieselbe Wirkung unnötige Kosten und zusätzliche Komplexität erzeugen.
 
@@ -122,7 +122,7 @@ Danach werden gespeichert:
 
 ### Manuelles Refresh
 
-`POST /api/image/refresh-active` ruft `update_from_context(force=True)` auf.
+`POST /api/image/current/refresh` ruft `update_from_context(force=True)` auf.
 Dadurch wird die Prompt-Skip-Logik deaktiviert.
 
 ### Merge mit Szenenbild

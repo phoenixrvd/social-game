@@ -10,9 +10,9 @@ from openai.types.chat import (
     ChatCompletionSystemMessageParam,
 )
 
+from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 from engine.storage import storage
 from engine.storage.models import Message
-from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 
 EMPTY_PLACEHOLDER = "(leer)"
 
@@ -39,7 +39,7 @@ class NpcTurnService:
 
     @staticmethod
     def _to_message_param(role: str, content: str) -> ChatCompletionMessageParam:
-        """Convert role and content to typed message param."""
+        """Überführt Rolle und Inhalt in einen typisierten Chat-Parameter."""
         return cast(ChatCompletionMessageParam, cast(object, {"role": role, "content": content}))
 
     @staticmethod

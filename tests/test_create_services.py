@@ -583,7 +583,7 @@ def test_scene_service_dynamic_scene_detection_and_cleanup(tmp_path, monkeypatch
     (vika_runtime / "stm.jsonl").write_text("{}\n", encoding="utf-8")
     (mira_runtime / "stm.jsonl").write_text("{}\n", encoding="utf-8")
 
-    scene_module.SceneService.delete_dynamic_scene_artifacts(scene_id)
+    scene_module.SceneService.delete_dynamic_scene(scene_id)
 
     assert not dynamic_scene_dir.exists()
     assert not vika_override.exists()

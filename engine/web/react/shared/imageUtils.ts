@@ -1,14 +1,15 @@
-import type { AppStateView } from "../api/types"
+import type { AppStateView } from "../api/state"
+import type { ImageBackupResponse } from "../api/generated/model"
 
 export const EMPTY_IMAGE = "data:,"
 
-export function overlayImages(state?: AppStateView): string[] {
+export function overlayImages(state?: AppStateView, backups: ImageBackupResponse[] = []): string[] {
   if (!state?.imageUrl) return []
-  const backups = state.imageBackups.map((backup) => backup.url).filter(Boolean)
-  const original = state.imageOriginalUrl && (backups.length > 0 || !state.imageIsOriginal)
+  const backupUrls = backups.map((backup) => backup.url).filter(Boolean)
+  const original = state.imageOriginalUrl && (backupUrls.length > 0 || !state.imageIsOriginal)
     ? state.imageOriginalUrl
     : null
-  return [state.imageUrl, ...backups, original].filter(Boolean) as string[]
+  return [state.imageUrl, ...backupUrls, original].filter(Boolean) as string[]
 }
 
 export function errorText(error: unknown, fallback = "Aktion fehlgeschlagen.") {

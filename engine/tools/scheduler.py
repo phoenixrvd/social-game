@@ -11,6 +11,8 @@ from engine.tools.image_job import ImageJob
 from engine.tools.scene_job import SceneJob
 from engine.tools.state_job import StateJob
 
+_scheduler_instance: Scheduler | None = None
+
 
 class Scheduler:
     def __init__(self) -> None:
@@ -76,3 +78,14 @@ class Scheduler:
 
         self._scheduler.shutdown(wait=False)
         self._scheduler = None
+
+
+def set_scheduler(scheduler: Scheduler) -> None:
+    global _scheduler_instance
+    _scheduler_instance = scheduler
+
+
+def get_scheduler() -> Scheduler:
+    if _scheduler_instance is None:
+        raise RuntimeError("Scheduler ist nicht initialisiert.")
+    return _scheduler_instance

@@ -1,15 +1,23 @@
 import { useEffect, useRef } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { useStateQuery } from "../../api/state"
-import { useUpdateSessionMutation } from "../../api/session"
+import { useSessionUpdateSession } from "../../api/generated/session/session"
+import { normalizeStateDynamic, stateQueryKey, useStateQuery } from "../../api/state"
 import { OptionsShell } from "./OptionsShell"
 import { buildOptionsPath, isOptionPanel, useOptionsParams } from "./routes"
 
 export function OptionsRoute() {
+  const queryClient = useQueryClient()
   const options = useOptionsParams()
   const navigate = useNavigate()
   const { data } = useStateQuery()
-  const updateSession = useUpdateSessionMutation()
+  const updateSession = useSessionUpdateSession({
+    mutation: {
+      onSuccess: (response) => {
+        queryClient.setQueryData(stateQueryKey, normalizeStateDynamic(response.data))
+      },
+    },
+  })
   const updateSessionPending = updateSession.isPending
   const mutateSession = updateSession.mutate
   const requestedSessionKey = useRef<string | null>(null)
@@ -28,7 +36,7 @@ export function OptionsRoute() {
     if (updateSessionPending || requestedSessionKey.current === routeSessionKey) return
     requestedSessionKey.current = routeSessionKey
     mutateSession(
-      { npcId: options.npcId, sceneId: options.sceneId },
+      { data: { npc: options.npcId, scene: options.sceneId } },
       { onError: () => { requestedSessionKey.current = null } },
     )
   }, [data?.npcId, data?.sceneId, mutateSession, navigate, options.isOptionsRoute, options.npcId, options.rawPanel, options.sceneId, updateSessionPending])

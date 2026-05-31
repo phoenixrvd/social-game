@@ -10,6 +10,7 @@ from engine.client import client
 from engine.services.etm_service import EtmService
 from engine.services.id_normalizer import normalize_to_snake_id
 from engine.services.npc_scene_service import NpcSceneService
+from engine.services.npc_service import NpcService
 from engine.storage import storage
 
 
@@ -76,6 +77,18 @@ class SceneService:
             return client.generate_scene_img(prompt)
         return client.generate_scene_img_from_reference(prompt, reference_image_bytes)
 
+    def resolve_create_image(
+        self,
+        scene_description: str,
+        image_bytes: bytes | None,
+        reference_image_bytes: bytes | None,
+    ) -> bytes | None:
+        if image_bytes is not None:
+            return image_bytes
+        if reference_image_bytes is None:
+            return None
+        return self.create_preview_image(scene_description, reference_image_bytes)
+
     def _create_scene_draft(self, short_description: str) -> SceneDraft:
         prompt = self._build_scene_create_prompt(short_description)
         return client.run_prompt_small_model(prompt, SceneDraft)
@@ -131,8 +144,57 @@ class SceneService:
         )
 
     @staticmethod
-    def delete_dynamic_scene_artifacts(scene_id: str) -> None:
+    def delete_dynamic_scene(scene_id: str) -> None:
+        if not (config.OVERRIDES_SCENE_DIR / scene_id).is_dir():
+            raise ValueError("Szene ist keine erstellte Szene.")
+
+        try:
+            is_active_scene = storage.session.scene_id == scene_id
+        except ValueError:
+            is_active_scene = False
+
+        if is_active_scene:
+            session_data = storage.session._yaml.get() or {}
+            session_data["scene_id"] = config.DEFAULT_SCENE_ID
+            storage.session._yaml.save(session_data)
+
         SceneService.reset_scene_artifacts(scene_id)
+        scene_override_dir = config.OVERRIDES_SCENE_DIR / scene_id
+        if scene_override_dir.exists():
+            shutil.rmtree(scene_override_dir)
+
+    @staticmethod
+    def can_reset_active_scene() -> bool:
+        scene_id = storage.session.scene_id
+        default_scene_dir = config.SCENE_DIR / scene_id
+        override_scene_dir = config.OVERRIDES_SCENE_DIR / scene_id
+        if not default_scene_dir.is_dir() or storage.scene.location.is_dynamic:
+            return False
+        if override_scene_dir.exists():
+            return True
+        for npc in storage.list_npcs:
+            scene_view = storage.scene_view(scene_id, npc.npc_id)
+            npc_view = storage.npc_view(npc.npc_id, scene_id)
+            if npc_view.base_runtime.exists() or scene_view.npc_context.override.path.parent.exists():
+                return True
+        return False
+
+    @staticmethod
+    def reset_active_scene_artifacts(scene_id: str) -> None:
+        if not SceneService.can_reset_active_scene():
+            raise ValueError("Aktive Szene kann nicht zurückgesetzt werden.")
+        SceneService.reset_scene_artifacts(scene_id)
+
+    @staticmethod
+    def reset_active() -> None:
+        from engine.tools.scheduler import get_scheduler
+
+        scene_id = storage.session.scene_id
+        if not SceneService.can_reset_active_scene():
+            raise ValueError("Aktive Szene kann nicht zurückgesetzt werden.")
+        get_scheduler().clear_pending_jobs()
+        NpcService.reset_active_runtime()
+        SceneService.reset_active_scene_artifacts(scene_id)
 
     @staticmethod
     def reset_scene_artifacts(scene_id: str) -> None:

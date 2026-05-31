@@ -1,8 +1,9 @@
 import { useRef, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { streamChatReply } from "../../api/chat"
+import type { MessageResponse as ChatMessage } from "../../api/generated/model"
+import { MessageResponseRole } from "../../api/generated/model"
 import { stateQueryKey } from "../../api/state"
-import type { ChatMessage } from "../../api/types"
 
 export function useChatStream() {
   const queryClient = useQueryClient()
@@ -24,7 +25,7 @@ export function useChatStream() {
     setError("")
     startedAtRef.current = Date.now()
     setIsSending(true)
-    setOptimisticMessages([{ id: userId, role: "user", content: message, timestamp_utc: new Date().toISOString() }])
+    setOptimisticMessages([{ id: userId, role: MessageResponseRole.user, content: message, timestampUtc: new Date().toISOString() }])
 
     try {
       await streamChatReply(message, (delta) => {
@@ -50,7 +51,7 @@ export function useChatStream() {
 function appendAssistantChunk(messages: ChatMessage[], assistantId: string, delta: string) {
   const assistant = messages.find((message) => message.id === assistantId)
   if (!assistant) {
-    return [...messages, { id: assistantId, role: "assistant", content: delta, timestamp_utc: new Date().toISOString() }]
+    return [...messages, { id: assistantId, role: MessageResponseRole.assistant, content: delta, timestampUtc: new Date().toISOString() }]
   }
   return messages.map((message) => message.id === assistantId ? { ...message, content: `${message.content || ""}${delta}` } : message)
 }

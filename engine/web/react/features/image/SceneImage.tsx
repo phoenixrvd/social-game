@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useIsMutating } from "@tanstack/react-query"
-import type { AppStateView } from "../../api/types"
+import { useImageCurrentBackups } from "../../api/generated/session/session"
+import type { AppStateView } from "../../api/state"
 import { EMPTY_IMAGE, overlayImages } from "../../shared/imageUtils"
 import { ImageOverlay } from "./ImageOverlay"
 
@@ -14,12 +15,22 @@ export function SceneImage({ className = "", imageState }: SceneImageProps) {
   const [index, setIndex] = useState(0)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const previousVideoKeyRef = useRef<string | null>(null)
-  const images = overlayImages(imageState)
+  const backupsQuery = useImageCurrentBackups({
+    query: {
+      enabled: Boolean(imageState?.imageUrl),
+      select: (response) => (Array.isArray(response.data) ? response.data : []),
+    },
+  })
+  const backups = backupsQuery.data ?? []
+  const images = overlayImages(imageState, backups)
   const imageUrl = imageState?.imageUrl || null
   const videoUrl = imageState?.videoUrl || null
   const hasImage = Boolean(imageUrl)
   const showVideo = Boolean(videoUrl && imageState?.imageIsOriginal !== false)
-  const isRefreshing = useIsMutating({ mutationKey: ["image"] }) > 0
+  const refreshMutations = useIsMutating({ mutationKey: ["imageCurrentRefresh"] })
+  const revertMutations = useIsMutating({ mutationKey: ["imageCurrentRevert"] })
+  const deleteMutations = useIsMutating({ mutationKey: ["imageCurrentDelete"] })
+  const isRefreshing = refreshMutations > 0 || revertMutations > 0 || deleteMutations > 0
 
   useEffect(() => setIndex(0), [imageUrl, imageState?.imageSignature])
 
