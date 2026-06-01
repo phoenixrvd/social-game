@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
-import { useSessionUpdateSession } from "../../api/generated/session/session"
-import { normalizeStateDynamic, stateQueryKey, useStateQuery } from "../../api/state"
+import { getImageCurrentBackupsQueryKey, useSessionUpdateSession } from "../../api/generated/session/session"
+import { imageSignatureQueryKey, normalizeStateDynamic, stateQueryKey, useStateQuery } from "../../api/state"
 import { OptionsShell } from "./OptionsShell"
 import { buildOptionsPath, isOptionPanel, useOptionsParams } from "./routes"
 
@@ -15,6 +15,8 @@ export function OptionsRoute() {
     mutation: {
       onSuccess: (response) => {
         queryClient.setQueryData(stateQueryKey, normalizeStateDynamic(response.data))
+        void queryClient.invalidateQueries({ queryKey: imageSignatureQueryKey })
+        void queryClient.invalidateQueries({ queryKey: getImageCurrentBackupsQueryKey() })
       },
     },
   })

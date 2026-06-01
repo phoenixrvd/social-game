@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import { useIsMutating } from "@tanstack/react-query"
-import { useImageCurrentBackups } from "../../api/generated/session/session"
+import { getImageCurrentBackupsQueryKey, useImageCurrentBackups } from "../../api/generated/session/session"
 import type { AppStateView } from "../../api/state"
 import { EMPTY_IMAGE, overlayImages } from "../../shared/imageUtils"
 import { ImageOverlay } from "./ImageOverlay"
@@ -17,6 +17,7 @@ export function SceneImage({ className = "", imageState }: SceneImageProps) {
   const previousVideoKeyRef = useRef<string | null>(null)
   const backupsQuery = useImageCurrentBackups({
     query: {
+      queryKey: [...getImageCurrentBackupsQueryKey(), imageState?.npcId, imageState?.sceneId, imageState?.imageSignature],
       enabled: Boolean(imageState?.imageUrl),
       select: (response) => (Array.isArray(response.data) ? response.data : []),
     },

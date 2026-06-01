@@ -167,7 +167,15 @@ def _setup_web_app(
 
 
 def _request(path: str, method: str = "GET"):
-    return cast(Any, SimpleNamespace(url=SimpleNamespace(path=path), method=method))
+    return cast(
+        Any,
+        SimpleNamespace(
+            url=SimpleNamespace(path=path, scheme="http", netloc="testserver"),
+            method=method,
+            headers={},
+            client=SimpleNamespace(host="testclient"),
+        ),
+    )
 
 
 def _run_async(coro):
@@ -308,6 +316,18 @@ def test_static_assets_disable_cache_in_web_debug_mode(tmp_path, monkeypatch):
         assert response.headers.get("expires") == "0"
 
 
+def test_api_responses_are_not_cached(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/session")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert response.headers["expires"] == "0"
+
+
 def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")
@@ -328,6 +348,7 @@ def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypa
     assert "image_url" not in payload
     assert "image_original_url" not in payload
     assert "image_backups" not in payload
+    assert isinstance(payload["image_is_original"], bool)
     assert payload["messages"][0]["content"] == "Hi"
     assert "npcs" not in payload
     assert "scenes" not in payload
@@ -624,7 +645,7 @@ def test_get_npc_returns_static_npc_properties(tmp_path, monkeypatch):
 
     assert payload["name"] == "Vika"
     assert payload["description"] == "Charakterbeschreibung vika"
-    assert isinstance(payload["image_is_original"], bool)
+    assert "image_is_original" not in payload
     assert payload["is_dynamic_npc"] is False
 
 
@@ -1827,7 +1848,33 @@ def test_create_scene_rejects_empty_scene_description(tmp_path, monkeypatch):
         )
 
     assert response.status_code == 400
-    assert "darf nicht leer sein" in response.json()["message"].lower()
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "darf nicht leer sein" in response.json()["detail"].lower()
+
+
+def test_reference_image_rejects_invalid_magic_bytes(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    image_data_url = f"data:image/png;base64,{base64.b64encode(b'not-a-png').decode('ascii')}"
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post("/api/scenes/image/describe", json={"image_data_url": image_data_url})
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "ungültiges bildformat" in response.json()["detail"].lower()
+
+
+def test_reference_image_rejects_images_over_3_5_mb(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+    oversized_png_payload = b"\x89PNG\r\n\x1a\n" + b"x" * 3_670_017
+    image_data_url = f"data:image/png;base64,{base64.b64encode(oversized_png_payload).decode('ascii')}"
+
+    with TestClient(web_app_module.app) as client:
+        response = client.post("/api/scenes/image/describe", json={"image_data_url": image_data_url})
+
+    assert response.status_code == 400
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "3,5 mb" in response.json()["detail"].lower()
 
 
 def test_create_npc_calls_npc_service_and_selects_new_npc(tmp_path, monkeypatch):
@@ -2057,7 +2104,8 @@ def test_create_npc_rejects_empty_character_description(tmp_path, monkeypatch):
         )
 
     assert response.status_code == 400
-    assert "darf nicht leer sein" in response.json()["message"].lower()
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "darf nicht leer sein" in response.json()["detail"].lower()
 
 
 def test_chat_stream_rejects_empty_message_with_validation_error(tmp_path, monkeypatch):
@@ -2078,4 +2126,5 @@ def test_chat_stream_rejects_empty_message_with_validation_error(tmp_path, monke
         response = client.post("/api/chat/stream", json={"message": "   "})
 
     assert response.status_code == 400
-    assert "darf nicht leer sein" in response.json()["message"].lower()
+    assert response.headers["content-type"].startswith("application/problem+json")
+    assert "darf nicht leer sein" in response.json()["detail"].lower()

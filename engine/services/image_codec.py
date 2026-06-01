@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import base64
+import binascii
 from io import BytesIO
 from pathlib import Path
 from typing import Any
 
 from PIL import Image
 
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
+MAX_IMAGE_BYTES = 3_670_016
 MAX_IMAGE_EDGE = 1536
+ALLOWED_IMAGE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 _webp_cache: dict[str, dict[str, Any]] = {}
 
@@ -37,11 +39,29 @@ def cached_webp_bytes(image_path: Path, max_width: int | None = None) -> bytes:
 
 def decode_image_data_url(data_url: str) -> bytes:
     header, separator, payload = data_url.partition(",")
-    if separator != "," or not header.startswith("data:image/") or ";base64" not in header:
+    if separator != "," or not header.startswith("data:") or ";base64" not in header:
         raise ValueError("Ungültiges Bildformat.")
-    if not header.startswith(("data:image/png", "data:image/jpeg", "data:image/webp")):
+    media_type = header.removeprefix("data:").split(";", 1)[0].lower()
+    if media_type not in ALLOWED_IMAGE_MIME_TYPES:
         raise ValueError("Nur PNG, JPEG oder WebP sind erlaubt.")
-    return base64.b64decode(payload, validate=True)
+    try:
+        image_bytes = base64.b64decode(payload, validate=True)
+    except binascii.Error as exc:
+        raise ValueError("Ungültiges Bildformat.") from exc
+    _validate_image_signature(media_type, image_bytes)
+    return image_bytes
+
+
+def _validate_image_signature(media_type: str, image_bytes: bytes) -> None:
+    signatures = {
+        "image/png": (b"\x89PNG\r\n\x1a\n",),
+        "image/jpeg": (b"\xff\xd8\xff",),
+        "image/webp": (b"RIFF",),
+    }
+    if media_type == "image/webp" and not (image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP"):
+        raise ValueError("Ungültiges Bildformat.")
+    if media_type != "image/webp" and not image_bytes.startswith(signatures[media_type]):
+        raise ValueError("Ungültiges Bildformat.")
 
 
 def encode_png(image: Image.Image) -> bytes:
@@ -53,7 +73,7 @@ def encode_png(image: Image.Image) -> bytes:
 def normalize_image_data_url(data_url: str) -> bytes:
     image_bytes = decode_image_data_url(data_url)
     if len(image_bytes) > MAX_IMAGE_BYTES:
-        raise ValueError("Bild ist größer als 5 MB.")
+        raise ValueError("Bild ist größer als 3,5 MB.")
     with Image.open(BytesIO(image_bytes)) as image:
         image.verify()
     with Image.open(BytesIO(image_bytes)) as image:

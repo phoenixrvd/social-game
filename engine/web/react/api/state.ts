@@ -70,9 +70,9 @@ export function useStateQuery() {
   }
 }
 
-export function useImageSignatureQuery(enabled: boolean) {
+export function useImageSignatureQuery(enabled: boolean, npcId?: string | null, sceneId?: string | null) {
   return useQuery({
-    queryKey: imageSignatureQueryKey,
+    queryKey: [...imageSignatureQueryKey, npcId, sceneId],
     enabled,
     refetchInterval: enabled ? 5000 : false,
     queryFn: async () => {
@@ -83,7 +83,7 @@ export function useImageSignatureQuery(enabled: boolean) {
       }
       return {
         imageSignature: typeof payload.signature === "string" ? payload.signature : null,
-        imageUrl: "/api/session/image",
+        imageUrl: currentImageUrl(payload.signature),
         imageIsOriginal: typeof payload.imageIsOriginal === "boolean" ? payload.imageIsOriginal : undefined,
       } as Partial<AppStateView>
     },
@@ -106,17 +106,17 @@ type NpcDetailState = Pick<
   | "characterDescription"
   | "isDynamicNpc"
   | "hasVideo"
-  | "imageIsOriginal"
 >
 
 type SceneDetailState = Pick<AppStateView, "sceneDescription" | "sceneLocationDescription" | "isDynamicScene">
 
 export function normalizeStateDynamic(data: unknown): DynamicState {
   const payload = (data ?? {}) as Record<string, unknown>
+  const imageSignature = stringOrNull(payload.imageSignature)
   return {
     messages: Array.isArray(payload.messages) ? (payload.messages as MessageResponse[]) : [],
-    imageUrl: stringOrNull(payload.imageUrl),
-    imageSignature: stringOrNull(payload.imageSignature),
+    imageUrl: currentImageUrl(imageSignature),
+    imageSignature,
     npcs: Array.isArray(payload.npcs) ? (payload.npcs as Array<NpcResponse & { imageUrl?: string; hasVideo?: boolean }>) : [],
     scenes: Array.isArray(payload.scenes) ? (payload.scenes as SceneResponse[]) : [],
     npcId: stringOrNull(payload.npc),
@@ -130,7 +130,7 @@ export function normalizeStateDynamic(data: unknown): DynamicState {
     imageOriginalUrl: null,
     videoUrl: null,
     hasVideo: false,
-    imageIsOriginal: true,
+    imageIsOriginal: typeof payload.imageIsOriginal === "boolean" ? payload.imageIsOriginal : true,
   }
 }
 
@@ -139,7 +139,6 @@ function normalizeNpc(data: unknown): NpcDetailState {
   return {
     npcName: typeof payload.name === "string" ? payload.name : "",
     characterDescription: typeof payload.description === "string" ? payload.description : "",
-    imageIsOriginal: typeof payload.imageIsOriginal === "boolean" ? payload.imageIsOriginal : true,
     hasVideo: typeof payload.hasVideo === "boolean" ? payload.hasVideo : false,
     isDynamicNpc: Boolean(payload.isDynamicNpc),
   }
@@ -171,7 +170,7 @@ function mergeState(
     isDynamicScene: sceneState?.isDynamicScene ?? false,
     imageUrl: dynamicState.imageUrl,
     imageOriginalUrl,
-    imageIsOriginal: npcState?.imageIsOriginal ?? true,
+    imageIsOriginal: dynamicState.imageIsOriginal,
     hasVideo: npcState?.hasVideo ?? false,
     videoUrl: npcState?.hasVideo && dynamicState.npcId ? `/api/npcs/${dynamicState.npcId}/video` : null,
   }
@@ -185,4 +184,8 @@ async function readJson(url: string): Promise<unknown> {
 
 function stringOrNull(value: unknown): string | null {
   return typeof value === "string" && value ? value : null
+}
+
+function currentImageUrl(signature: unknown): string {
+  return typeof signature === "string" && signature ? `/api/session/image?v=${encodeURIComponent(signature)}` : "/api/session/image"
 }

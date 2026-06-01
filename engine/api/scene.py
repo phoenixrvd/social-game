@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from fastapi.responses import Response
 from pydantic import Field
 
-from engine.api.models import ApiModel
+from engine.api.models import ApiModel, DATA_URL_MAX_LENGTH, LONG_TEXT_MAX_LENGTH
 from engine.api.state_npc import render_markdown_to_html
 from engine.api.state_app import EntityId
 from engine.services.image_codec import cached_webp_bytes, normalize_image_data_url, png_data_url
@@ -35,11 +35,11 @@ def _scene_option_image_path(scene: EntityId):
 
 
 class SceneResponse(ApiModel):
-    id: str
-    name: str
-    description_html: str
-    description: str
-    is_dynamic_scene: bool
+    id: str = Field(description="Technische Szenen-ID, die in Session- und Pfadparametern verwendet wird.")
+    name: str = Field(description="Anzeigename der Szene; wird aus der ersten Markdown-Überschrift oder aus der ID abgeleitet.")
+    description_html: str = Field(description="Gerenderte HTML-Fassung der Szenenbeschreibung für die Oberfläche.")
+    description: str = Field(description="Szenenbeschreibung als Markdown.")
+    is_dynamic_scene: bool = Field(description="Gibt an, ob die Szene selbst erstellt wurde.")
 
 
 def _map_scene_response(scene_view) -> SceneResponse:
@@ -56,41 +56,49 @@ def _map_scene_response(scene_view) -> SceneResponse:
 class SceneCreateRequest(ApiModel):
     description: str = Field(
         min_length=1,
+        max_length=LONG_TEXT_MAX_LENGTH,
         pattern=r".*\S.*",
-        description="Szenenbeschreibung, aus der die Location gespeichert oder erzeugt wird.",
+        description="Nicht leere Szenenbeschreibung als Markdown, aus der eine neue Szene erstellt wird.",
     )
     image_data_url: str | None = Field(
         default=None,
-        description="Optionales bereits erzeugtes Szenenbild als Data-URL.",
+        max_length=DATA_URL_MAX_LENGTH,
+        description="Optionales fertiges Szenenbild als Data-URL; wird direkt gespeichert und hat Vorrang vor dem Referenzbild.",
     )
     reference_image_data_url: str | None = Field(
         default=None,
-        description="Optionales Referenzbild als Data-URL, falls noch kein Vorschaubild erzeugt wurde.",
+        max_length=DATA_URL_MAX_LENGTH,
+        description="Optionales Referenzbild als Data-URL; wird nur genutzt, wenn kein fertiges Szenenbild übergeben wurde.",
     )
 
 
 class SceneDescriptionResponse(ApiModel):
-    description: str = Field(description="Editierbare Beschreibung der sichtbaren Location.")
+    description: str = Field(description="Aus dem Referenzbild abgeleitete, editierbare Beschreibung der sichtbaren Location.")
 
 
 class SceneReferenceImageRequest(ApiModel):
-    image_data_url: str = Field(description="Referenzbild der Location als Data-URL.")
+    image_data_url: str = Field(
+        max_length=DATA_URL_MAX_LENGTH,
+        description="Referenzbild der Location als Data-URL; muss dekodierbare Bilddaten enthalten.",
+    )
 
 
 class ScenePreviewImageRequest(ApiModel):
     description: str = Field(
         min_length=1,
+        max_length=LONG_TEXT_MAX_LENGTH,
         pattern=r".*\S.*",
-        description="Szenenbeschreibung für das temporäre Vorschaubild.",
+        description="Nicht leere Szenenbeschreibung für das temporäre Vorschaubild.",
     )
     reference_image_data_url: str | None = Field(
         default=None,
+        max_length=DATA_URL_MAX_LENGTH,
         description="Optionales Referenzbild als visuelle Grundlage der Bildgenerierung.",
     )
 
 
 class ImageDataResponse(ApiModel):
-    image_data_url: str = Field(description="PNG-Bild als Data-URL.")
+    image_data_url: str = Field(description="Generiertes PNG-Bild als Data-URL zur direkten Vorschau oder Speicherung.")
 
 
 class OperationResponse(ApiModel):
@@ -99,14 +107,14 @@ class OperationResponse(ApiModel):
 
 @router.get("/api/scenes", summary="Szenen-Optionen laden")
 def list_options() -> list[SceneResponse]:
-    """Liefert die auswählbaren Szenen-Optionen mit Vorschaubild."""
+    """Liefert alle Szenen, die in der Oberfläche gewählt werden können. Jeder Eintrag enthält ID, Anzeigename, Markdown-Beschreibung, HTML-Beschreibung und die Information, ob die Szene selbst erstellt wurde."""
 
     return [_map_scene_response(scene_view) for scene_view in storage.list_scenes]
 
 
 @router.get("/api/scenes/{scene}", summary="Szene laden")
 def get_scene(scene: EntityId) -> SceneResponse:
-    """Liefert statische Eigenschaften einer Szene für den aktiven NPC."""
+    """Liefert Anzeigename, Markdown-Beschreibung und HTML-Beschreibung einer Szene. Die Szenen-ID muss dem technischen ID-Format entsprechen und vorhanden sein."""
 
     scene_view = storage.scene_view(scene_id=scene)
     return _map_scene_response(scene_view)
@@ -114,7 +122,7 @@ def get_scene(scene: EntityId) -> SceneResponse:
 
 @router.post("/api/scenes", summary="Szene erstellen")
 def create(request: SceneCreateRequest) -> SceneResponse:
-    """Legt eine neue Szene an, aktiviert sie und liefert die neue Szenen-Option."""
+    """Erstellt aus einer nicht leeren Markdown-Beschreibung eine neue Szene und macht sie zur aktiven Szene. Wenn `imageDataUrl` gesetzt ist, wird dieses Bild verwendet; sonst kann aus `referenceImageDataUrl` automatisch ein Bild erzeugt werden."""
 
     scene_description = request.description
 
@@ -134,7 +142,7 @@ def create(request: SceneCreateRequest) -> SceneResponse:
 
 @router.delete("/api/scenes/{scene}", summary="Erstellte Szene löschen")
 def delete(scene: EntityId) -> Response:
-    """Löscht eine erstellte Szene inklusive aller Artefakte; bei Standard-Szenen werden nur Artefakte zurückgesetzt und die Szene selbst bleibt erhalten."""
+    """Entfernt eine selbst erstellte Szene. Bei mitgelieferten Szenen bleiben die Grunddaten erhalten; zurücksetzbare Nutzerdaten werden gelöscht."""
 
     get_scheduler().clear_pending_jobs()
     scene_view = storage.scene_view(scene_id=scene)
@@ -147,14 +155,14 @@ def delete(scene: EntityId) -> Response:
 
 @router.get("/api/scenes/{scene}/image", summary="Szenen-Vorschaubild laden")
 def option_image(scene: EntityId) -> Response:
-    """Liefert das Vorschaubild einer Szene für die Auswahl."""
+    """Liefert das Vorschaubild einer Szene als WebP mit maximal 256 Pixel Breite."""
 
     return _webp_response(_scene_option_image_path(scene=scene), max_width=256)
 
 
 @router.put("/api/scenes/{scene}", summary="Szene speichern")
 def update(scene: EntityId, request: SceneCreateRequest) -> OperationResponse:
-    """Speichert Beschreibung und Bild für die übergebene Szene. Anpassungen können nachträglich über den Szenen-Reset zurückgesetzt werden; dabei werden auch szenenabhängige Dialoge mit zurückgesetzt."""
+    """Speichert Beschreibung und Bild für die angegebene Szene und macht sie zur aktiven Szene. Wenn automatische Bildgenerierung aktiv ist, wird das Szenenbild anschließend aktualisiert."""
 
     storage.session.scene_id = scene
     scene_description = request.description
@@ -169,7 +177,7 @@ def update(scene: EntityId, request: SceneCreateRequest) -> OperationResponse:
 
 @router.delete("/api/scenes/{scene}/reset", summary="Szene zurücksetzen")
 def reset_active(scene: EntityId) -> Response:
-    """Setzt lokale Artefakte der übergebenen Szene zurück (z. B. Szenen-Overrides, NPC-Szenenkontexte und Runtime-Daten wie Verlauf/Bilder), damit nach dem Zurücksetzen keine veralteten Restdaten den Zustand oder Folgeschritte verfälschen."""
+    """Setzt zurücksetzbare Nutzerdaten der angegebenen Szene zurück, einschließlich Dialogen, Szenenkontexten und Bildern."""
 
     get_scheduler().clear_pending_jobs()
     SceneService.reset_active_scene_artifacts(scene)
@@ -188,7 +196,7 @@ def _scene_create_image(scene_service: SceneService, scene_description: str, req
 
 @router.post("/api/scenes/image/describe", summary="Referenzbild beschreiben")
 def describe_image(request: SceneReferenceImageRequest) -> SceneDescriptionResponse:
-    """Analysiert ein Referenzbild und liefert eine editierbare Beschreibung der sichtbaren Location."""
+    """Analysiert ein Referenzbild und liefert eine editierbare Beschreibung der sichtbaren Location. Der Request muss eine dekodierbare Bild-Data-URL enthalten."""
 
     reference_image = normalize_image_data_url(request.image_data_url)
     return SceneDescriptionResponse(description=SceneService().describe_reference_image(reference_image))
@@ -196,7 +204,7 @@ def describe_image(request: SceneReferenceImageRequest) -> SceneDescriptionRespo
 
 @router.post("/api/scenes/image/preview", summary="Vorschaubild erzeugen")
 def preview_image(request: ScenePreviewImageRequest) -> ImageDataResponse:
-    """Erzeugt ein temporäres Szenenbild aus Beschreibung und optionaler visueller Referenz."""
+    """Erzeugt ein temporäres Szenenbild aus einer nicht leeren Beschreibung und optionaler visueller Referenz. Das Bild wird als PNG-Data-URL zurückgegeben und nicht automatisch gespeichert."""
 
     scene_description = request.description
     reference_image = None

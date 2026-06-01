@@ -49,6 +49,7 @@ class Config(BaseSettings):
     MODEL_EMBEDDING_DIMENSIONS: int = 1536
     MODEL_EMBEDDING_MAX_TOKENS: int = 8192
     MODEL_VERIFY_SSL: bool = True
+    MODEL_TIMEOUT_SECONDS: float = 60.0
 
     model_config = SettingsConfigDict(
         env_file=".env",

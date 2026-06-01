@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 from pydantic import Field
 
-from engine.api.models import ApiModel
+from engine.api.models import ApiModel, CHAT_MESSAGE_MAX_LENGTH
 from engine.client import client, user_visible_provider_error_detail
 from engine.services.npc_turn_service import NpcTurnService
 from engine.tools.scheduler import get_scheduler
@@ -16,13 +16,18 @@ router = APIRouter(tags=["chat"])
 
 
 class ChatRequest(ApiModel):
-    message: str = Field(min_length=1, pattern=r".*\S.*")
+    message: str = Field(
+        min_length=1,
+        max_length=CHAT_MESSAGE_MAX_LENGTH,
+        pattern=r".*\S.*",
+        description="Nicht leere Nutzer-Nachricht, die an den aktiven NPC gesendet wird.",
+    )
 
 
 class ChatStreamEvent(ApiModel):
-    type: str
-    delta: str | None = None
-    detail: str | None = None
+    type: str = Field(description="Event-Typ im NDJSON-Stream: 'chunk', 'done' oder 'error'.")
+    delta: str | None = Field(default=None, description="Textfragment der NPC-Antwort; nur bei 'chunk' gesetzt.")
+    detail: str | None = Field(default=None, description="Nutzerlesbare Fehlermeldung; nur bei 'error' gesetzt.")
 
 
 def _stream_event(event_type: str, **payload: object) -> str:
@@ -66,7 +71,7 @@ def _stream_events(
     summary="Chat streamen",
     responses={
         200: {
-            "description": "Stream mit Chat-Events als NDJSON.",
+            "description": "NDJSON-Stream mit Chat-Events. Jede Zeile ist ein JSON-Objekt vom Typ `chunk`, `done` oder `error`.",
             "content": {
                 "application/x-ndjson": {
                     "schema": ChatStreamEvent.model_json_schema(),
@@ -76,7 +81,7 @@ def _stream_events(
     },
 )
 def stream(request: ChatRequest) -> StreamingResponse:
-    """Streamt NDJSON-Events für den NPC-Dialog und schließt den Turn nach erfolgreicher Antwort ab."""
+    """Sendet eine nicht leere Nutzer-Nachricht an den aktiven NPC und streamt die Antwort als NDJSON. Jede Zeile enthält ein Event vom Typ `chunk`, `done` oder `error`."""
     npc_turn = NpcTurnService()
     message_text = request.message.strip()
 

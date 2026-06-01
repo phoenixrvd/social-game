@@ -15,7 +15,7 @@ export function App() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
   const stateQuery = useStateQuery()
   const state = stateQuery.data
-  const imageSignatureQuery = useImageSignatureQuery(Boolean(state?.imageAutogenerate))
+  const imageSignatureQuery = useImageSignatureQuery(Boolean(state?.imageAutogenerate), state?.npcId, state?.sceneId)
   const stateWithImage = state ? ({ ...state, ...imageSignatureQuery.data } as AppStateView) : state
   const chat = useChatStream()
 

@@ -9,7 +9,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
-from fastapi.responses import JSONResponse
 from fastapi.responses import Response
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
@@ -59,6 +58,24 @@ def _problem_response(status_code: int, detail: Any) -> Response:
     )
 
 
+def _add_security_headers(request: Request, response: Response) -> Response:
+    if request.url.path.startswith(("/docs", "/redoc")):
+        response.headers["Content-Security-Policy"] = _DOCS_CSP
+    else:
+        response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "same-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
+    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
+    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
+
 def generate_unique_id_function(route: APIRoute) -> str:
     if route.name.startswith("image_current"):
         return "".join(part[:1].upper() + part[1:] for part in route.name.split("_") if part).replace("Image", "image", 1)
@@ -86,6 +103,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="Social Game",
+    description=(
+        "HTTP-API für die Social-Game-Oberfläche. Die API verwaltet den aktiven NPC, "
+        "die aktive Szene, den Dialogverlauf, Bilder und Checkpoints."
+    ),
     lifespan=_lifespan,
     responses=ERROR_RESPONSES,
     generate_unique_id_function=generate_unique_id_function,
@@ -129,16 +150,7 @@ _DOCS_CSP = (
 @app.middleware("http")
 async def _add_web_headers(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path.startswith(("/docs", "/redoc")):
-        response.headers["Content-Security-Policy"] = _DOCS_CSP
-    else:
-        response.headers["Content-Security-Policy"] = _CSP
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["Referrer-Policy"] = "same-origin"
-    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
-    response.headers["Cross-Origin-Opener-Policy"] = "same-origin"
-    response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+    response = _add_security_headers(request, response)
 
     if not request.url.path.startswith(STATIC_ASSET_PREFIXES):
         return response
@@ -169,9 +181,11 @@ async def _validation_error_handler(_request: Request, exc: RequestValidationErr
         message = str(first_error.get("msg", "Ungueltige Anfrage."))
     if first_error.get("type") == "string_pattern_mismatch":
         message = "Eingabe darf nicht leer sein."
+    if first_error.get("type") == "string_too_long":
+        message = "Eingabe ist zu lang."
     if message.startswith("Value error, "):
         message = message.removeprefix("Value error, ")
-    return JSONResponse(status_code=400, content={"message": message})
+    return _problem_response(400, message)
 
 
 @app.exception_handler(ValueError)

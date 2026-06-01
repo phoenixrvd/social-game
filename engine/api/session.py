@@ -10,7 +10,7 @@ from fastapi.responses import Response
 from pydantic import Field
 
 from engine.api import history as history_api
-from engine.api.models import ApiModel
+from engine.api.models import ApiModel, LONG_TEXT_MAX_LENGTH, SHORT_TEXT_MAX_LENGTH, USER_PROFILE_MAX_LENGTH
 from engine.api.state_app import EntityId, RelativeUrl, url_version
 from engine.config import config
 from engine.services.image_codec import cached_webp_bytes, is_image_backup_name
@@ -28,24 +28,33 @@ router = APIRouter(tags=["session"])
 
 
 class SessionRequest(ApiModel):
-    npc: EntityId | None = Field(default=None, description="Neue aktive NPC-ID.")
-    scene: EntityId | None = Field(default=None, description="Neue aktive Szenen-ID.")
-    image_autogenerate: bool | None = Field(default=None, description="Automatische Bildgenerierung ein- oder ausschalten.")
+    npc: EntityId | None = Field(default=None, description="Neue aktive NPC-ID; bleibt unverändert, wenn das Feld fehlt oder null ist.")
+    scene: EntityId | None = Field(
+        default=None,
+        description="Neue aktive Szenen-ID; bleibt unverändert, wenn das Feld fehlt oder null ist.",
+    )
+    image_autogenerate: bool | None = Field(
+        default=None,
+        description="Schaltet automatische Bildgenerierung für Folgeschritte ein oder aus; bleibt unverändert, wenn das Feld fehlt oder null ist.",
+    )
 
 
 class UserProfileRequest(ApiModel):
-    content: str = Field(description="Profiltext der Nutzerin oder des Nutzers.")
+    content: str = Field(
+        max_length=USER_PROFILE_MAX_LENGTH,
+        description="Vollständiger Profiltext der Nutzerin oder des Nutzers, der den bisherigen Profiltext ersetzt.",
+    )
 
 
 class ImageBackupResponse(ApiModel):
-    name: str
-    url: RelativeUrl
-    signature: str
+    name: str = Field(description="Dateiname des Backup-Bildes; kann zum Laden dieses Backups verwendet werden.")
+    url: RelativeUrl = Field(description="Relative URL zum Laden des Backup-Bildes.")
+    signature: str = Field(description="Signatur zur Erkennung von Bildänderungen.")
 
 
 class ImageSignatureResponse(ApiModel):
-    signature: str
-    image_is_original: bool
+    signature: str = Field(description="Änderungssignatur des aktiven Bildes; leer, wenn keine Datei existiert.")
+    image_is_original: bool = Field(description="Gibt an, ob das aktive Bild dem initialen NPC-Bild entspricht.")
 
 
 class EmptyResponse(ApiModel):
@@ -53,38 +62,49 @@ class EmptyResponse(ApiModel):
 
 
 class SceneContextRequest(ApiModel):
-    content: str = Field(description="Textgrundlage oder Inhalt des NPC-spezifischen Szenenkontexts.")
+    content: str = Field(
+        max_length=LONG_TEXT_MAX_LENGTH,
+        description="Textgrundlage für die Generierung oder vollständiger Inhalt des zu speichernden Szenenkontexts.",
+    )
 
 
 class SceneContextResponse(ApiModel):
-    context: str = Field(description="Generierter NPC-spezifischer Szenenkontext.")
+    context: str = Field(description="Generierter NPC-spezifischer Szenenkontext, der vor dem Speichern noch bearbeitet werden kann.")
 
 
 class MessageResponse(ApiModel):
-    id: str
-    role: Literal["user", "assistant", "system"]
-    content: str
-    timestamp_utc: datetime
-    html: str | None = None
-    context_type: Literal["scene"] | None = None
-    is_editable_scene_context: bool | None = None
+    id: str = Field(description="Stabile Nachrichten-ID aus dem Laufzeitspeicher oder synthetische Kontext-ID.")
+    role: Literal["user", "assistant", "system"] = Field(description="Rolle der Nachricht im Dialogverlauf.")
+    content: str = Field(description="Rohtext der Nachricht; bei gerenderten Kontextkarten kann dieser leer sein.")
+    timestamp_utc: datetime = Field(description="UTC-Zeitpunkt der Nachricht oder der synthetischen Kontextkarte.")
+    html: str | None = Field(default=None, description="Optional gerenderter HTML-Inhalt für Kontextkarten.")
+    context_type: Literal["scene"] | None = Field(default=None, description="Markiert eine Nachricht als Szenenkontext, falls gesetzt.")
+    is_editable_scene_context: bool | None = Field(
+        default=None,
+        description="Gibt an, ob die Oberfläche diesen Szenenkontext direkt bearbeiten darf.",
+    )
 
 
 class StateResponse(ApiModel):
-    npc: EntityId
-    scene: EntityId
-    scene_context: str
-    messages: list[MessageResponse]
-    messages_signature: str
-    image_signature: str
-    user_profile: str
-    image_autogenerate: bool
-    default_npc: EntityId
-    default_scene: EntityId
-    can_reset_scene: bool
+    npc: EntityId = Field(description="Aktive NPC-ID der Session.")
+    scene: EntityId = Field(description="Aktive Szenen-ID der Session.")
+    scene_context: str = Field(description="Aktueller NPC-spezifischer Kontext zur aktiven Szene.")
+    messages: list[MessageResponse] = Field(description="Für die Oberfläche sichtbare Dialog- und Kontextnachrichten.")
+    messages_signature: str = Field(description="Kurze Signatur des sichtbaren Dialogverlaufs zur Änderungserkennung.")
+    image_signature: str = Field(description="Kurze Signatur des aktiven Laufzeitbildes zur Änderungserkennung.")
+    image_is_original: bool = Field(description="Gibt an, ob das aktive Bild dem initialen NPC-Bild entspricht.")
+    user_profile: str = Field(description="Aktuelles Laufzeitprofil der Nutzerin oder des Nutzers.")
+    image_autogenerate: bool = Field(description="Gibt an, ob das Bild nach passenden Änderungen automatisch aktualisiert wird.")
+    default_npc: EntityId = Field(description="Konfigurierte Standard-NPC-ID.")
+    default_scene: EntityId = Field(description="Konfigurierte Standard-Szenen-ID.")
+    can_reset_scene: bool = Field(description="Gibt an, ob die aktive Szene zurückgesetzt werden kann.")
 
 
 CommitHash = Annotated[str, Path(min_length=7, pattern=r"^[0-9a-fA-F]{7,40}$", description="Git-Commit-Hash.")]
+ImageBackupName = Annotated[
+    str,
+    Path(max_length=SHORT_TEXT_MAX_LENGTH, pattern=r"^img-\d{8}-\d{6}\.png$", description="Name eines Bild-Backups."),
+]
 
 
 class OperationResponse(ApiModel):
@@ -92,25 +112,25 @@ class OperationResponse(ApiModel):
 
 
 class CheckpointResponse(ApiModel):
-    commit_hash: CommitHash
-    commit_date: datetime
-    commit_message: str
+    commit_hash: CommitHash = Field(description="Git-Commit-Hash des gespeicherten Checkpoints.")
+    commit_date: datetime = Field(description="Zeitpunkt des Checkpoint-Commits.")
+    commit_message: str = Field(description="Commit-Nachricht, die den Checkpoint beschreibt.")
 
 
 class CheckpointListResponse(ApiModel):
-    checkpoints: list[CheckpointResponse]
+    checkpoints: list[CheckpointResponse] = Field(description="Verfügbare Checkpoints.")
 
 
 @router.get("/api/session", summary="App-State laden")
 def get_state() -> StateResponse:
-    """Liefert den aktuellen App-State für die Oberfläche."""
+    """Liefert den vollständigen App-State für die Oberfläche. Die Antwort enthält aktive IDs, Kontext, sichtbare Nachrichten, Bildstatus, Profil, Standardauswahl und Reset-Fähigkeiten."""
 
     return _state_response()
 
 
 @router.put("/api/session", summary="Session aktualisieren")
 def update_session(request: SessionRequest) -> StateResponse:
-    """Aktualisiert Session-Werte und liefert den aktuellen App-State."""
+    """Aktualisiert nur die im Request gesetzten Session-Werte und liefert danach den vollständigen App-State. Beim Einschalten der automatischen Bildgenerierung wird das Bild anschließend aktualisiert."""
 
     if request.npc is not None:
         storage.session.npc_id = request.npc
@@ -127,14 +147,14 @@ def update_session(request: SessionRequest) -> StateResponse:
 
 @router.post("/api/session/context/generate", summary="Szenenkontext generieren")
 def scene_context_generate(request: SceneContextRequest) -> SceneContextResponse:
-    """Erzeugt einen NPC-spezifischen Szenenkontext aus einer Textgrundlage."""
+    """Erzeugt einen NPC-spezifischen Szenenkontext aus der übergebenen Textgrundlage. Der generierte Text wird nur zurückgegeben und nicht automatisch gespeichert."""
 
     return SceneContextResponse(context=NpcSceneService().generate_context(request.content))
 
 
 @router.put("/api/session/context", summary="Szenenkontext speichern")
 def scene_context_update(request: SceneContextRequest) -> StateResponse:
-    """Speichert den NPC-spezifischen Kontext der aktiven Szene."""
+    """Speichert den übergebenen Text als NPC-spezifischen Kontext der aktiven Szene und liefert den aktualisierten App-State zurück."""
 
     NpcSceneService().save_active_context(request.content)
     return _state_response()
@@ -142,7 +162,7 @@ def scene_context_update(request: SceneContextRequest) -> StateResponse:
 
 @router.get("/api/session/history", summary="Checkpoints auflisten")
 def history_checkpoints() -> CheckpointListResponse:
-    """Liefert alle verfügbaren Checkpoints mit Metadaten."""
+    """Liefert alle verfügbaren Checkpoints mit Kennung, Datum und Nachricht. Die Kennung kann zum Wiederherstellen eines Checkpoints verwendet werden."""
 
     checkpoints = history_api.checkpoints()
     return CheckpointListResponse(
@@ -159,7 +179,7 @@ def history_checkpoints() -> CheckpointListResponse:
 
 @router.post("/api/session/history", summary="Checkpoint speichern")
 def history_create_checkpoint() -> OperationResponse:
-    """Speichert den aktuellen Zustand als Checkpoint."""
+    """Speichert den aktuellen Zustand als Checkpoint und meldet den Erfolg der Operation."""
 
     history_api.create()
     return OperationResponse(success=True)
@@ -167,7 +187,7 @@ def history_create_checkpoint() -> OperationResponse:
 
 @router.post("/api/session/history/{commit_hash}/restore", summary="Checkpoint wiederherstellen")
 def history_restore_checkpoint(commit_hash: CommitHash) -> OperationResponse:
-    """Stellt den Zustand aus einem gespeicherten Checkpoint wieder her."""
+    """Stellt den Zustand aus dem angegebenen Checkpoint wieder her. Der Pfadparameter muss eine gültige Checkpoint-Kennung mit 7 bis 40 Hex-Zeichen sein."""
 
     history_api.restore(commit_hash)
     return OperationResponse(success=True)
@@ -175,14 +195,14 @@ def history_restore_checkpoint(commit_hash: CommitHash) -> OperationResponse:
 
 @router.get("/api/session/image", summary="Aktives Laufzeitbild laden")
 def image_current() -> Response:
-    """Liefert das aktive Laufzeitbild des aktuellen NPC-Szenen-Kontexts als WebP."""
+    """Liefert das aktive Bild des aktuellen NPC-Szenen-Kontexts als WebP. Wenn kein aktualisiertes Bild existiert, wird das initiale Bild verwendet."""
 
     return _webp_response(storage.npc.img.get())
 
 
 @router.get("/api/session/image/backups", summary="Bild-Backups auflisten")
 def image_current_backups() -> list[ImageBackupResponse]:
-    """Liefert die Backups des aktiven Laufzeitbildes."""
+    """Liefert die verfügbaren Backups des aktiven Laufzeitbildes mit Lade-URL und Signatur. Die Backups gehören immer zum aktuellen NPC-Szenen-Kontext."""
 
     return [
         ImageBackupResponse(
@@ -195,8 +215,8 @@ def image_current_backups() -> list[ImageBackupResponse]:
 
 
 @router.get("/api/session/image/backups/{backup_name}", summary="Bild-Backup laden")
-def image_current_backup(backup_name: str) -> Response:
-    """Liefert ein Backup des aktiven Laufzeitbildes als WebP."""
+def image_current_backup(backup_name: ImageBackupName) -> Response:
+    """Liefert ein benanntes Backup des aktiven Laufzeitbildes als WebP. Ungültige oder nicht vorhandene Backup-Namen werden aus Sicherheitsgründen mit 404 beantwortet."""
 
     if not is_image_backup_name(backup_name):
         raise HTTPException(status_code=404, detail="Backup-Bild nicht gefunden.")
@@ -208,7 +228,7 @@ def image_current_backup(backup_name: str) -> Response:
 
 @router.delete("/api/session/image", summary="Aktives Laufzeitbild löschen, Initialbild verwenden")
 def image_current_delete() -> Response:
-    """Löscht das aktive Laufzeitbild, sodass wieder das Initialbild als Standard verwendet wird; historische Bilder werden nicht gelöscht."""
+    """Löscht nur das aktive Laufzeitbild des aktuellen NPC-Szenen-Kontexts. Danach greift die Oberfläche wieder auf das Initialbild zurück; vorhandene Backups bleiben erhalten."""
 
     ImageService().delete_current()
     return Response(status_code=200)
@@ -216,7 +236,7 @@ def image_current_delete() -> Response:
 
 @router.post("/api/session/image/refresh", summary="Aktives Laufzeitbild aktualisieren")
 def image_current_refresh() -> EmptyResponse:
-    """Aktualisiert das aktive Laufzeitbild aus dem aktuellen NPC-Szenen-Kontext."""
+    """Erzeugt das aktive Bild aus dem aktuellen NPC-Szenen-Kontext neu und überschreibt den bisherigen aktiven Bildstand."""
 
     ImageService().update_from_context(force=True)
     return EmptyResponse()
@@ -224,7 +244,7 @@ def image_current_refresh() -> EmptyResponse:
 
 @router.post("/api/session/image/revert", summary="Auf letztes Backup zurücksetzen")
 def image_current_revert() -> EmptyResponse:
-    """Setzt das aktive Laufzeitbild auf das letzte verfügbare Backup zurück."""
+    """Setzt das aktive Laufzeitbild auf das letzte verfügbare Backup des aktuellen NPC-Szenen-Kontexts zurück."""
 
     ImageService().revert()
     return EmptyResponse()
@@ -232,7 +252,7 @@ def image_current_revert() -> EmptyResponse:
 
 @router.get("/api/session/image/signature", summary="Bildsignatur abrufen")
 def image_current_signature() -> ImageSignatureResponse:
-    """Liefert Signatur und Metadaten des aktiven Bildzustands."""
+    """Liefert eine kompakte Signatur und die Herkunft des aktiven Bildzustands, damit die Oberfläche Bildänderungen ohne erneutes Laden des App-State erkennen kann."""
 
     npc = storage.npc
     return ImageSignatureResponse(
@@ -243,7 +263,7 @@ def image_current_signature() -> ImageSignatureResponse:
 
 @router.put("/api/session/user-profile", summary="Nutzerprofil speichern")
 def update_user_profile(request: UserProfileRequest) -> StateResponse:
-    """Speichert das Laufzeit-Nutzerprofil und liefert den aktuellen App-State."""
+    """Ersetzt das Laufzeit-Nutzerprofil des aktuellen NPC-Szenen-Kontexts durch den übergebenen Text und liefert danach den vollständigen App-State."""
 
     storage.npc.user_profile_runtime.save(request.content)
     return _state_response()
@@ -270,6 +290,7 @@ def _state_response() -> StateResponse:
         messages=[MessageResponse(**message) for message in visible_messages(npc, scene)],
         messages_signature=messages_signature(npc),
         image_signature=_file_signature(npc.img.get()),
+        image_is_original=npc.is_image_original,
         user_profile=npc.user_profile,
         image_autogenerate=storage.session.image_autogenerate,
         default_npc=config.DEFAULT_NPC_ID,

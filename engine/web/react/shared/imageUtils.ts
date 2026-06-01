@@ -2,6 +2,7 @@ import type { AppStateView } from "../api/state"
 import type { ImageBackupResponse } from "../api/generated/model"
 
 export const EMPTY_IMAGE = "data:,"
+const MAX_REFERENCE_IMAGE_BYTES = 3.5 * 1024 * 1024
 
 export function overlayImages(state?: AppStateView, backups: ImageBackupResponse[] = []): string[] {
   if (!state?.imageUrl) return []
@@ -51,7 +52,7 @@ function encodeImage(canvas: HTMLCanvasElement): string {
   for (const quality of [0.9, 0.82, 0.74, 0.66]) {
     const dataUrl = canvas.toDataURL("image/webp", quality)
     const bytes = Math.ceil(((dataUrl.split(",")[1] || "").length * 3) / 4)
-    if (bytes <= 5 * 1024 * 1024) return dataUrl
+    if (bytes <= MAX_REFERENCE_IMAGE_BYTES) return dataUrl
   }
-  throw new Error("Das verkleinerte Referenzbild ist größer als 5 MB.")
+  throw new Error("Das verkleinerte Referenzbild ist größer als 3,5 MB.")
 }

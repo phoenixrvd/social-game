@@ -398,11 +398,12 @@ class Client:
 
     @staticmethod
     def _text_client() -> OpenAI:
-        http_client = httpx.Client(verify=config.MODEL_VERIFY_SSL)
+        http_client = httpx.Client(verify=config.MODEL_VERIFY_SSL, timeout=config.MODEL_TIMEOUT_SECONDS)
         return OpenAI(
             api_key=config.MODEL_API_KEY,
             base_url=config.MODEL_BASE_URL,
             http_client=http_client,
+            timeout=config.MODEL_TIMEOUT_SECONDS,
         )
 
 
