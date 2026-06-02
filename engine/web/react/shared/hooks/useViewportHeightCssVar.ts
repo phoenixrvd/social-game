@@ -15,6 +15,7 @@ export function useViewportHeightCssVar() {
 }
 
 function syncViewportHeight() {
-  const height = Math.max(Math.round(window.visualViewport?.height || window.innerHeight), 1)
+  const viewportHeight = window.visualViewport?.height || window.innerHeight
+  const height = Math.max(Math.round(viewportHeight), 1)
   document.documentElement.style.setProperty("--app-vh", `${height}px`)
 }

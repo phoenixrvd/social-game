@@ -23,7 +23,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [theme])
 
   function toggleTheme() {
-    setTheme((current) => current === "dark" ? "light" : "dark")
+    setTheme((current) => (current === "dark" ? "light" : "dark"))
   }
 
   return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>
@@ -36,11 +36,13 @@ export function useTheme() {
 }
 
 function syncThemeChrome(theme: Theme) {
-  const installedApp = window.matchMedia("(display-mode: standalone)").matches ||
+  const installedApp =
+    window.matchMedia("(display-mode: standalone)").matches ||
     window.matchMedia("(display-mode: fullscreen)").matches ||
     window.matchMedia("(display-mode: minimal-ui)").matches ||
     (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  const themeColorMeta = document.querySelector("#theme-color-meta") || document.querySelector('meta[name="theme-color"]')
+  const themeColorMeta =
+    document.querySelector("#theme-color-meta") || document.querySelector('meta[name="theme-color"]')
   document.documentElement.setAttribute("data-installed-app", installedApp ? "true" : "false")
   themeColorMeta?.setAttribute("content", theme === "light" ? "#f4f4f5" : "#18181b")
 }

@@ -1,18 +1,9 @@
 import { chatStream } from "./generated/chat/chat"
 
-export type ChatStreamEvent =
-  | { type: "chunk"; delta?: string }
-  | { type: "done" }
-  | { type: "error"; detail?: string }
+export type ChatStreamEvent = { type: "chunk"; delta?: string } | { type: "done" } | { type: "error"; detail?: string }
 
-export async function streamChatReply(
-  message: string,
-  onChunk: (delta: string) => void,
-): Promise<void> {
-  const response = await chatStream(
-    { message },
-    { headers: { Accept: "application/x-ndjson" } },
-  )
+export async function streamChatReply(message: string, onChunk: (delta: string) => void): Promise<void> {
+  const response = await chatStream({ message }, { headers: { Accept: "application/x-ndjson" } })
   const stream = extractResponseBodyStream(response)
   if (!stream) throw new Error("Nachricht konnte nicht gesendet werden.")
   await readStream(stream, onChunk)
@@ -21,10 +12,7 @@ export async function streamChatReply(
 function extractResponseBodyStream(response: unknown): ReadableStream<Uint8Array> | null {
   if (!response || typeof response !== "object") return null
 
-  if (
-    "data" in response &&
-    (response as { data?: unknown }).data instanceof ReadableStream
-  ) {
+  if ("data" in response && (response as { data?: unknown }).data instanceof ReadableStream) {
     return (response as { data: ReadableStream<Uint8Array> }).data
   }
 

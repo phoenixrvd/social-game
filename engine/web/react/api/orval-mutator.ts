@@ -34,10 +34,7 @@ export function toApiError(error: unknown, fallbackError = "Anfrage fehlgeschlag
   return createApiError(errorMessage(payload, fallbackError), status)
 }
 
-export async function orvalFetch<T>(
-  url: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function orvalFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, options)
 
   if (!response.ok) {
@@ -68,10 +65,7 @@ export async function orvalFetch<T>(
   } as T
 }
 
-export async function orvalFetchStream<T>(
-  url: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function orvalFetchStream<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, options)
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))

@@ -35,6 +35,8 @@
 
 - React-Quellcode liegt in `engine/web/react/`; Build-Ziel ist `engine/web/static/js` (siehe `vite.config.js`).
 - `engine/web/static/index.html` bindet `/js/theme-init.js` und `/js/app.js` direkt ein; nach React-Aenderungen daher `npm run build` ausfuehren.
+- Die React-UI nutzt eine verbindliche Container/View-Trennung für Features und Options-Panels: Container enthalten Datenzugriff, Commands, Router, Query, lokalen State und Props-Mapping; Views rendern nur Props und rufen Callback-Props auf.
+- Feature- und Panel-Container sollen im Regelfall nur die zugehörige View direkt aufrufen. Reine Shared-UI-Komponenten brauchen keine Container/View-Trennung, solange sie keine fachliche Daten-, Router-, Query- oder Command-Logik enthalten.
 - GUI-Texte sind Deutsch mit korrekten Umlauten (z. B. `zurück`, `löschen`, `größer`).
 - Deutsche Texte immer mit korrekten Umlauten schreiben (kein `ae/oe/ue` als Ersatz).
 

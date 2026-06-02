@@ -25,12 +25,9 @@ export function SettingsAction({
   ariaPressed,
   onClick,
 }: SettingsActionProps) {
-  const className = [
-    "sg-settings-action",
-    danger ? "danger" : "",
-    inactive ? "inactive" : "",
-    compact ? "compact" : "",
-  ].filter(Boolean).join(" ")
+  const className = ["sg-settings-action", danger ? "danger" : "", inactive ? "inactive" : "", compact ? "compact" : ""]
+    .filter(Boolean)
+    .join(" ")
 
   return (
     <span className={className}>

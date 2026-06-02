@@ -1,6 +1,6 @@
 ---
 state: deprecated
-superseded-by: react-migration
+superseded-by: doc/adr/012-react-ui-architektur.md
 ---
 
 # ADR-007: UI-Architektur mit Web Components

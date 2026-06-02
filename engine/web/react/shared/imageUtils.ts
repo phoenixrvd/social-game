@@ -1,16 +1,14 @@
-import type { AppStateView } from "../api/state"
 import type { ImageBackupResponse } from "../api/generated/model"
+import type { AppView } from "../state/appViewTypes"
 
 export const EMPTY_IMAGE = "data:,"
 const MAX_REFERENCE_IMAGE_BYTES = 3.5 * 1024 * 1024
 
-export function overlayImages(state?: AppStateView, backups: ImageBackupResponse[] = []): string[] {
-  if (!state?.imageUrl) return []
+export function overlayImages(image?: AppView["image"], backups: ImageBackupResponse[] = []): string[] {
+  if (!image?.url) return []
   const backupUrls = backups.map((backup) => backup.url).filter(Boolean)
-  const original = state.imageOriginalUrl && (backupUrls.length > 0 || !state.imageIsOriginal)
-    ? state.imageOriginalUrl
-    : null
-  return [state.imageUrl, ...backupUrls, original].filter(Boolean) as string[]
+  const original = image.originalUrl && (backupUrls.length > 0 || !image.isOriginal) ? image.originalUrl : null
+  return [image.url, ...backupUrls, original].filter(Boolean) as string[]
 }
 
 export function errorText(error: unknown, fallback = "Aktion fehlgeschlagen.") {
@@ -24,8 +22,10 @@ export async function resizeReferenceImage(file: File): Promise<string> {
   const image = await loadImage(await readFile(file))
   const scale = Math.min(1, 1536 / image.width, 1536 / image.height)
   const canvas = document.createElement("canvas")
-  canvas.width = Math.max(1, Math.round(image.width * scale))
-  canvas.height = Math.max(1, Math.round(image.height * scale))
+  const resizedWidth = Math.round(image.width * scale)
+  const resizedHeight = Math.round(image.height * scale)
+  canvas.width = Math.max(1, resizedWidth)
+  canvas.height = Math.max(1, resizedHeight)
   canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height)
   return encodeImage(canvas)
 }

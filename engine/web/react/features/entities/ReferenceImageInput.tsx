@@ -1,7 +1,6 @@
-import type { ChangeEvent } from "react"
+import type { ChangeEvent, MouseEvent } from "react"
 import type { ReactNode } from "react"
 import { useState } from "react"
-import { useIsMutating } from "@tanstack/react-query"
 import { DeleteIcon, ImageIcon, TextEditIcon } from "../../shared/icons"
 import { SettingsAction } from "../../shared/SettingsAction"
 import { resizeReferenceImage } from "../../shared/imageUtils"
@@ -9,6 +8,7 @@ import { ImageOverlay } from "../image/ImageOverlay"
 
 type ReferenceImageInputProps = {
   busy: boolean
+  isPreviewing: boolean
   canCreatePreview: boolean
   previewAlt: string
   referenceImageDataUrl: string | null
@@ -23,6 +23,7 @@ type ReferenceImageInputProps = {
 
 export function ReferenceImageInput({
   busy,
+  isPreviewing,
   canCreatePreview,
   previewAlt,
   referenceImageDataUrl,
@@ -36,7 +37,13 @@ export function ReferenceImageInput({
 }: ReferenceImageInputProps) {
   const [overlayOpen, setOverlayOpen] = useState(false)
   const visibleImageDataUrl = previewImageDataUrl || referenceImageDataUrl
-  const isPreviewing = useIsMutating({ mutationKey: ["scene-creator", "preview-image"] }) + useIsMutating({ mutationKey: ["npc-creator", "preview-image"] }) > 0
+  const previewOverlayImages = previewImageDataUrl ? [previewImageDataUrl] : []
+
+  function openPreviewOverlay(event: MouseEvent<HTMLLabelElement>) {
+    if (!previewImageDataUrl) return
+    event.preventDefault()
+    setOverlayOpen(true)
+  }
 
   async function selectFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.currentTarget.files?.[0]
@@ -58,8 +65,22 @@ export function ReferenceImageInput({
 
   return (
     <div className="sg-scene-reference-panel">
-      <label className={`sg-scene-preview${isPreviewing ? " is-loading" : ""}`} data-empty={visibleImageDataUrl ? "false" : "true"} role="button" tabIndex={0} aria-label={previewImageDataUrl ? "Bildvorschau vergrößern" : "Referenzbild wählen"} onClick={(event) => { if (previewImageDataUrl) { event.preventDefault(); setOverlayOpen(true) } }}>
-        <input className="sg-visually-hidden" type="file" accept="image/*" capture="environment" disabled={busy || Boolean(previewImageDataUrl)} onChange={selectFile} />
+      <label
+        className={`sg-scene-preview${isPreviewing ? " is-loading" : ""}`}
+        data-empty={visibleImageDataUrl ? "false" : "true"}
+        role="button"
+        tabIndex={0}
+        aria-label={previewImageDataUrl ? "Bildvorschau vergrößern" : "Referenzbild wählen"}
+        onClick={openPreviewOverlay}
+      >
+        <input
+          className="sg-visually-hidden"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          disabled={busy || Boolean(previewImageDataUrl)}
+          onChange={selectFile}
+        />
         <span className="sg-image-content">
           {visibleImageDataUrl ? (
             <>
@@ -70,11 +91,30 @@ export function ReferenceImageInput({
         </span>
         {!visibleImageDataUrl ? <span className="sg-scene-preview-placeholder">Bild auswählen</span> : null}
       </label>
-      <ImageOverlay open={overlayOpen} images={previewImageDataUrl ? [previewImageDataUrl] : []} onClose={() => setOverlayOpen(false)} />
+      <ImageOverlay open={overlayOpen} images={previewOverlayImages} onClose={() => setOverlayOpen(false)} />
       <div className="sg-scene-reference-actions">
-        <SettingsAction compact icon={<TextEditIcon />} title="Beschreibung aus Bild" disabled={busy || !referenceImageDataUrl} onClick={onDescribe} />
-        <SettingsAction compact icon={<ImageIcon />} title="Bild aus Beschreibung" disabled={busy || !canCreatePreview} onClick={onPreview} />
-        <SettingsAction compact danger icon={<DeleteIcon />} title="Bild löschen" disabled={busy || !visibleImageDataUrl} onClick={clear} />
+        <SettingsAction
+          compact
+          icon={<TextEditIcon />}
+          title="Beschreibung aus Bild"
+          disabled={busy || !referenceImageDataUrl}
+          onClick={onDescribe}
+        />
+        <SettingsAction
+          compact
+          icon={<ImageIcon />}
+          title="Bild aus Beschreibung"
+          disabled={busy || !canCreatePreview}
+          onClick={onPreview}
+        />
+        <SettingsAction
+          compact
+          danger
+          icon={<DeleteIcon />}
+          title="Bild löschen"
+          disabled={busy || !visibleImageDataUrl}
+          onClick={clear}
+        />
         {extraActions}
       </div>
     </div>

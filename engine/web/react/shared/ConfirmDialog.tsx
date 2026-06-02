@@ -58,7 +58,12 @@ export function ConfirmDialogProvider({ children }: { children: ReactNode }) {
       {children}
       {request ? (
         <div className="sg-confirm-backdrop" role="presentation" onClick={() => close(false)}>
-          <div className="sg-confirm-dialog" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="sg-confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h3 className="sg-settings-heading">{request.options.title}</h3>
             <p className="sg-confirm-message">{request.options.message}</p>
             {request.options.listItems.length > 0 ? (
