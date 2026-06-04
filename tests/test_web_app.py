@@ -328,6 +328,23 @@ def test_api_responses_are_not_cached(tmp_path, monkeypatch):
     assert response.headers["expires"] == "0"
 
 
+def test_history_endpoint_returns_empty_list_when_git_init_fails(tmp_path, monkeypatch):
+    _setup_web_app(tmp_path, monkeypatch)
+
+    import engine.services.history_service as history_service_module
+
+    def fail_git_init(*args, **kwargs):
+        raise PermissionError("read-only volume")
+
+    monkeypatch.setattr(history_service_module.subprocess, "run", fail_git_init)
+
+    with TestClient(web_app_module.app) as client:
+        response = client.get("/api/session/history")
+
+    assert response.status_code == 200
+    assert response.json() == {"checkpoints": []}
+
+
 def test_get_state_returns_session_messages_options_and_image(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     (tmp_path / "npcs" / "vika" / "video.mp4").write_bytes(b"video")

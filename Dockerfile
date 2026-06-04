@@ -1,15 +1,3 @@
-FROM node:20-slim AS node-builder
-
-WORKDIR /build
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY .openapi/openapi.json .openapi/openapi.json
-COPY orval.config.js vite.config.js tsconfig*.json ./
-COPY engine/web/react/ engine/web/react/
-RUN ORVAL_OPENAPI_TARGET=.openapi/openapi.json npm run build
-
 FROM python:3.12-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
@@ -37,6 +25,29 @@ RUN python -m venv /opt/venv \
         /opt/venv/bin/pip3 \
         /opt/venv/bin/pip3.12
 
+FROM builder AS openapi-spec
+
+WORKDIR /build
+
+COPY engine /build/engine
+COPY npcs /build/npcs
+COPY scenes /build/scenes
+COPY prompts /build/prompts
+RUN mkdir -p .openapi \
+    && /opt/venv/bin/python -c "import json; from pathlib import Path; from engine.api.app import app; Path('.openapi/openapi.json').write_text(json.dumps(app.openapi(), ensure_ascii=False), encoding='utf-8')"
+
+FROM node:22-slim AS node-builder
+
+WORKDIR /build
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY --from=openapi-spec /build/.openapi/openapi.json .openapi/openapi.json
+COPY orval.config.js vite.config.js tsconfig*.json ./
+COPY engine/web/react/ engine/web/react/
+RUN ORVAL_OPENAPI_TARGET=.openapi/openapi.json npm run build
+
 FROM python:3.12-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
@@ -47,6 +58,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 RUN groupadd --system --gid 10001 app \
     && useradd --system --uid 10001 --gid app --no-create-home --home /nonexistent --shell /usr/sbin/nologin app
+
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes git \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
