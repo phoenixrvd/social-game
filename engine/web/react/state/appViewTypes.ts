@@ -1,4 +1,4 @@
-import type { MessageResponse, NpcResponse, SceneResponse } from "../api/generated/model"
+import type { AvatarResponse, MessageResponse, NpcResponse, SceneResponse } from "../api/generated/model"
 
 export type MessageView = MessageResponse & {
   contextActions?: {
@@ -16,15 +16,22 @@ export type SceneView = SceneResponse & {
   imageUrl: string
 }
 
+export type AvatarView = AvatarResponse & {
+  imageUrl: string
+}
+
 export type NpcOption = NpcView
 export type SceneOption = SceneView
+export type AvatarOption = AvatarView
 
 export type AppView = {
   session: {
     npcId: string
     sceneId: string
+    avatarId: string
     defaultNpcId: string
     defaultSceneId: string
+    defaultAvatarId: string
   }
   chat: {
     messages: MessageView[]
@@ -39,6 +46,10 @@ export type AppView = {
     options: SceneOption[]
     context: string
     canReset: boolean
+  }
+  avatar: {
+    active: AvatarView | null
+    options: AvatarOption[]
   }
   image: {
     url: string

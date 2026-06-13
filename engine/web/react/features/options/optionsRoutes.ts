@@ -8,6 +8,8 @@ export const OPTIONS_PANELS = [
   "scene-creator",
   "scene-editor",
   "npc-creator",
+  "avatar-creator",
+  "avatar-editor",
   "scene-context",
 ] as const
 

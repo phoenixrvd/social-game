@@ -6,10 +6,12 @@ state: implemented
 
 ## Kontext
 Das System verwaltet ein User Profile als langfristige Sicht des aktiven NPC auf den Spieler. Das Profil
-enthaelt manuell hinterlegte, stabile Informationen und wird als Kontext im Dialog verwendet.
+enthält manuell hinterlegte, stabile Informationen und wird als Kontext im Dialog verwendet. Die Pflege in
+der Web-GUI erfolgt über Player-Avatare, deren Beschreibung das aktive User Profile bereitstellt.
 
 ## Annahmen
-- Keine
+- Ein Avatar-Wechsel während einer laufenden Session ist erlaubt.
+- Inkonsistente Dialogkontexte nach einem Wechsel werden bewusst akzeptiert.
 
 ## Offene Fragen
 - Keine
@@ -18,7 +20,7 @@ enthaelt manuell hinterlegte, stabile Informationen und wird als Kontext im Dial
 
 ### Bereitstellung und Nutzung im Dialogkontext
 **Typ:** Funktional  
-**Beschreibung:** Das System muss ein User Profile als optionalen Langzeitkontext ueber den Spieler im Dialogkontext bereitstellen und ueber RAG nutzen.  
+**Beschreibung:** Das System muss ein User Profile als optionalen Langzeitkontext über den Spieler im Dialogkontext bereitstellen.  
 **Akzeptanzkriterien:**
 - Ein User Profile kann leer sein.
 - Das System funktioniert auch ohne vorhandenes User Profile.
@@ -32,28 +34,54 @@ enthaelt manuell hinterlegte, stabile Informationen und wird als Kontext im Dial
 **Typ:** Randbedingung  
 **Beschreibung:** Das System muss User Profiles an definierten Speicherorten unterstützen.  
 **Akzeptanzkriterien:**
-- Das Basisprofil liegt unter `npcs/user_profile.md`.
-- Lokale Overrides liegen unter `.overrides/npcs/user_profile.md`.
-- Das aktive Runtime-Profil liegt unter `.data/npcs/<npc_id>/<scene_id>/user_profile.md`.
+- Das aktive User Profile wird aus der Beschreibung des aktiven Avatars gelesen.
+- Mitgelieferte Avatar-Profile liegen unter `avatars/<avatar_id>/description.md`.
+- Geänderte und eigene Avatar-Profile liegen unter `.overrides/avatars/<avatar_id>/description.md`.
+- Bestehende `user_profile.md`-Dateien können als Legacy-Daten vorhanden sein, werden aber nicht mehr über die Web-GUI gepflegt.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
+
+### Standard-Avatare
+**Typ:** Funktional  
+**Beschreibung:** Das System muss mitgelieferte Standard-Avatare bereitstellen, deren Beschreibung das User Profile bildet.  
+**Akzeptanzkriterien:**
+- Die Standard-Avatare `max` und `erika` existieren unter `avatars/<id>/`.
+- Wenn keine Avatar-ID in der Session gespeichert ist, ist `max` aktiv.
+- Jeder Avatar besteht aus `character.yaml`, `description.md` und `img.png`.
+
+### Avatar-Auswahl
+**Typ:** Funktional  
+**Beschreibung:** Das System muss den aktiven Spieleravatar in der Session speichern und wechseln können.  
+**Akzeptanzkriterien:**
+- Die aktive Auswahl wird als `avatar_id` in `.data/session.yaml` gespeichert.
+- Ein Avatar-Wechsel löst keine Scheduler-Jobs und keine NPC- oder Szenenkontextanpassung aus.
+- Ungültige gespeicherte Avatar-IDs werden auf den Default-Avatar zurückgesetzt.
+
+### Avatar-Speicherung
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss Avatar-Dateien über Default- und Override-Ebenen auflösen.  
+**Akzeptanzkriterien:**
+- Mitgelieferte Avatare liegen unter `avatars/<id>/`.
+- Geänderte und eigene Avatare liegen unter `.overrides/avatars/<id>/`.
+- Die Auflösung nutzt Override vor Default.
+- Es gibt keine `.data/avatars`-Ebene.
+- Es gibt keinen globalen Datei-Fallback auf `avatars/max/<filename>`.
 
 ### Priorisierung der Datenschichten
 **Typ:** Randbedingung  
 **Beschreibung:** Das System muss User Profiles über die bestehende Datei-Überladelogik mit definierter Priorität auflösen.  
 **Akzeptanzkriterien:**
-- `.data/npcs/<npc_id>/<scene_id>/user_profile.md` hat die höchste Priorität.
-- `.overrides/npcs/user_profile.md` hat Vorrang vor `npcs/user_profile.md`.
-- `npcs/user_profile.md` ist der Fallback.
-- Fehlende Ebenen werden auf die jeweils nächste verfügbare Ebene zurückgeführt.
+- `.overrides/avatars/<avatar_id>/description.md` hat Vorrang vor `avatars/<avatar_id>/description.md`.
+- Es gibt keine `.data/avatars`-Ebene.
+- Es gibt keinen globalen Fallback auf `avatars/max/description.md` für einzelne Avatar-Dateien.
 **Referenzen:** `doc/requirements/sg-016-overrides-verzeichnis.md`
 
 ### Manuelle statische Profilpflege
 **Typ:** Funktional  
 **Beschreibung:** Das System muss das User Profile ausschliesslich als manuell gepflegte, statische Hinterlegung fuehren.  
 **Akzeptanzkriterien:**
-- Profilinhalte aendern sich nur durch manuelle Bearbeitung.
+- Profilinhalte ändern sich nur durch manuelle Avatar-Bearbeitung.
 - Ein Dialog allein erzeugt keinen neuen Profilinhalt.
-- Ein Dialog allein veraendert keinen vorhandenen Profilinhalt.
+- Ein Dialog allein verändert keinen vorhandenen Profilinhalt.
 
 ### Profilgröße
 **Typ:** Randbedingung  
@@ -80,10 +108,26 @@ enthaelt manuell hinterlegte, stabile Informationen und wird als Kontext im Dial
 
 ### Editierbarkeit in der Web-GUI
 **Typ:** Funktional  
-**Beschreibung:** Das System muss das User Profile im Bereich „Allgemein“ der Web-GUI editierbar bereitstellen.  
+**Beschreibung:** Das System muss das User Profile im Bereich „Allgemein“ der Web-GUI über die Avatar-Verwaltung editierbar bereitstellen.  
 **Akzeptanzkriterien:**
-- Der Bereich ist sichtbar mit der Überschrift `Dein Profil`.
-- Das User Profile ist über ein Textarea-Feld editierbar.
-- Änderungen werden gespeichert, sobald das Feld den Fokus verliert.
-- Die Speicherung erfolgt unter `.data/npcs/<npc_id>/<scene_id>/user_profile.md`.
+- Der Bereich ist sichtbar mit der Überschrift `Dein Avatar`.
+- Die Avatar-Liste wird nach Anzeigename sortiert.
+- Das User Profile ist die Beschreibung des aktiven Avatars.
+- Die Bearbeitung wird explizit über `Avatar bearbeiten` in einem eigenen Options-Panel geöffnet.
+- Änderungen werden über `Speichern` gespeichert.
+- Die Speicherung erfolgt unter `.overrides/avatars/<avatar_id>/description.md`.
+- Eigene Avatare können erstellt, bearbeitet und gelöscht werden.
+- Standard-Avatare können bearbeitet, aber nicht gelöscht werden.
+- Beim Bearbeiten kann das Bild per Upload oder generierter Vorschau ersetzt werden.
+- Ein generiertes Vorschaubild kann vor dem Speichern gelöscht werden.
+- Ein gespeichertes Avatar-Bild kann nicht einzeln gelöscht werden, weil ein Avatar immer ein Bild haben muss.
+- Mitgelieferte Avatare können auf den initialen Stand zurückgesetzt werden, wenn lokale Overrides existieren.
+- Das Zurücksetzen wird in der Bildaktionsleiste angeboten, bestätigt und wechselt nicht das Options-Panel.
 **Referenzen:** `doc/requirements/sg-011-web-gui.md`
+
+### Bildverwendung
+**Typ:** Randbedingung  
+**Beschreibung:** Das System muss Avatar-Bilder auf die Avatar-Verwaltung begrenzen.  
+**Akzeptanzkriterien:**
+- Avatar-Bilder dienen der Darstellung und Bearbeitung in der Web-GUI.
+- Avatar-Bilder werden nicht als Referenz für spätere Szenen- oder NPC-Bildgenerierung verwendet.

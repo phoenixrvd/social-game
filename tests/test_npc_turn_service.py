@@ -29,6 +29,7 @@ def _build_npc(**overrides) -> SimpleNamespace:
         system_prompt="Bleib in Character",
         state="mood: neutral",
         user_profile="",
+        avatar_description="Avatarbeschreibung",
         scene=SimpleNamespace(scene_id="office", description="Im Buero", img=Path(__file__)),
         img=Path(__file__),
         stm=FakeStmView(),
@@ -60,9 +61,13 @@ def _patch_storage(monkeypatch, npc_data: SimpleNamespace, template: str) -> Non
         state = npc_data.state
         user_profile = npc_data.user_profile
 
+    class FakeAvatarPaths:
+        description = FakeText(npc_data.avatar_description)
+
     class FakeStorage:
         prompts = FakePrompts()
         npc = FakeNpcPaths()
+        avatar = FakeAvatarPaths()
         scene = SimpleNamespace(description=npc_data.scene.description)
 
     monkeypatch.setattr(npc_turn_service_module, "storage", FakeStorage())

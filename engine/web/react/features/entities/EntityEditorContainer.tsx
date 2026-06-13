@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useImageDescribeAvatar, useImagePreviewAvatar } from "../../api/generated/avatar/avatar"
 import { useImageDescribeNpc, useImagePreviewNpc } from "../../api/generated/npc/npc"
 import { useImageDescribeScene, useImagePreviewScene } from "../../api/generated/scene/scene"
 import { useAppCommands } from "../../state/appCommands"
@@ -13,6 +14,7 @@ import { EntityEditorView } from "./EntityEditorView"
 type EntityEditorProps =
   | { type: "scene"; mode: "create" | "edit"; appView: AppView; close?: () => void }
   | { type: "npc"; mode: "create"; appView: AppView; close?: () => void }
+  | { type: "avatar"; mode: "create"; appView: AppView; close?: () => void }
 
 const CONFIG = {
   scene: {
@@ -32,26 +34,37 @@ const CONFIG = {
       "z. B. Alex ist ein ruhiger Koch Anfang 30, beobachtet genau und spricht selten direkt aus, was er denkt...",
     previewAlt: "Vorschau des NPC-Profilbilds",
   },
+  avatar: {
+    title: "Neuen Avatar erstellen",
+    editTitle: "Neuen Avatar erstellen",
+    label: "Avatarbeschreibung",
+    hint: "Die Beschreibung wird als Wissen über deinen Spielercharakter im Chat verwendet.",
+    placeholder: "z. B. Max ist ein direkter Elektriker Mitte 30, pragmatisch, freundlich und schnell ungeduldig...",
+    previewAlt: "Vorschau des Avatar-Bilds",
+  },
 }
 
 export function EntityEditorContainer({ type, mode, appView }: EntityEditorProps) {
   const navigate = useNavigate()
   const commands = useAppCommands()
   const confirm = useConfirmDialog()
+  const describeAvatar = useImageDescribeAvatar()
   const describeScene = useImageDescribeScene()
   const describeNpc = useImageDescribeNpc()
+  const previewAvatar = useImagePreviewAvatar()
   const previewScene = useImagePreviewScene()
   const previewNpc = useImagePreviewNpc()
-  const imageMutations = [describeScene, describeNpc, previewScene, previewNpc]
+  const imageMutations = [describeAvatar, describeScene, describeNpc, previewAvatar, previewScene, previewNpc]
   const [description, setDescription] = useState("")
   const [referenceImageDataUrl, setReferenceImageDataUrl] = useState<string | null>(null)
   const [previewImageDataUrl, setPreviewImageDataUrl] = useState<string | null>(null)
   const [localError, setLocalError] = useState("")
   const isScene = type === "scene"
+  const isAvatar = type === "avatar"
   const isSceneEdit = type === "scene" && mode === "edit"
   const config = CONFIG[type]
   const busy = commands.pending.entity || imageMutations.some((mutation) => mutation.isPending)
-  const isPreviewing = previewScene.isPending || previewNpc.isPending
+  const isPreviewing = previewAvatar.isPending || previewScene.isPending || previewNpc.isPending
   const imageMutationError = imageMutations.find((mutation) => mutation.error)?.error
   const mutationError = commands.errors.entity || imageMutationError
   const error = localError || errorText(mutationError, "")
@@ -71,9 +84,12 @@ export function EntityEditorContainer({ type, mode, appView }: EntityEditorProps
   async function describeReference() {
     setLocalError("")
     try {
+      const imageDataUrl = previewImageDataUrl || referenceImageDataUrl || ""
       const response = isScene
-        ? await describeScene.mutateAsync({ data: { imageDataUrl: referenceImageDataUrl || "" } })
-        : await describeNpc.mutateAsync({ data: { imageDataUrl: referenceImageDataUrl || "" } })
+        ? await describeScene.mutateAsync({ data: { imageDataUrl } })
+        : isAvatar
+          ? await describeAvatar.mutateAsync({ data: { imageDataUrl } })
+          : await describeNpc.mutateAsync({ data: { imageDataUrl } })
       setDescription(response.status === 200 ? response.data.description : "")
     } catch (err) {
       setLocalError(errorText(err, "Beschreibung aus Bild konnte nicht erstellt werden."))
@@ -86,7 +102,9 @@ export function EntityEditorContainer({ type, mode, appView }: EntityEditorProps
       const input = { description: description.trim(), referenceImageDataUrl }
       const response = isScene
         ? await previewScene.mutateAsync({ data: input })
-        : await previewNpc.mutateAsync({ data: input })
+        : isAvatar
+          ? await previewAvatar.mutateAsync({ data: input })
+          : await previewNpc.mutateAsync({ data: input })
       setPreviewImageDataUrl(response.status === 200 ? response.data.imageDataUrl : "")
     } catch (err) {
       setLocalError(errorText(err, "Bild aus Beschreibung konnte nicht erstellt werden."))
@@ -115,6 +133,15 @@ export function EntityEditorContainer({ type, mode, appView }: EntityEditorProps
         referenceImageDataUrl,
       })
       if (nextSceneId) navigate(buildOptionsPath(appView.session.npcId, nextSceneId, "context"))
+      return
+    }
+    if (isAvatar) {
+      const nextAvatarId = await commands.createAvatar({
+        description: text,
+        imageDataUrl: previewImageDataUrl,
+        referenceImageDataUrl,
+      })
+      if (nextAvatarId) navigate(buildOptionsPath(appView.session.npcId, appView.session.sceneId, "general"))
       return
     }
     const nextNpcId = await commands.createNpc({

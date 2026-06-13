@@ -19,7 +19,7 @@ from engine.config import config
 from engine.client import client, user_visible_provider_error_detail
 from engine.storage import storage
 from engine.tools.scheduler import Scheduler, set_scheduler
-from . import chat, history, npc, scene, session
+from . import avatar, chat, history, npc, scene, session
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "web" / "static"
 STATIC_ASSET_PREFIXES = ("/css/", "/js/", "/icons/", "/react/")
@@ -80,10 +80,20 @@ def generate_unique_id_function(route: APIRoute) -> str:
     if route.name.startswith("image_current"):
         return "".join(part[:1].upper() + part[1:] for part in route.name.split("_") if part).replace("Image", "image", 1)
     if route.name == "describe_image":
-        suffix = "Npc" if route.path.startswith("/api/npcs/") else "Scene"
+        if route.path.startswith("/api/npcs/"):
+            suffix = "Npc"
+        elif route.path.startswith("/api/avatars/"):
+            suffix = "Avatar"
+        else:
+            suffix = "Scene"
         return f"imageDescribe{suffix}"
     if route.name == "preview_image":
-        suffix = "Npc" if route.path.startswith("/api/npcs/") else "Scene"
+        if route.path.startswith("/api/npcs/"):
+            suffix = "Npc"
+        elif route.path.startswith("/api/avatars/"):
+            suffix = "Avatar"
+        else:
+            suffix = "Scene"
         return f"imagePreview{suffix}"
     module_name = route.endpoint.__module__.rsplit(".", 1)[-1]
     operation_suffix = "".join(part[:1].upper() + part[1:] for part in route.name.split("_") if part)
@@ -202,6 +212,7 @@ async def _internal_error_handler(_request: Request, exc: Exception) -> Response
 
 
 app.include_router(chat.router)
+app.include_router(avatar.router)
 app.include_router(npc.router)
 app.include_router(scene.router)
 app.include_router(session.router)

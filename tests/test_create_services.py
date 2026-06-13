@@ -3,6 +3,7 @@ import yaml
 
 from engine.config import config
 from engine.services.id_normalizer import normalize_to_snake_id
+from engine.services.avatar_service import AvatarDescriptionDraft, AvatarService
 from engine.services.npc_scene_service import NpcSceneService
 from engine.services.npc_service import NpcService
 from engine.services.scene_service import SceneService
@@ -221,6 +222,78 @@ def test_npc_service_create_override_rejects_invalid_state_format(tmp_path, monk
 
     with pytest.raises(ValueError, match="lowercase"):
         NpcService().create_override("Kira, Designerin")
+
+
+def test_avatar_service_create_override_generates_short_profile_not_npc_sections(tmp_path, monkeypatch):
+    import engine.services.avatar_service as avatar_module
+
+    captured: list[tuple[str, object]] = []
+
+    def fake_run_prompt_small_model(prompt: str, response_model):
+        captured.append((prompt, response_model))
+        return response_model(
+            character_name="Mara",
+            profile_markdown=(
+                "Mara ist etwa 30 Jahre alt und lebt seit einigen Monaten im Ort. "
+                "Sie arbeitet im Einzelhandel und verbringt ihre Freizeit meist mit Lesen und Spaziergängen."
+            ),
+        )
+
+    monkeypatch.setattr(avatar_module.config, "OVERRIDES_AVATAR_DIR", tmp_path / ".overrides" / "avatars")
+    monkeypatch.setattr(avatar_module.config, "AVATAR_DIR", tmp_path / "avatars")
+    monkeypatch.setattr(avatar_module.config, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(avatar_module.client, "run_prompt_small_model", fake_run_prompt_small_model)
+    monkeypatch.setattr(AvatarService, "create_preview_image", lambda self, _description: b"png-bytes")
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "avatar_create_description.md").write_text(
+        "Avatar-Prompt für {{CHARACTER_DESCRIPTION}} ohne NPC-Persönlichkeitsprofil.",
+        encoding="utf-8",
+    )
+
+    target_dir = AvatarService().create_override("Mara, 30, arbeitet im Einzelhandel.")
+
+    assert captured[0][1] is AvatarDescriptionDraft
+    assert "Avatar-Prompt für Mara, 30, arbeitet im Einzelhandel." in captured[0][0]
+    assert "NPC-Persönlichkeitsprofil" in captured[0][0]
+    description = (target_dir / "description.md").read_text(encoding="utf-8")
+    assert "# Verhalten" not in description
+    assert "Stressreaktion" not in description
+    assert description.startswith("Mara ist etwa 30 Jahre alt")
+    assert yaml.safe_load((target_dir / "character.yaml").read_text(encoding="utf-8")) == {"id": "mara", "name": "Mara"}
+
+
+def test_avatar_description_draft_rejects_npc_profile_sections():
+    with pytest.raises(ValueError, match="NPC-Profilabschnitte"):
+        AvatarDescriptionDraft(
+            character_name="Mara",
+            profile_markdown="# Verhalten\n\n- spricht ruhig\n\n# Stressreaktion\n\n- zieht sich zurück",
+        )
+
+
+def test_avatar_describe_reference_image_uses_avatar_prompt(tmp_path, monkeypatch):
+    import engine.services.avatar_service as avatar_module
+
+    seen: list[tuple[str, bytes]] = []
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "avatar_describe_image.md").write_text(
+        "Avatar-Bild final beschreiben. Keine bloße Bildbeschreibung.",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(avatar_module.config, "PROJECT_ROOT", tmp_path)
+
+    def fake_describe(prompt: str, image_bytes: bytes):
+        seen.append((prompt, image_bytes))
+        return "Mara ist etwa 30 Jahre alt und anderen nur oberflächlich bekannt."
+
+    monkeypatch.setattr(avatar_module.client, "describe_npc_reference_img", fake_describe)
+
+    description = AvatarService().describe_reference_image(b"image")
+
+    assert description == "Mara ist etwa 30 Jahre alt und anderen nur oberflächlich bekannt."
+    assert seen == [("Avatar-Bild final beschreiben. Keine bloße Bildbeschreibung.", b"image")]
 
 
 def test_scene_service_create_override_creates_scene_markdown_and_image(tmp_path, monkeypatch):

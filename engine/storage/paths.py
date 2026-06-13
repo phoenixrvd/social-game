@@ -58,6 +58,14 @@ class PathResolver:
             )
         )
 
+    def avatar_file(self, avatar_id: str, filename: str) -> Path:
+        return self.preferred_file(
+            self.ordered_unique_paths(
+                config.OVERRIDES_AVATAR_DIR / avatar_id / filename,
+                config.AVATAR_DIR / avatar_id / filename,
+            )
+        )
+
     def user_profile_candidates(self, npc_id: str, scene_id: str) -> tuple[Path, ...]:
         """Return candidates for user profile with priority: runtime-active > overrides > default."""
         filename = "user_profile.md"
@@ -120,6 +128,10 @@ class PathResolver:
         return (config.OVERRIDES_SCENE_DIR / scene_id).is_dir() or (config.SCENE_DIR / scene_id).is_dir()
 
     @staticmethod
+    def avatar_exists(avatar_id: str) -> bool:
+        return (config.OVERRIDES_AVATAR_DIR / avatar_id).is_dir() or (config.AVATAR_DIR / avatar_id).is_dir()
+
+    @staticmethod
     def _collect_dir_ids(*roots: Path) -> list[str]:
         ids: set[str] = set()
         for root in roots:
@@ -130,6 +142,9 @@ class PathResolver:
 
     def list_npc_ids(self) -> list[str]:
         return self._collect_dir_ids(config.OVERRIDES_NPC_DIR, config.NPC_DIR)
+
+    def list_avatar_ids(self) -> list[str]:
+        return self._collect_dir_ids(config.OVERRIDES_AVATAR_DIR, config.AVATAR_DIR)
 
     def list_scene_ids(self) -> list[str]:
         return self._collect_dir_ids(config.OVERRIDES_SCENE_DIR, config.SCENE_DIR)

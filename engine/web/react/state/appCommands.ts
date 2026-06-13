@@ -42,6 +42,10 @@ export function useAppCommands() {
     restoreCheckpoint: history.restoreCheckpoint,
     resetScene: entity.resetScene,
     createNpc: entity.createNpc,
+    createAvatar: entity.createAvatar,
+    updateAvatar: entity.updateAvatar,
+    deleteAvatar: entity.deleteAvatar,
+    resetAvatar: entity.resetAvatar,
     createScene: entity.createScene,
     updateScene: entity.updateScene,
   }

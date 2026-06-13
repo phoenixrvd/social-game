@@ -12,7 +12,7 @@ export type EntityEditorConfig = {
 }
 
 type EntityEditorViewProps = {
-  type: "scene" | "npc"
+  type: "scene" | "npc" | "avatar"
   mode: "create" | "edit"
   config: EntityEditorConfig
   description: string
@@ -91,13 +91,15 @@ export function EntityEditorView(props: EntityEditorViewProps) {
   )
 }
 
-function submitTitle(type: "scene" | "npc", isSceneEdit: boolean) {
+function submitTitle(type: "scene" | "npc" | "avatar", isSceneEdit: boolean) {
   if (isSceneEdit) return "Scene speichern"
+  if (type === "avatar") return "Avatar erstellen"
   return type === "scene" ? "Szene erstellen" : "NPC erstellen"
 }
 
-function submitDescription(type: "scene" | "npc", isSceneEdit: boolean) {
+function submitDescription(type: "scene" | "npc" | "avatar", isSceneEdit: boolean) {
   if (isSceneEdit) return "Aktualisiert die aktive Event Location und den NPC-Kontext"
+  if (type === "avatar") return "Erzeugt deinen Avatar"
   return type === "scene"
     ? "Erzeugt Szene und NPC-Kontext aus der Beschreibung"
     : "Erzeugt eine neue Figur aus deiner Charakterbeschreibung"

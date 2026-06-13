@@ -19,6 +19,10 @@ type ReferenceImageInputProps = {
   onPreview: () => void
   onError: (message: string) => void
   extraActions?: ReactNode
+  showClearAction?: boolean
+  allowUploadWithPreview?: boolean
+  clearPreviewOnly?: boolean
+  canDescribe?: boolean
 }
 
 export function ReferenceImageInput({
@@ -34,6 +38,10 @@ export function ReferenceImageInput({
   onPreview,
   onError,
   extraActions,
+  showClearAction = true,
+  allowUploadWithPreview = false,
+  clearPreviewOnly = false,
+  canDescribe,
 }: ReferenceImageInputProps) {
   const [overlayOpen, setOverlayOpen] = useState(false)
   const visibleImageDataUrl = previewImageDataUrl || referenceImageDataUrl
@@ -41,6 +49,7 @@ export function ReferenceImageInput({
 
   function openPreviewOverlay(event: MouseEvent<HTMLLabelElement>) {
     if (!previewImageDataUrl) return
+    if (allowUploadWithPreview) return
     event.preventDefault()
     setOverlayOpen(true)
   }
@@ -59,9 +68,15 @@ export function ReferenceImageInput({
   }
 
   function clear() {
+    if (clearPreviewOnly) {
+      onPreviewChange(null)
+      return
+    }
     onReferenceChange(null)
     onPreviewChange(null)
   }
+
+  const canClear = clearPreviewOnly ? Boolean(previewImageDataUrl) : Boolean(visibleImageDataUrl)
 
   return (
     <div className="sg-scene-reference-panel">
@@ -78,7 +93,7 @@ export function ReferenceImageInput({
           type="file"
           accept="image/*"
           capture="environment"
-          disabled={busy || Boolean(previewImageDataUrl)}
+          disabled={busy || (!allowUploadWithPreview && Boolean(previewImageDataUrl))}
           onChange={selectFile}
         />
         <span className="sg-image-content">
@@ -96,25 +111,27 @@ export function ReferenceImageInput({
         <SettingsAction
           compact
           icon={<TextEditIcon />}
-          title="Beschreibung aus Bild"
-          disabled={busy || !referenceImageDataUrl}
+          title="Bild beschreiben"
+          disabled={busy || !(canDescribe ?? Boolean(visibleImageDataUrl))}
           onClick={onDescribe}
         />
         <SettingsAction
           compact
           icon={<ImageIcon />}
-          title="Bild aus Beschreibung"
+          title="Bild erstellen"
           disabled={busy || !canCreatePreview}
           onClick={onPreview}
         />
-        <SettingsAction
-          compact
-          danger
-          icon={<DeleteIcon />}
-          title="Bild löschen"
-          disabled={busy || !visibleImageDataUrl}
-          onClick={clear}
-        />
+        {showClearAction ? (
+          <SettingsAction
+            compact
+            danger
+            icon={<DeleteIcon />}
+            title="Bild löschen"
+            disabled={busy || !canClear}
+            onClick={clear}
+          />
+        ) : null}
         {extraActions}
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { getAvatarImageUrl } from "./generated/avatar/avatar"
 import { getNpcImageUrl, getNpcVideoUrl } from "./generated/npc/npc"
 import { getSceneOptionImageUrl } from "./generated/scene/scene"
 import { getImageCurrentUrl } from "./generated/session/session"
@@ -5,6 +6,10 @@ import { getImageCurrentUrl } from "./generated/session/session"
 export function currentImageUrl(signature: string | null): string {
   const url = getImageCurrentUrl()
   return signature ? `${url}?v=${encodeURIComponent(signature)}` : url
+}
+
+export function avatarImageUrl(avatarId: string): string {
+  return getAvatarImageUrl(avatarId)
 }
 
 export function npcImageUrl(npcId: string): string {
