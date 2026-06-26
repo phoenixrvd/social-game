@@ -115,14 +115,11 @@ def _setup_web_app(
     web_debug: bool = False,
 ) -> None:
     npcs_dir = tmp_path / "npcs"
-    avatars_dir = tmp_path / "avatars"
     scenes_dir = tmp_path / "scenes"
     data_npcs_dir = tmp_path / ".data" / "npcs"
     overrides_npcs_dir = tmp_path / ".overrides" / "npcs"
-    overrides_avatars_dir = tmp_path / ".overrides" / "avatars"
     overrides_scenes_dir = tmp_path / ".overrides" / "scenes"
     overrides_npcs_dir.mkdir(parents=True, exist_ok=True)
-    overrides_avatars_dir.mkdir(parents=True, exist_ok=True)
     overrides_scenes_dir.mkdir(parents=True, exist_ok=True)
 
     for npc_id, label in (("vika", "Vika"), ("mira", "Mira")):
@@ -136,13 +133,6 @@ def _setup_web_app(
             encoding="utf-8",
         )
         _make_test_png(npc_dir / "img.png")
-
-    for avatar_id, label in (("max", "Max"), ("erika", "Erika")):
-        avatar_dir = avatars_dir / avatar_id
-        avatar_dir.mkdir(parents=True)
-        (avatar_dir / "character.yaml").write_text(f"id: {avatar_id}\nname: {label}\n", encoding="utf-8")
-        (avatar_dir / "description.md").write_text(f"Avatarbeschreibung {label}", encoding="utf-8")
-        _make_test_png(avatar_dir / "img.png")
 
     for scene_id, heading in (("office", "# Office"), ("cafe", "# Cafe")):
         scene_dir = scenes_dir / scene_id
@@ -158,11 +148,9 @@ def _setup_web_app(
     FakeSessionView.scene_id = "office"
 
     monkeypatch.setattr(config, "NPC_DIR", npcs_dir)
-    monkeypatch.setattr(config, "AVATAR_DIR", avatars_dir)
     monkeypatch.setattr(config, "SCENE_DIR", scenes_dir)
     monkeypatch.setattr(config, "DATA_NPC_DIR", data_npcs_dir)
     monkeypatch.setattr(config, "OVERRIDES_NPC_DIR", overrides_npcs_dir)
-    monkeypatch.setattr(config, "OVERRIDES_AVATAR_DIR", overrides_avatars_dir)
     monkeypatch.setattr(config, "OVERRIDES_SCENE_DIR", overrides_scenes_dir)
     monkeypatch.setattr(config, "SESSION_PATH", tmp_path / "session.yaml")
     monkeypatch.setattr(config, "WEB_DEBUG", web_debug)
@@ -494,48 +482,12 @@ def test_get_state_context_html_renders_label_lists_as_html_lists(tmp_path, monk
 def test_update_session_persists_and_returns_new_state(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
     payload = _as_payload(
-        web_app_module.session.update_session(web_app_module.session.SessionRequest(npc="mira", scene="cafe", avatar="erika"))
+        web_app_module.session.update_session(web_app_module.session.SessionRequest(npc="mira", scene="cafe"))
     )
     assert storage.session.npc_id == "mira"
     assert storage.session.scene_id == "cafe"
-    assert storage.session.avatar_id == "erika"
     assert payload["npc"] == "mira"
     assert payload["scene"] == "cafe"
-    assert payload["avatar"] == "erika"
-
-
-def test_update_session_avatar_switch_does_not_trigger_context_actions(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    calls: list[str] = []
-
-    class FakeScheduler:
-        def enqueue(self, job_name: str) -> None:
-            calls.append(job_name)
-
-    _patch_scheduler(monkeypatch, lambda: FakeScheduler())
-    monkeypatch.setattr(web_app_module.session.NpcSceneService, "adapt_default_fallback", lambda self: calls.append("adapt"))
-
-    payload = _as_payload(web_app_module.session.update_session(web_app_module.session.SessionRequest(avatar="erika")))
-
-    assert payload["avatar"] == "erika"
-    assert calls == []
-
-
-def test_invalid_avatar_session_value_resets_to_default(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    config.SESSION_PATH.write_text("npc_id: vika\nscene_id: office\navatar_id: missing\n", encoding="utf-8")
-
-    assert storage.session.avatar_id == config.DEFAULT_AVATAR_ID
-    assert "avatar_id: max" in config.SESSION_PATH.read_text(encoding="utf-8")
-
-
-def test_avatar_list_contains_defaults_sorted_by_name(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-
-    payload = [avatar.model_dump() for avatar in web_app_module.avatar.list_options()]
-
-    assert [avatar["name"] for avatar in payload] == ["Erika", "Max"]
-    assert {avatar["id"] for avatar in payload} == {"erika", "max"}
 
 
 def test_update_session_enqueues_image_job_when_autogenerate_enabled(tmp_path, monkeypatch):
@@ -656,105 +608,6 @@ def test_delete_dynamic_npc_removes_artifacts_and_resets_session(tmp_path, monke
     assert not dynamic_runtime_dir.exists()
     assert storage.session.npc_id == config.DEFAULT_NPC_ID
     assert response.status_code == 200
-
-
-def test_update_standard_avatar_writes_override_without_renaming(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-
-    payload = _as_payload(
-        web_app_module.avatar.update(
-            "max",
-            web_app_module.avatar.AvatarUpdateRequest(description="Neue Beschreibung", image_data_url=None),
-        )
-    )
-
-    override_dir = config.OVERRIDES_AVATAR_DIR / "max"
-    assert payload["id"] == "max"
-    assert payload["name"] == "Max"
-    assert (override_dir / "description.md").read_text(encoding="utf-8") == "Neue Beschreibung\n"
-    assert (override_dir / "character.yaml").read_text(encoding="utf-8") == "id: max\nname: Max\n"
-    assert (override_dir / "img.png").is_file()
-
-
-def test_reset_standard_avatar_removes_override(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    override_dir = config.OVERRIDES_AVATAR_DIR / "max"
-    override_dir.mkdir(parents=True)
-    (override_dir / "character.yaml").write_text("id: max\nname: Max Override\n", encoding="utf-8")
-    (override_dir / "description.md").write_text("Override", encoding="utf-8")
-    _make_test_png(override_dir / "img.png")
-
-    response = web_app_module.avatar.reset_active("max")
-
-    assert response.status_code == 200
-    assert not override_dir.exists()
-    assert storage.avatar.description.get() == "Avatarbeschreibung Max"
-
-
-def test_reset_dynamic_avatar_is_rejected(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    avatar_dir = config.OVERRIDES_AVATAR_DIR / "alex"
-    avatar_dir.mkdir(parents=True)
-    (avatar_dir / "character.yaml").write_text("id: alex\nname: Alex\n", encoding="utf-8")
-    (avatar_dir / "description.md").write_text("Alex", encoding="utf-8")
-    _make_test_png(avatar_dir / "img.png")
-
-    try:
-        web_app_module.avatar.reset_active("alex")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-        assert "zurückgesetzt" in str(exc.detail)
-    else:
-        raise AssertionError("Eigener Avatar darf nicht zurückgesetzt werden.")
-
-
-def test_create_avatar_sets_active_session_and_has_image(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    from engine.services.avatar_service import AvatarService
-
-    def fake_avatar_create(self, character_description: str, avatar_image_bytes: bytes | None = None):
-        avatar_dir = config.OVERRIDES_AVATAR_DIR / "alex"
-        avatar_dir.mkdir(parents=True, exist_ok=True)
-        (avatar_dir / "character.yaml").write_text("id: alex\nname: Alex\n", encoding="utf-8")
-        (avatar_dir / "description.md").write_text(character_description, encoding="utf-8")
-        (avatar_dir / "img.png").write_bytes(avatar_image_bytes or b"test-image-data")
-        return avatar_dir
-
-    monkeypatch.setattr(AvatarService, "create_override", fake_avatar_create)
-
-    payload = _as_payload(web_app_module.avatar.create(web_app_module.avatar.AvatarCreateRequest(description="Alex")))
-
-    assert payload["id"] == "alex"
-    assert storage.session.avatar_id == "alex"
-    assert (config.OVERRIDES_AVATAR_DIR / "alex" / "img.png").is_file()
-
-
-def test_delete_standard_avatar_is_rejected(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-
-    try:
-        web_app_module.avatar.delete("max")
-    except HTTPException as exc:
-        assert exc.status_code == 400
-        assert "Standard-Avatar" in str(exc.detail)
-    else:
-        raise AssertionError("Standard-Avatar darf nicht gelöscht werden.")
-
-
-def test_delete_active_dynamic_avatar_removes_artifacts_and_resets_session(tmp_path, monkeypatch):
-    _setup_web_app(tmp_path, monkeypatch)
-    avatar_dir = config.OVERRIDES_AVATAR_DIR / "alex"
-    avatar_dir.mkdir(parents=True)
-    (avatar_dir / "character.yaml").write_text("id: alex\nname: Alex\n", encoding="utf-8")
-    (avatar_dir / "description.md").write_text("Alex", encoding="utf-8")
-    _make_test_png(avatar_dir / "img.png")
-    storage.session.avatar_id = "alex"
-
-    response = web_app_module.avatar.delete("alex")
-
-    assert response.status_code == 200
-    assert not avatar_dir.exists()
-    assert storage.session.avatar_id == config.DEFAULT_AVATAR_ID
 
 
 def test_delete_dynamic_scene_removes_artifacts_and_resets_session(tmp_path, monkeypatch):
@@ -1495,7 +1348,7 @@ def test_chat_stream_hides_internal_followup_runtime_errors_after_chunks(tmp_pat
     assert calls == []
 
 
-def test_update_user_profile_persists_legacy_runtime_profile_but_state_uses_avatar(tmp_path, monkeypatch):
+def test_update_user_profile_persists_runtime_profile_and_state_uses_profile(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
 
     scene_profile = config.DATA_NPC_DIR / "vika" / "office" / "user_profile.md"
@@ -1506,18 +1359,16 @@ def test_update_user_profile_persists_legacy_runtime_profile_but_state_uses_avat
     )
 
     assert scene_profile.read_text(encoding="utf-8") == "global-profile"
-    assert payload["user_profile"] == "Avatarbeschreibung Max"
+    assert payload["user_profile"] == "global-profile"
 
 
-def test_chat_prompt_uses_active_avatar_description(tmp_path, monkeypatch):
+def test_chat_prompt_uses_active_user_profile(tmp_path, monkeypatch):
     _setup_web_app(tmp_path, monkeypatch)
-    storage.session.avatar_id = "erika"
-    (config.DATA_NPC_DIR / "vika" / "office" / "user_profile.md").write_text("Altes Profil", encoding="utf-8")
+    (config.DATA_NPC_DIR / "vika" / "office" / "user_profile.md").write_text("Aktives Profil", encoding="utf-8")
 
     prompt = npc_turn_service_module.NpcTurnService._build_system_prompt("Keine Erinnerungen")
 
-    assert "Avatarbeschreibung Erika" in prompt
-    assert "Altes Profil" not in prompt
+    assert "Aktives Profil" in prompt
 
 
 def test_web_lifespan_uses_scheduler_directly(monkeypatch):

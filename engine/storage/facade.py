@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from engine.config import config
-from engine.storage.nodes import AvatarNode, NpcNode, PromptsNode, SceneNode, SessionNode
+from engine.storage.nodes import NpcNode, PromptsNode, SceneNode, SessionNode
 from engine.storage.paths import path_resolver
 
 
@@ -11,19 +11,12 @@ class Storage:
     def npc_view(self, npc_id: str, scene_id: str = "") -> NpcNode:
         return NpcNode(npc_id=npc_id, scene_id=scene_id)
 
-    def avatar_view(self, avatar_id: str) -> AvatarNode:
-        return AvatarNode(avatar_id=avatar_id)
-
     def scene_view(self, scene_id: str, npc_id: str = "") -> SceneNode:
         return SceneNode(npc_id=npc_id, scene_id=scene_id)
 
     @property
     def list_npcs(self) -> list[NpcNode]:
         return [self.npc_view(npc_id=npc_id) for npc_id in path_resolver.list_npc_ids()]
-
-    @property
-    def list_avatars(self) -> list[AvatarNode]:
-        return [self.avatar_view(avatar_id=avatar_id) for avatar_id in path_resolver.list_avatar_ids()]
 
     @property
     def list_scenes(self) -> list[SceneNode]:
@@ -47,10 +40,6 @@ class Storage:
     @property
     def npc(self) -> NpcNode:
         return self.npc_view(self.session.npc_id, self.session.scene_id)
-
-    @property
-    def avatar(self) -> AvatarNode:
-        return self.avatar_view(self.session.avatar_id)
 
     @property
     def scene(self) -> SceneNode:

@@ -635,6 +635,10 @@
   gap: 0.5rem;
 }
 
+.sg-user-profile-form {
+  padding-top: 0.5rem;
+}
+
 .sg-form-label {
   font-size: 0.9rem;
   font-weight: 600;

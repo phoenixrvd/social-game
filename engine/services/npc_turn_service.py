@@ -52,7 +52,7 @@ class NpcTurnService:
         character_description = storage.npc.description.get().strip() or EMPTY_PLACEHOLDER
         scene_description = storage.scene.description.strip() or EMPTY_PLACEHOLDER
         state_text = storage.npc.state.strip() or EMPTY_PLACEHOLDER
-        user_profile = storage.avatar.description.get().strip() or EMPTY_PLACEHOLDER
+        user_profile = storage.npc.user_profile.strip() or EMPTY_PLACEHOLDER
 
         replacements = {
             "{{ROLE}}": role_text,

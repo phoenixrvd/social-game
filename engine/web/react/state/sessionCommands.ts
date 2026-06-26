@@ -1,5 +1,4 @@
 import { useQueryClient } from "@tanstack/react-query"
-import { getAvatarListOptionsQueryKey } from "../api/generated/avatar/avatar"
 import { getNpcListOptionsQueryKey, useNpcDelete, useNpcResetActive } from "../api/generated/npc/npc"
 import { getSceneListOptionsQueryKey, useSceneDelete } from "../api/generated/scene/scene"
 import {
@@ -35,7 +34,6 @@ export function useSessionCommands() {
     const invalidateEntities = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: getSessionGetStateQueryKey() }),
-      queryClient.invalidateQueries({ queryKey: getAvatarListOptionsQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getNpcListOptionsQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getSceneListOptionsQueryKey() }),
     ])
@@ -55,10 +53,6 @@ export function useSessionCommands() {
     },
     async selectContext(data: SessionRequest): Promise<void> {
       await updateSession.mutateAsync({ data })
-      if (data.avatar && !data.npc && !data.scene && data.imageAutogenerate == null) {
-        await invalidateState()
-        return
-      }
       await invalidateImage()
     },
     async saveUserProfile(content: string): Promise<void> {

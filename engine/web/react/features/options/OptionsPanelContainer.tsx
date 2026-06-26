@@ -2,7 +2,6 @@ import type { ComponentType } from "react"
 import type { AppView } from "../../state/appViewTypes"
 import { EntityEditorContainer } from "../entities/EntityEditorContainer"
 import type { OptionPanel } from "./optionsRoutes"
-import { AvatarEditorPanelContainer } from "./panels/AvatarEditorPanelContainer"
 import { ContextPanelContainer } from "./panels/ContextPanelContainer"
 import { GeneralPanelContainer } from "./panels/GeneralPanelContainer"
 import { HistoryPanelContainer } from "./panels/HistoryPanelContainer"
@@ -30,8 +29,6 @@ const PANEL_COMPONENTS: Record<OptionPanel, ComponentType<PanelComponentProps>> 
     <EntityEditorContainer type="scene" mode="edit" appView={appView} close={close} />
   ),
   "npc-creator": ({ appView }) => <EntityEditorContainer type="npc" mode="create" appView={appView} />,
-  "avatar-creator": ({ appView }) => <EntityEditorContainer type="avatar" mode="create" appView={appView} />,
-  "avatar-editor": ({ appView }) => <AvatarEditorPanelContainer appView={appView} />,
   "scene-context": ({ appView }) => <SceneContextPanelContainer appView={appView} />,
 }
 

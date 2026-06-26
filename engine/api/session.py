@@ -33,10 +33,6 @@ class SessionRequest(ApiModel):
         default=None,
         description="Neue aktive Szenen-ID; bleibt unverändert, wenn das Feld fehlt oder null ist.",
     )
-    avatar: EntityId | None = Field(
-        default=None,
-        description="Neue aktive Avatar-ID; bleibt unverändert, wenn das Feld fehlt oder null ist.",
-    )
     image_autogenerate: bool | None = Field(
         default=None,
         description="Schaltet automatische Bildgenerierung für Folgeschritte ein oder aus; bleibt unverändert, wenn das Feld fehlt oder null ist.",
@@ -92,7 +88,6 @@ class MessageResponse(ApiModel):
 class StateResponse(ApiModel):
     npc: EntityId = Field(description="Aktive NPC-ID der Session.")
     scene: EntityId = Field(description="Aktive Szenen-ID der Session.")
-    avatar: EntityId = Field(description="Aktive Avatar-ID der Session.")
     scene_context: str = Field(description="Aktueller NPC-spezifischer Kontext zur aktiven Szene.")
     messages: list[MessageResponse] = Field(description="Für die Oberfläche sichtbare Dialog- und Kontextnachrichten.")
     messages_signature: str = Field(description="Kurze Signatur des sichtbaren Dialogverlaufs zur Änderungserkennung.")
@@ -102,7 +97,6 @@ class StateResponse(ApiModel):
     image_autogenerate: bool = Field(description="Gibt an, ob das Bild nach passenden Änderungen automatisch aktualisiert wird.")
     default_npc: EntityId = Field(description="Konfigurierte Standard-NPC-ID.")
     default_scene: EntityId = Field(description="Konfigurierte Standard-Szenen-ID.")
-    default_avatar: EntityId = Field(description="Konfigurierte Standard-Avatar-ID.")
     can_reset_scene: bool = Field(description="Gibt an, ob die aktive Szene zurückgesetzt werden kann.")
 
 
@@ -142,8 +136,6 @@ def update_session(request: SessionRequest) -> StateResponse:
         storage.session.npc_id = request.npc
     if request.scene is not None:
         storage.session.scene_id = request.scene
-    if request.avatar is not None:
-        storage.session.avatar_id = request.avatar
     if request.image_autogenerate is not None:
         storage.session.image_autogenerate = request.image_autogenerate
     if request.image_autogenerate:
@@ -291,20 +283,17 @@ def _file_signature(path) -> str:
 def _state_response() -> StateResponse:
     npc = storage.npc
     scene = storage.scene
-    avatar = storage.avatar
     return StateResponse(
         npc=npc.npc_id,
         scene=scene.scene_id,
-        avatar=avatar.avatar_id,
         scene_context=scene.npc_context.original.get(),
         messages=[MessageResponse(**message) for message in visible_messages(npc, scene)],
         messages_signature=messages_signature(npc),
         image_signature=_file_signature(npc.img.get()),
         image_is_original=npc.is_image_original,
-        user_profile=avatar.description.get(),
+        user_profile=npc.user_profile,
         image_autogenerate=storage.session.image_autogenerate,
         default_npc=config.DEFAULT_NPC_ID,
         default_scene=config.DEFAULT_SCENE_ID,
-        default_avatar=config.DEFAULT_AVATAR_ID,
         can_reset_scene=SceneService.can_reset_active_scene(),
     )

@@ -133,14 +133,6 @@ class SessionNode:
         self._save(self._state.model_copy(update={"scene_id": value}))
 
     @property
-    def avatar_id(self) -> str:
-        return self._state.avatar_id
-
-    @avatar_id.setter
-    def avatar_id(self, value: str) -> None:
-        self._save(self._state.model_copy(update={"avatar_id": value}))
-
-    @property
     def image_autogenerate(self) -> bool:
         return self._state.image_autogenerate
 
@@ -151,37 +143,6 @@ class SessionNode:
     @property
     def scene(self) -> SceneNode:
         return SceneNode(npc_id=self.npc_id, scene_id=self.scene_id)
-
-
-@dataclass(frozen=True)
-class AvatarNode:
-    avatar_id: str
-
-    @property
-    def base(self) -> Path:
-        return config.AVATAR_DIR / self.avatar_id
-
-    @property
-    def override_base(self) -> Path:
-        return config.OVERRIDES_AVATAR_DIR / self.avatar_id
-
-    @property
-    def character(self) -> YamlFile:
-        return YamlFile(path_resolver.avatar_file(self.avatar_id, "character.yaml"))
-
-    @property
-    def description(self) -> TextFile:
-        return TextFile(path_resolver.avatar_file(self.avatar_id, "description.md"))
-
-    @property
-    def img(self) -> ImageFile:
-        return ImageFile(path_resolver.avatar_file(self.avatar_id, "img.png"))
-
-    @property
-    def is_dynamic_avatar(self) -> bool:
-        is_default_avatar = self.base.is_dir()
-        is_override_avatar = self.override_base.is_dir()
-        return is_override_avatar and not is_default_avatar
 
 
 @dataclass(frozen=True)
@@ -221,14 +182,6 @@ class PromptsNode:
     @property
     def npc_describe_image(self) -> TextFile:
         return TextFile(path_resolver.prompt_file("npc_describe_image.md"))
-
-    @property
-    def avatar_create_description(self) -> TextFile:
-        return TextFile(path_resolver.prompt_file("avatar_create_description.md"))
-
-    @property
-    def avatar_describe_image(self) -> TextFile:
-        return TextFile(path_resolver.prompt_file("avatar_describe_image.md"))
 
     @property
     def npc_scene_create_text(self) -> TextFile:

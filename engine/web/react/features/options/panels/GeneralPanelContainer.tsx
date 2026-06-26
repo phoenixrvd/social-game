@@ -1,20 +1,18 @@
 import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
 import { useAppCommands } from "../../../state/appCommands"
 import type { AppView } from "../../../state/appViewTypes"
 import { useConfirmDialog } from "../../../shared/ConfirmDialog"
 import { useTheme } from "../../../shared/hooks/useTheme"
-import { buildOptionsPath } from "../optionsRoutes"
 import { GeneralPanelView } from "./GeneralPanelView"
 
 export function GeneralPanelContainer({ appView, close }: { appView: AppView; close: () => void }) {
   const commands = useAppCommands()
-  const navigate = useNavigate()
   const { toggleTheme } = useTheme()
   const confirm = useConfirmDialog()
   const [deleteNpc, setDeleteNpc] = useState(false)
   const [deleteScene, setDeleteScene] = useState(false)
   const [deleteContext, setDeleteContext] = useState(false)
+  const [profile, setProfile] = useState(appView.user.profile)
 
   useEffect(() => {
     if (!appView.npc.active?.isDynamicNpc) setDeleteNpc(false)
@@ -22,6 +20,7 @@ export function GeneralPanelContainer({ appView, close }: { appView: AppView; cl
   useEffect(() => {
     if (!appView.scene.active?.isDynamicScene) setDeleteScene(false)
   }, [appView.scene.active?.isDynamicScene])
+  useEffect(() => setProfile(appView.user.profile), [appView.user.profile])
 
   async function reset() {
     const contextChecked = deleteContext || deleteNpc
@@ -50,8 +49,9 @@ export function GeneralPanelContainer({ appView, close }: { appView: AppView; cl
       deleteNpc={deleteNpc}
       deleteScene={deleteScene}
       deleteContext={deleteContext || deleteNpc}
-      onAvatarSelect={(avatar) => commands.selectContext({ avatar })}
-      onAvatarEdit={() => navigate(buildOptionsPath(appView.session.npcId, appView.session.sceneId, "avatar-editor"))}
+      profile={profile}
+      onProfile={setProfile}
+      onSaveProfile={() => commands.saveUserProfile(profile)}
       onDeleteNpc={setDeleteNpc}
       onDeleteScene={setDeleteScene}
       onDeleteContext={setDeleteContext}

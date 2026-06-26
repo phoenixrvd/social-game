@@ -26,7 +26,6 @@ class Message(BaseModel):
 class SessionState(BaseModel):
     npc_id: str = Field(default_factory=lambda: config.DEFAULT_NPC_ID)
     scene_id: str = Field(default_factory=lambda: config.DEFAULT_SCENE_ID)
-    avatar_id: str = Field(default_factory=lambda: config.DEFAULT_AVATAR_ID)
     image_autogenerate: bool = True
 
     @field_validator("npc_id")
@@ -44,11 +43,3 @@ class SessionState(BaseModel):
         if not path_resolver.scene_exists(value):
             raise ValueError(f"Scene '{value}' existiert nicht.")
         return value
-
-    @field_validator("avatar_id")
-    @classmethod
-    def validate_avatar(cls, value: str) -> str:
-        from engine.storage.paths import path_resolver
-        if path_resolver.avatar_exists(value):
-            return value
-        return config.DEFAULT_AVATAR_ID

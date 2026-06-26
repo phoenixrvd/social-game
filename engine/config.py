@@ -10,19 +10,16 @@ class Config(BaseSettings):
     # Paths
     PROJECT_ROOT: Path = Path(__file__).resolve().parents[1]
     NPC_DIR: Path = PROJECT_ROOT / "npcs"
-    AVATAR_DIR: Path = PROJECT_ROOT / "avatars"
     SCENE_DIR: Path = PROJECT_ROOT / "scenes"
     DATA_DIR: Path = PROJECT_ROOT / ".data"
     DATA_NPC_DIR: Path = DATA_DIR / "npcs"
     SESSION_PATH: Path = DATA_DIR / "session.yaml"
     OVERRIDES_NPC_DIR: Path = PROJECT_ROOT / ".overrides" / "npcs"
-    OVERRIDES_AVATAR_DIR: Path = PROJECT_ROOT / ".overrides" / "avatars"
     OVERRIDES_SCENE_DIR: Path = PROJECT_ROOT / ".overrides" / "scenes"
     OVERRIDES_PROMPTS_DIR: Path = PROJECT_ROOT / ".overrides" / "prompts"
 
     # Defaults
     DEFAULT_NPC_ID: str = "vika"
-    DEFAULT_AVATAR_ID: str = "max"
     DEFAULT_SCENE_ID: str = "office"
 
     # Episodic Term Memory (ETM) configuration
