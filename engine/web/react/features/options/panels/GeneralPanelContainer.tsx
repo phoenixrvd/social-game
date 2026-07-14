@@ -20,7 +20,9 @@ export function GeneralPanelContainer({ appView, close }: { appView: AppView; cl
   useEffect(() => {
     if (!appView.scene.active?.isDynamicScene) setDeleteScene(false)
   }, [appView.scene.active?.isDynamicScene])
-  useEffect(() => setProfile(appView.user.profile), [appView.user.profile])
+  useEffect(() => {
+    setProfile(appView.user.profile)
+  }, [appView.user.profile])
 
   async function reset() {
     const contextChecked = deleteContext || deleteNpc

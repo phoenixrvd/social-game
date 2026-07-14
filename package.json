@@ -6,22 +6,22 @@
     "dev": "vite",
     "format": "prettier --write \"engine/web/react/**/*.{ts,tsx}\" \"!engine/web/react/api/generated/**\"",
     "typecheck": "npm run generate:api && tsc --noEmit",
-    "generate:api": "orval --config orval.config.js",
+    "generate:api": ".venv/bin/python -m scripts.export_openapi > /tmp/social-game-openapi.json && ORVAL_OPENAPI_TARGET=/tmp/social-game-openapi.json orval --config orval.config.js",
     "generate:api:raw": "orval --config orval.config.js"
   },
   "dependencies": {
-    "@tanstack/react-query": "5.100.14",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
-    "react-router-dom": "7.15.1"
+    "@tanstack/react-query": "5.101.2",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "react-router-dom": "7.18.1"
   },
   "devDependencies": {
-    "@types/react": "19.2.15",
+    "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
-    "@vitejs/plugin-react": "6.0.2",
-    "orval": "8.14.0",
-    "prettier": "3.6.2",
-    "typescript": "6.0.3",
-    "vite": "8.0.14"
+    "@vitejs/plugin-react": "6.0.3",
+    "orval": "8.22.0",
+    "prettier": "3.9.5",
+    "typescript": "7.0.2",
+    "vite": "8.1.4"
   }
 }

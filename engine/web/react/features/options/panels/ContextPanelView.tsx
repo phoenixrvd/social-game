@@ -23,10 +23,9 @@ function ContextGallery({ type, appView }: { type: "npc" | "scene"; appView: App
   const items = type === "scene" ? appView.scene.options : appView.npc.options
   const selectedId = type === "scene" ? appView.session.sceneId : appView.session.npcId
 
-  useEffect(
-    () => selectedItemRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" }),
-    [selectedId],
-  )
+  useEffect(() => {
+    selectedItemRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" })
+  }, [selectedId])
   useEffect(() => {
     if (previousSelectedIdRef.current === selectedId) return
     previousSelectedIdRef.current = selectedId || null

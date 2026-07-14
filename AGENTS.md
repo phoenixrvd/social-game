@@ -17,19 +17,19 @@
 - LLM-Client: `engine/client.py` (Text, Embeddings, Bildgenerierung, Fehlernormalisierung).
 - Storage-Fassade: `engine/storage/__init__.py` -> `engine/storage/facade.py`.
 
-## Laufzeitfluss, der leicht uebersehen wird
+## Laufzeitfluss, der leicht übersehen wird
 
-- Der Scheduler startet im FastAPI-Lifespan (`engine/api/app.py`) und laeuft per APScheduler-Intervall alle `10s`.
+- Der Scheduler startet im FastAPI-Lifespan (`engine/api/app.py`) und läuft per APScheduler-Intervall alle `10s`.
 - Fachliche Jobs (`etm`, `state`, `scene`, `image`) werden **nicht** zyklisch neu eingeplant; sie werden nach finaler Chat-Antwort per `get_scheduler().enqueue_all()` vorgemerkt (`engine/api/chat.py`).
 - `Scheduler.execute_pending_jobs()` arbeitet pending Jobs synchron ab und respektiert Job-spezifische `rate_limit_seconds`.
 
-## Datenprioritaet und Dateipfade
+## Datenpriorität und Dateipfade
 
 - Aktiver Kontext: `.data/session.yaml` mit `npc_id` und `scene_id`.
 - Runtime-Daten liegen unter `.data/npcs/<npc_id>/<scene_id>/` (z. B. `state.md`, `scene.md`, `stm.jsonl`, `etm_lightrag/`, `img.png`).
 - Overrides liegen unter `.overrides/...` und sind nicht versioniert.
-- Aufloesung erfolgt ueber `engine/storage/paths.py`; Prioritaet ist runtime -> override -> default (mit Fallback auf Default-NPC/Default-Scene).
-- Prompt-Dateien: `.overrides/prompts/*.md` uebersteuern `prompts/*.md`.
+- Auflösung erfolgt über `engine/storage/paths.py`; Priorität ist runtime -> override -> default (mit Fallback auf Default-NPC/Default-Scene).
+- Prompt-Dateien: `.overrides/prompts/*.md` übersteuern `prompts/*.md`.
 
 ## Frontend-Besonderheiten
 
@@ -42,14 +42,14 @@
 
 ## Sprache und Umlaute
 
-- Alle deutschen Texte im Repository muessen korrekte Umlaute enthalten (`ä`, `ö`, `ü`, `Ä`, `Ö`, `Ü`, `ß`).
-- Das gilt fuer Code-Kommentare, Docstrings, API-Beschreibungen, Fehlermeldungen, UI-Texte und Dokumentation.
+- Alle deutschen Texte im Repository müssen korrekte Umlaute enthalten (`ä`, `ö`, `ü`, `Ä`, `Ö`, `Ü`, `ß`).
+- Das gilt für Code-Kommentare, Docstrings, API-Beschreibungen, Fehlermeldungen, UI-Texte und Dokumentation.
 - Umschreibungen wie `ae/oe/ue/ss` sind in deutschen Texten nicht erlaubt.
-- Ausnahmen nur bei technischen Bezeichnern, die aus Kompatibilitaetsgruenden ASCII bleiben muessen (z. B. Dateinamen, Slugs, Legacy-Keys).
+- Ausnahmen nur bei technischen Bezeichnern, die aus Kompatibilitätsgründen ASCII bleiben müssen (z. B. Dateinamen, Slugs, Legacy-Keys).
 
 ## Konventionen mit hoher Fehlerwahrscheinlichkeit
 
-- Konfiguration ausschliesslich ueber `engine/config.py` (`pydantic-settings`, Env-Prefix `SG_`); kein direkter `os.environ`-Zugriff in Fachcode.
+- Konfiguration ausschließlich über `engine/config.py` (`pydantic-settings`, Env-Prefix `SG_`); kein direkter `os.environ`-Zugriff in Fachcode.
 - Prompt-Templates werden per String-Replacement mit `{{KEY}}` verarbeitet, nicht per Template-Engine.
 - Provider-Fehler als `RuntimeError` mit nutzerlesbarer Meldung propagieren; in HTTP/API-Schicht werden Problem-Details geliefert (`application/problem+json`).
 - Dependencies: direkte Pakete in `requirements.in` pflegen; `requirements.txt` nur via `pip-compile requirements.in` aktualisieren.
