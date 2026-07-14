@@ -46,7 +46,8 @@ RUN npm ci
 COPY --from=openapi-spec /build/.openapi/openapi.json .openapi/openapi.json
 COPY orval.config.js vite.config.js tsconfig*.json ./
 COPY engine/web/react/ engine/web/react/
-RUN ORVAL_OPENAPI_TARGET=.openapi/openapi.json npm run build
+RUN ORVAL_OPENAPI_TARGET=.openapi/openapi.json npm run generate:api:raw \
+    && npm run build:static
 
 FROM python:3.12-slim AS runtime
 
