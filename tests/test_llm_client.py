@@ -6,7 +6,7 @@ from typing import Iterator, cast
 
 import engine.client as llm_client_module
 import openai
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.responses import EasyInputMessageParam
 from PIL import Image
 from pydantic import BaseModel
 
@@ -34,7 +34,7 @@ def _next_chunk(stream: Iterator[str]) -> str:
 
 
 def test_stream_prompt_streams_chunks(monkeypatch):
-    messages = [cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": "Hi"}))]
+    messages = [EasyInputMessageParam(role="user", content="Hi")]
 
     class FakeBigClient:
         @staticmethod
@@ -47,7 +47,7 @@ def test_stream_prompt_streams_chunks(monkeypatch):
 
 
 def test_stream_prompt_delegates_to_big_request_without_tools_override(monkeypatch):
-    messages = [cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": "Hi"}))]
+    messages = [EasyInputMessageParam(role="user", content="Hi")]
     captured: dict[str, object] = {}
 
     class FakeBigClient:
@@ -182,6 +182,19 @@ def test_generate_npc_img_from_reference_uses_prompt_guided_fidelity(monkeypatch
     assert [name for name, _ in images] == ["npc-reference.jpg"]
 
 
+def test_image_user_message_uses_responses_input_parts():
+    message = cast(
+        dict[str, object],
+        llm_client_module.Client._image_user_message("Beschreibe das Bild", ("reference.jpg", b"image")),
+    )
+
+    assert message["role"] == "user"
+    assert message["content"] == [
+        {"type": "input_text", "text": "Beschreibe das Bild"},
+        {"type": "input_image", "image_url": "data:image/jpeg;base64,aW1hZ2U=", "detail": "auto"},
+    ]
+
+
 def test_generate_scene_img_rejects_blank_prompt():
     try:
         llm_client_module.client.generate_scene_img("   ")
@@ -207,6 +220,41 @@ def test_request_scene_image_uses_portrait_size(monkeypatch):
 
     assert result == b"img"
     assert captured["size"] == "1024x1536"
+
+
+def test_request_image_combines_multiple_references_into_one_upload(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeClient:
+        class images:
+            @staticmethod
+            def edit(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(data=[SimpleNamespace(b64_json="aW1n")])
+
+    first = BytesIO()
+    Image.new("RGB", (80, 40), "red").save(first, format="PNG")
+    second = BytesIO()
+    Image.new("RGB", (40, 80), "blue").save(second, format="PNG")
+    client = llm_client_module.Client()
+    monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
+
+    result = client._request_image(
+        "Combine references.",
+        [("identity.jpg", first.getvalue()), ("current.jpg", second.getvalue())],
+    )
+
+    assert result == b"img"
+    assert captured["prompt"] == (
+        "Reference image layout in the uploaded contact sheet:\n"
+        "- left: `identity.jpg`\n"
+        "- right: `current.jpg`\n\n"
+        "Combine references."
+    )
+    uploaded = cast(BytesIO, captured["image"])
+    assert uploaded.name == "reference-sheet.jpg"
+    with Image.open(uploaded) as sheet:
+        assert sheet.size == (100, 40)
 
 
 
@@ -262,18 +310,17 @@ def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
 
     class FailingStream:
         def __iter__(self):
-            yield SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="Hallo"))])
+            yield SimpleNamespace(type="response.output_text.delta", delta="Hallo")
             raise FakePermissionDenied(
                 "PermissionDeniedError(\"Error code: 403 - {'code': 'forbidden', 'error': 'Content violates usage "
                 "guidelines. Team: abc Failed check: SAFETY_CHECK_TYPE_CSAM'}\")"
             )
 
     class FakeClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**_kwargs):
-                    return FailingStream()
+        class responses:
+            @staticmethod
+            def create(**_kwargs):
+                return FailingStream()
 
     monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
@@ -287,61 +334,57 @@ def test_openai_streaming_wraps_iteration_error_with_main_message(monkeypatch):
         assert isinstance(exc.__cause__, FakePermissionDenied)
 
 
-def test_openai_big_request_sends_no_tools(monkeypatch):
+def test_responses_big_request_disables_storage_and_sends_no_tools(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**kwargs):
-                    captured.update(kwargs)
-                    return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])]
+        class responses:
+            @staticmethod
+            def create(**kwargs):
+                captured.update(kwargs)
+                return [SimpleNamespace(type="response.output_text.delta", delta="ok")]
 
     client = llm_client_module.Client()
     monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
     assert list(client._request_big([])) == ["ok"]
+    assert captured["store"] is False
+    assert captured["input"] == []
+    assert captured["stream"] is True
     assert "tools" not in captured
 
 
-def test_openai_small_request_sends_no_tools(monkeypatch):
+def test_responses_small_request_disables_storage_and_sends_no_tools(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeClient:
-        class chat:
-            class completions:
-                @staticmethod
-                def create(**kwargs):
-                    captured.update(kwargs)
-                    return [SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content="ok"))])]
+        class responses:
+            @staticmethod
+            def create(**kwargs):
+                captured.update(kwargs)
+                return [SimpleNamespace(type="response.output_text.delta", delta="ok")]
 
     client = llm_client_module.Client()
     monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
 
     assert client._request_small([]) == "ok"
+    assert captured["store"] is False
+    assert captured["input"] == []
+    assert captured["stream"] is True
     assert "tools" not in captured
 
 
-def test_openai_small_model_request_uses_parse_api(monkeypatch):
+def test_responses_small_model_request_uses_parse_api_without_storage(monkeypatch):
     captured: dict[str, object] = {}
 
     class FakeClient:
-        class beta:
-            class chat:
-                class completions:
-                    @staticmethod
-                    def parse(**kwargs):
-                        captured.update(kwargs)
-                        return SimpleNamespace(
-                            choices=[
-                                SimpleNamespace(
-                                    message=SimpleNamespace(
-                                        parsed=SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
-                                    )
-                                )
-                            ]
-                        )
+        class responses:
+            @staticmethod
+            def parse(**kwargs):
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    output_parsed=SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
+                )
 
     client = llm_client_module.Client()
     monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))
@@ -349,20 +392,21 @@ def test_openai_small_model_request_uses_parse_api(monkeypatch):
     result = client._request_small_model([], response_model=SceneCreateDraft)
 
     assert result == SceneCreateDraft(location_name="Park", scene_description="Ruhiger Ort")
-    assert captured["response_format"] == SceneCreateDraft
+    assert captured["store"] is False
+    assert captured["input"] == []
+    assert captured["text_format"] == SceneCreateDraft
 
 
 def test_openai_small_model_request_reports_refusal(monkeypatch):
     class FakeClient:
-        class beta:
-            class chat:
-                class completions:
-                    @staticmethod
-                    def parse(**kwargs):
-                        _ = kwargs
-                        return SimpleNamespace(
-                            choices=[SimpleNamespace(message=SimpleNamespace(parsed=None, refusal="not allowed"))]
-                        )
+        class responses:
+            @staticmethod
+            def parse(**kwargs):
+                _ = kwargs
+                return SimpleNamespace(
+                    output_parsed=None,
+                    output=[SimpleNamespace(content=[SimpleNamespace(refusal="not allowed")])],
+                )
 
     client = llm_client_module.Client()
     monkeypatch.setattr(llm_client_module.Client, "_text_client", staticmethod(lambda: FakeClient()))

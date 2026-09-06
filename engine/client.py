@@ -8,7 +8,7 @@ import httpx
 import openai
 import requests
 from openai import OpenAI
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.responses import EasyInputMessageParam, ResponseInputParam
 from PIL import Image
 from pydantic import BaseModel
 
@@ -126,7 +126,7 @@ class CompressedImage:
 
 
 class Client:
-    def stream_prompt(self, messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
+    def stream_prompt(self, messages: ResponseInputParam) -> Iterator[str]:
         yield from self._request_big(messages)
 
     def embed_texts(self, text: str) -> list[float]:
@@ -139,10 +139,10 @@ class Client:
         cleaned = prompt.strip()
         if not cleaned:
             return ""
-        user_message = cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": cleaned}))
+        user_message: EasyInputMessageParam = {"role": "user", "content": cleaned}
         return self._request_small([user_message])
 
-    def run_messages_small(self, messages: list[ChatCompletionMessageParam]) -> str:
+    def run_messages_small(self, messages: ResponseInputParam) -> str:
         if not messages:
             return ""
         return self._request_small(messages)
@@ -151,7 +151,7 @@ class Client:
         cleaned = prompt.strip()
         if not cleaned:
             raise ValueError("Modell-Prompt darf nicht leer sein.")
-        user_message = cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": cleaned}))
+        user_message: EasyInputMessageParam = {"role": "user", "content": cleaned}
         return self._request_small_model([user_message], response_model=response_model)
 
     def generate_scene_img(self, prompt: str) -> bytes:
@@ -202,22 +202,22 @@ class Client:
         ]
         return self._request_image(prompt, images)
 
-    def _request_big(self, messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
+    def _request_big(self, messages: ResponseInputParam) -> Iterator[str]:
         return self._chat_request(config.MODEL_LLM_BIG, messages)
 
-    def _request_small(self, messages: list[ChatCompletionMessageParam]) -> str:
+    def _request_small(self, messages: ResponseInputParam) -> str:
         return "".join(self._chat_request(config.MODEL_LLM_SMALL, messages))
 
-    def _request_small_model(self, messages: list[ChatCompletionMessageParam], *, response_model: type[ModelT]) -> ModelT:
+    def _request_small_model(self, messages: ResponseInputParam, *, response_model: type[ModelT]) -> ModelT:
         response = self._request(
-            lambda openai_client: openai_client.beta.chat.completions.parse(
+            lambda openai_client: openai_client.responses.parse(
                 model=config.MODEL_LLM_SMALL,
                 store=False,
-                messages=messages,
-                response_format=response_model,
+                input=messages,
+                text_format=response_model,
             )
         )
-        return self._response_message_parsed(response, response_model)
+        return self._response_output_parsed(response, response_model)
 
     def _request_embedding(self, text: str) -> list[float]:
         response = self._request(
@@ -230,6 +230,7 @@ class Client:
         return [float(value) for value in embedding]
 
     def _request_image(self, prompt: str, images: list[NamedImage], input_fidelity: str = "low") -> bytes:
+        prompt, images = self._normalize_image_edit_input(prompt, images)
         payload = self._image_payload(images)
         image_arg: BytesIO | list[BytesIO] = payload[0] if len(payload) == 1 else payload
         result = self._request(
@@ -247,6 +248,39 @@ class Client:
             )
         )
         return self._decode_image_result(result)
+
+    @staticmethod
+    def _normalize_image_edit_input(prompt: str, images: list[NamedImage]) -> tuple[str, list[NamedImage]]:
+        if len(images) < 2:
+            return prompt, images
+
+        normalized: list[tuple[str, Image.Image]] = []
+        for name, image_bytes in images:
+            with Image.open(BytesIO(image_bytes)) as image:
+                normalized.append((name, image.convert("RGB")))
+
+        target_height = min(image.height for _, image in normalized)
+        panels: list[tuple[str, Image.Image]] = []
+        for name, image in normalized:
+            width = max(1, round(image.width * target_height / image.height))
+            panel = image if image.size == (width, target_height) else image.resize((width, target_height), Image.Resampling.LANCZOS)
+            panels.append((name, panel))
+
+        sheet = Image.new("RGB", (sum(panel.width for _, panel in panels), target_height), (255, 255, 255))
+        offset = 0
+        for _, panel in panels:
+            sheet.paste(panel, (offset, 0))
+            offset += panel.width
+
+        encoded = BytesIO()
+        sheet.save(encoded, format="JPEG", quality=90, optimize=True, progressive=True)
+        positions = ("left", "right")
+        layout = "\n".join(
+            f"- {positions[index] if index < len(positions) else f'panel {index + 1}'}: `{name}`"
+            for index, (name, _) in enumerate(panels)
+        )
+        mapped_prompt = f"Reference image layout in the uploaded contact sheet:\n{layout}\n\n{prompt}"
+        return mapped_prompt, [("reference-sheet.jpg", encoded.getvalue())]
 
     def _request_scene_image(self, prompt: str) -> bytes:
         result = self._request(
@@ -279,31 +313,35 @@ class Client:
         return payload
 
     @staticmethod
-    def _image_user_message(prompt: str, image: NamedImage) -> ChatCompletionMessageParam:
+    def _image_user_message(prompt: str, image: NamedImage) -> EasyInputMessageParam:
         image_data = base64.b64encode(image[1]).decode("ascii")
         content = [
-            {"type": "text", "text": prompt},
-            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+            {"type": "input_text", "text": prompt},
+            {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_data}", "detail": "auto"},
         ]
-        return cast(ChatCompletionMessageParam, cast(object, {"role": "user", "content": content}))
+        return cast(EasyInputMessageParam, {"role": "user", "content": content})
 
-    def _chat_request(self, model: str, messages: list[ChatCompletionMessageParam]) -> Iterator[str]:
-        payload: dict[str, object] = {"model": model, "store": False, "messages": messages, "stream": True}
-        response = self._request(lambda openai_client: openai_client.chat.completions.create(**payload))
+    def _chat_request(self, model: str, messages: ResponseInputParam) -> Iterator[str]:
+        response = self._request(
+            lambda openai_client: openai_client.responses.create(
+                model=model,
+                store=False,
+                input=messages,
+                stream=True,
+            )
+        )
         return self._stream_chunks(response)
 
     @staticmethod
-    def _response_message_parsed(response: Any, response_model: type[ModelT]) -> ModelT:
-        choices = getattr(response, "choices", None)
-        if not choices:
-            raise RuntimeError("LLM-Antwort enthaelt keine Auswahl.")
-        message = getattr(choices[0], "message", None)
-        parsed = getattr(message, "parsed", None) if message is not None else None
+    def _response_output_parsed(response: Any, response_model: type[ModelT]) -> ModelT:
+        parsed = getattr(response, "output_parsed", None)
         if isinstance(parsed, response_model):
             return parsed
-        refusal = getattr(message, "refusal", "") if message is not None else ""
-        if isinstance(refusal, str) and refusal.strip():
-            raise RuntimeError(f"LLM-Antwort wurde abgelehnt: {refusal.strip()}")
+        for output in getattr(response, "output", []) or []:
+            for content in getattr(output, "content", []) or []:
+                refusal = getattr(content, "refusal", "")
+                if isinstance(refusal, str) and refusal.strip():
+                    raise RuntimeError(f"LLM-Antwort wurde abgelehnt: {refusal.strip()}")
         raise RuntimeError(f"LLM-Antwort enthaelt kein parsebares {response_model.__name__}-Objekt.")
 
     def _request(self, action: Callable[[OpenAI], T]) -> T:
@@ -325,10 +363,10 @@ class Client:
             raise RuntimeError(self._llm_error_message(exc)) from exc
 
     def _chunk_content(self, chunk: object) -> str | None:
-        delta = self._extract_delta(chunk)
-        if delta is None:
+        if getattr(chunk, "type", None) != "response.output_text.delta":
             return None
-        return self._extract_delta_content(delta)
+        delta = getattr(chunk, "delta", None)
+        return delta if isinstance(delta, str) and delta else None
 
     def _llm_error_message(self, exc: openai.OpenAIError) -> str:
         if isinstance(exc, openai.APIStatusError):
@@ -383,18 +421,6 @@ class Client:
         if status >= 500:
             return f"Serverfehler ({status}) - bitte spaeter erneut versuchen."
         return None
-
-    @staticmethod
-    def _extract_delta(chunk: object) -> Any | None:
-        choices = getattr(chunk, "choices", None)
-        if not choices:
-            return None
-        return getattr(choices[0], "delta", None)
-
-    @staticmethod
-    def _extract_delta_content(delta: Any) -> str | None:
-        content = getattr(delta, "content", None)
-        return content if isinstance(content, str) and content else None
 
     @staticmethod
     def _text_client() -> OpenAI:

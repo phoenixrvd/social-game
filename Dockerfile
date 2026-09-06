@@ -1,4 +1,4 @@
-FROM python:3.12-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -13,17 +13,17 @@ RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-compile --requirement requirements.txt \
     && find /opt/venv -type d \( -name __pycache__ -o -name test -o -name tests \) -prune -exec rm -rf '{}' + \
     && find /opt/venv -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete \
-    && rm -rf /opt/venv/lib/python3.12/site-packages/lightrag/api \
-        /opt/venv/lib/python3.12/site-packages/lightrag/tools \
-        /opt/venv/lib/python3.12/site-packages/pip \
-        /opt/venv/lib/python3.12/site-packages/pip-* \
-        /opt/venv/lib/python3.12/site-packages/pkg_resources \
-        /opt/venv/lib/python3.12/site-packages/setuptools \
-        /opt/venv/lib/python3.12/site-packages/setuptools-* \
+    && rm -rf /opt/venv/lib/python3.14/site-packages/lightrag/api \
+        /opt/venv/lib/python3.14/site-packages/lightrag/tools \
+        /opt/venv/lib/python3.14/site-packages/pip \
+        /opt/venv/lib/python3.14/site-packages/pip-* \
+        /opt/venv/lib/python3.14/site-packages/pkg_resources \
+        /opt/venv/lib/python3.14/site-packages/setuptools \
+        /opt/venv/lib/python3.14/site-packages/setuptools-* \
         /opt/venv/bin/lightrag-server \
         /opt/venv/bin/pip \
         /opt/venv/bin/pip3 \
-        /opt/venv/bin/pip3.12
+        /opt/venv/bin/pip3.14
 
 FROM builder AS openapi-spec
 
@@ -49,7 +49,7 @@ COPY engine/web/react/ engine/web/react/
 RUN ORVAL_OPENAPI_TARGET=.openapi/openapi.json npm run generate:api:raw \
     && npm run build:static
 
-FROM python:3.12-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \

@@ -2,7 +2,7 @@
 
 ## Schnellstart (verifiziert)
 
-- Python ist auf `3.12` ausgelegt (CI nutzt `actions/setup-python@v5` mit `python-version: '3.12'`).
+- Python ist auf `3.14` ausgelegt (CI nutzt `actions/setup-python@v5` mit `python-version: '3.14'`).
 - Setup: `git config core.hooksPath .githooks && python3 -m venv .venv && source .venv/bin/activate && pip install -r requirements.dev.txt`.
 - App starten: `./sg web` (ruft `engine.api.app.run` auf, Default `127.0.0.1:8000`).
 - Tests (CI-Quelle): `pytest`.
@@ -34,7 +34,8 @@
 ## Frontend-Besonderheiten
 
 - React-Quellcode liegt in `engine/web/react/`; Build-Ziel ist `engine/web/static/js` (siehe `vite.config.js`).
-- `engine/web/static/index.html` bindet `/js/theme-init.js` und `/js/app.js` direkt ein; nach React-Aenderungen daher `npm run build` ausfuehren.
+- Das Node-Tooling verwendet ausschließlich ES-Module (`"type": "module"`); Konfigurationen exportieren per `export default`.
+- `engine/web/static/index.html` bindet `/js/theme-init.js` und `/js/app.js` direkt ein; nach React-Änderungen daher `npm run build` ausführen.
 - Die React-UI nutzt eine verbindliche Container/View-Trennung für Features und Options-Panels: Container enthalten Datenzugriff, Commands, Router, Query, lokalen State und Props-Mapping; Views rendern nur Props und rufen Callback-Props auf.
 - Feature- und Panel-Container sollen im Regelfall nur die zugehörige View direkt aufrufen. Reine Shared-UI-Komponenten brauchen keine Container/View-Trennung, solange sie keine fachliche Daten-, Router-, Query- oder Command-Logik enthalten.
 - GUI-Texte sind Deutsch mit korrekten Umlauten (z. B. `zurück`, `löschen`, `größer`).

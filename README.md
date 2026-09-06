@@ -143,7 +143,7 @@ SG_MODEL_BASE_URL=https://api.openai.com/v1
 # SG_MODEL_EMBEDDING=text-embedding-3-small
 ```
 
-Fuer eigene Embedding-Modelle kann ein OpenAI-kompatibler Endpoint genutzt werden (z. B. ueber LiteLLM).
+Für eigene Embedding-Modelle kann ein OpenAI-kompatibler Endpoint genutzt werden (z. B. über LiteLLM).
 
 ## Schnellstart (Docker – Quick Preview)
 
@@ -160,6 +160,7 @@ Danach erreichbar unter:
 ## Hackable Installation (empfohlen)
 
 Für Entwicklung, Verständnis und Anpassungen:
+Python `3.14` ist erforderlich.
 
 ```bash
 git config core.hooksPath .githooks

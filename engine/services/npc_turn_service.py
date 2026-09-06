@@ -5,10 +5,7 @@ from typing import Literal, cast
 from uuid import uuid4
 
 import yaml
-from openai.types.chat import (
-    ChatCompletionMessageParam,
-    ChatCompletionSystemMessageParam,
-)
+from openai.types.responses import EasyInputMessageParam, ResponseInputParam
 
 from engine.services.etm_service import EMPTY_ETM_TEXT, EtmService
 from engine.storage import storage
@@ -24,9 +21,9 @@ class NpcTurnService:
     def _build_turn_messages_for_context(
         self,
         retrieved_memories: str,
-    ) -> list[ChatCompletionMessageParam]:
+    ) -> ResponseInputParam:
         system_prompt = self._build_system_prompt(retrieved_memories)
-        system_message: ChatCompletionSystemMessageParam = {
+        system_message: EasyInputMessageParam = {
             "role": "system",
             "content": system_prompt,
         }
@@ -38,9 +35,9 @@ class NpcTurnService:
         return [system_message, *memory_messages]
 
     @staticmethod
-    def _to_message_param(role: str, content: str) -> ChatCompletionMessageParam:
-        """Überführt Rolle und Inhalt in einen typisierten Chat-Parameter."""
-        return cast(ChatCompletionMessageParam, cast(object, {"role": role, "content": content}))
+    def _to_message_param(role: str, content: str) -> EasyInputMessageParam:
+        """Überführt Rolle und Inhalt in einen typisierten Responses-Parameter."""
+        return cast(EasyInputMessageParam, cast(object, {"role": role, "content": content}))
 
     @staticmethod
     def _build_system_prompt(retrieved_memories: str) -> str:
@@ -72,7 +69,7 @@ class NpcTurnService:
     def build_chat_messages(
         self,
         player_input: str,
-    ) -> list[ChatCompletionMessageParam]:
+    ) -> ResponseInputParam:
         retrieval_query = self._build_retrieval_query(player_input)
         retrieved_memories = self.etm_retrieval.load_relevant(retrieval_query) or EMPTY_ETM_TEXT
         user_message = self._to_message_param("user", player_input.strip())

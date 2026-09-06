@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import numpy as np
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.responses import EasyInputMessageParam, ResponseInputParam
 
 from engine.client import client
 from engine.config import config
@@ -88,14 +88,12 @@ class LightRagMemory:
         history_messages: list[dict[str, str]] | None = None,
         **_kwargs: Any,
     ) -> str:
-        messages: list[ChatCompletionMessageParam] = []
+        messages: ResponseInputParam = []
         if system_prompt:
-            messages.append(
-                cast(ChatCompletionMessageParam, {"role": "system", "content": system_prompt})
-            )
+            messages.append(EasyInputMessageParam(role="system", content=system_prompt))
         for message in history_messages or []:
-            messages.append(cast(ChatCompletionMessageParam, message))
-        messages.append(cast(ChatCompletionMessageParam, {"role": "user", "content": prompt}))
+            messages.append(cast(EasyInputMessageParam, message))
+        messages.append(EasyInputMessageParam(role="user", content=prompt))
         return client.run_messages_small(messages)
 
     @staticmethod
